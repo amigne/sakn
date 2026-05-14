@@ -4,7 +4,12 @@ import { useThemeStore } from "@/stores/themeStore";
 import type { ThemeMode, UserRole } from "@/types/user";
 import { useState, useRef, useEffect } from "react";
 
-export default function TopBar() {
+interface TopBarProps {
+  onToggleSidebar: () => void;
+  showHamburger?: boolean;
+}
+
+export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBarProps) {
   const devRole = useAuthStore((s) => s.devRole);
   const storeUser = useAuthStore((s) => s.user);
   const setDevRole = useAuthStore((s) => s.setDevRole);
@@ -42,12 +47,25 @@ export default function TopBar() {
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4">
-      <Link to="/ping" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
+      <div className="flex items-center gap-2">
+        {showHamburger && (
+          <button
+            onClick={onToggleSidebar}
+            className="rounded p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            aria-label="Toggle sidebar"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+        )}
+        <Link to="/ping" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
         <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
-        <span className="hidden sm:inline">SAKN</span>
+        <span className="hidden min-[350px]:inline">SAKN</span>
       </Link>
+      </div>
 
       <div className="flex items-center gap-2">
         <button
