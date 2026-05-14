@@ -1,0 +1,44 @@
+# Dependencies
+src/backend/.venv/
+src/frontend/node_modules/
+
+# Build output
+src/frontend/dist/
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker volumes (persistent data)
+volumes/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+playwright-report/
+test-results/
+
+# Claude Code
+.claude/settings.local.json
+
+# Misc
+*.log
