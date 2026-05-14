@@ -14,7 +14,7 @@ export default function Checkbox({ checked, onChange, disabled, label }: Checkbo
         checked={checked}
         onCheckedChange={onChange}
         disabled={disabled}
-        className={`focus-ring flex h-4 w-4 items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-surface)] radix-state-checked:bg-primary-600 radix-state-checked:border-primary-600 disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`focus-ring flex h-4 w-4 items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-surface)] data-[state=checked]:bg-primary-600 data-[state=checked]:border-primary-600 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <RadixCheckbox.Indicator>
           {checked === "indeterminate" ? (

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import type { PingResult, TracerouteHop, DnsResult, SslResult, ExecutionStatus } from "@/types/tool";
+import type { TracerouteHop, DnsResult, SslResult, ExecutionStatus } from "@/types/tool";
 
 // ── Fake data generators ──────────────────────────────────────────
 
@@ -78,24 +78,6 @@ function fakeSslResults(): SslResult {
   };
 }
 
-function fakePingResults(count: number): PingResult[] {
-  const results: PingResult[] = [];
-  for (let i = 1; i <= count; i++) {
-    if (Math.random() > 0.15) {
-      results.push({
-        seq: i,
-        status: "ok",
-        rtt_ms: +(10 + Math.random() * 20).toFixed(1),
-        ttl: 50 + Math.floor(Math.random() * 15),
-        bytes: 64,
-      });
-    } else {
-      results.push({ seq: i, status: "timeout" });
-    }
-  }
-  return results;
-}
-
 function fakeTracerouteHops(maxHops: number): TracerouteHop[] {
   const hops: TracerouteHop[] = [];
   const gateways = [
@@ -162,87 +144,6 @@ export function useMockToolExecution() {
   }, []);
 
   return { status, error, duration, execute, reset };
-}
-
-export function useMockPingWebSocket() {
-  const [status, setStatus] = useState<ExecutionStatus>("idle");
-  const [results, setResults] = useState<PingResult[]>([]);
-  const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
-  const [terminatedBy, setTerminatedBy] = useState<string | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
-  const [currentSeq, setCurrentSeq] = useState(0);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const cancelledRef = useRef(false);
-
-  const clearTimers = useCallback(() => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-  }, []);
-
-  const start = useCallback((params: Record<string, unknown>) => {
-    clearTimers();
-    cancelledRef.current = false;
-    setStatus("running");
-    setResults([]);
-    setSummary(null);
-    setTerminatedBy(null);
-    setDuration(null);
-    setCurrentSeq(0);
-
-    const startTime = performance.now();
-    const count = (params.count as number) || 4;
-    const allResults: PingResult[] = fakePingResults(count);
-
-    allResults.forEach((result, i) => {
-      const timer = setTimeout(() => {
-        if (cancelledRef.current) return;
-        setCurrentSeq(i + 1);
-        setResults((prev) => [...prev, result]);
-
-        if (i === count - 1) {
-          const d = performance.now() - startTime;
-          setDuration(d);
-          if (!cancelledRef.current) {
-            setStatus("completed");
-            setTerminatedBy("completed");
-            const finalResults = [...allResults.slice(0, i), result];
-            const received = finalResults.filter((r) => r.status === "ok").length;
-            const rtts = finalResults.filter((r) => r.rtt_ms != null).map((r) => r.rtt_ms!);
-            setSummary({
-              transmitted: count,
-              received,
-              lost: count - received,
-              loss_pct: +(((count - received) / count) * 100).toFixed(1),
-              rtt_min_ms: rtts.length ? Math.min(...rtts) : null,
-              rtt_avg_ms: rtts.length ? +(rtts.reduce((a, b) => a + b, 0) / rtts.length).toFixed(1) : null,
-              rtt_max_ms: rtts.length ? Math.max(...rtts) : null,
-              rtt_stddev_ms: null,
-            });
-          }
-        }
-      }, (i + 1) * 600);
-      timersRef.current.push(timer);
-    });
-  }, [clearTimers]);
-
-  const cancel = useCallback(() => {
-    cancelledRef.current = true;
-    clearTimers();
-    setStatus("stopped");
-    setTerminatedBy("user");
-  }, [clearTimers]);
-
-  const reset = useCallback(() => {
-    clearTimers();
-    setStatus("idle");
-    setResults([]);
-    setSummary(null);
-    setTerminatedBy(null);
-    setDuration(null);
-    setCurrentSeq(0);
-  }, [clearTimers]);
-
-  return { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset };
 }
 
 export function useMockTracerouteWebSocket() {

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { useMockPingWebSocket } from "@/hooks/useMockToolExecution";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToolStore } from "@/stores/toolStore";
 import { TextInput, ToggleSwitch, Badge, ProgressBar } from "@/components/ui";
 import type { PingResult, PingSummary } from "@/types/tool";
@@ -35,7 +35,7 @@ export default function PingPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof PingFormData, string>>>({});
   const [runCount, setRunCount] = useState(defaults.count);
-  const { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset: resetOutput } = useMockPingWebSocket();
+  const { status, results, summary, terminatedBy, duration, error, connect, cancel, reset: resetOutput } = useWebSocket({ toolName: "ping" });
 
   const pingResults = results as PingResult[];
   const pingSummary = summary as PingSummary | null;
@@ -59,8 +59,8 @@ export default function PingPage() {
     if (!validate()) return;
     resetOutput();
     setRunCount(form.count);
-    start({ ...form });
-  }, [form, start, resetOutput]);
+    connect({ ...form });
+  }, [form, connect, resetOutput]);
 
   const handleReset = useCallback(() => {
     setForm({ ...defaults });
@@ -76,10 +76,27 @@ export default function PingPage() {
   const isRunning = status === "running";
 
   const copyResults = () => {
-    const text = pingResults.map((r) => {
-      if (r.status === "timeout") return `Request timeout for icmp_seq ${r.seq}`;
-      return `Reply from ${form.target}: bytes=${r.bytes} time=${r.rtt_ms}ms TTL=${r.ttl}`;
-    }).join("\n");
+    let text: string;
+    if (displayMode === "table") {
+      const header = "| Seq | Status | RTT (ms) | TTL |";
+      const sep = "|-----|--------|----------|-----|";
+      const rows = pingResults.map((r) => {
+        if (r.status === "timeout") return `| ${r.seq} | timeout | — | — |`;
+        return `| ${r.seq} | ok | ${r.rtt_ms} | ${r.ttl} |`;
+      });
+      const summaryRows = pingSummary ? [
+        "",
+        `| Sent | Received | Lost | Loss % |`,
+        `|------|----------|------|--------|`,
+        `| ${pingSummary.transmitted} | ${pingSummary.received} | ${pingSummary.lost} | ${pingSummary.loss_pct}% |`,
+      ] : [];
+      text = [header, sep, ...rows, ...summaryRows].join("\n");
+    } else {
+      text = pingResults.map((r) => {
+        if (r.status === "timeout") return `Request timeout for icmp_seq ${r.seq}`;
+        return `Reply from ${form.target}: bytes=${r.bytes} time=${r.rtt_ms}ms TTL=${r.ttl}`;
+      }).join("\n");
+    }
     navigator.clipboard.writeText(text).catch(() => {});
   };
 
@@ -143,12 +160,13 @@ export default function PingPage() {
 
       <ToolOutput
         status={status}
+        error={error}
         onCopy={pingResults.length > 0 ? copyResults : undefined}
         viewToggle={undefined}
       >
         {status !== "idle" && (
           <>
-            {isRunning && <ProgressBar value={currentSeq} max={runCount || pingResults.length + 5} className="mb-3" />}
+            {isRunning && <ProgressBar value={pingResults.length} max={runCount || pingResults.length + 5} className="mb-3" />}
             {displayMode === "table" ? (
               <table className="w-full text-sm">
                 <thead>
@@ -228,13 +246,12 @@ export default function PingPage() {
                         displayMode === "table" ? (
                           <>
                             <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-1 mt-3">RTT</h4>
-                            <table className="w-full max-w-lg text-sm">
+                            <table className="w-full max-w-xs text-sm">
                               <thead>
                                 <tr className="border-b border-[var(--color-border)]">
                                   <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Min</th>
                                   <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Average</th>
                                   <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Max</th>
-                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Std Dev</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -242,7 +259,6 @@ export default function PingPage() {
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_min_ms} ms</td>
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_avg_ms} ms</td>
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_max_ms} ms</td>
-                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_stddev_ms ?? "—"}</td>
                                 </tr>
                               </tbody>
                             </table>
@@ -250,7 +266,7 @@ export default function PingPage() {
                         ) : (
                           <pre className="font-mono text-sm text-[var(--color-text)]">
                             {`Approximate round trip times in milliseconds:
-    Minimum = ${pingSummary.rtt_min_ms}ms, Maximum = ${pingSummary.rtt_max_ms}ms, Average = ${pingSummary.rtt_avg_ms}ms, Std deviation = ${pingSummary.rtt_stddev_ms ?? "-"}`}
+    Minimum = ${pingSummary.rtt_min_ms}ms, Maximum = ${pingSummary.rtt_max_ms}ms, Average = ${pingSummary.rtt_avg_ms}ms`}
                           </pre>
                         )
                       ) : (

@@ -50,7 +50,6 @@ export interface PingSummary {
   rtt_min_ms: number | null;
   rtt_avg_ms: number | null;
   rtt_max_ms: number | null;
-  rtt_stddev_ms: number | null;
 }
 
 export interface TracerouteProbe {
