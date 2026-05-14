@@ -1,6 +1,6 @@
 # Implementation Plan — SAKN MVP
 
-> **Version:** 2.0 — Vertical slices
+> **Version:** 3.0 — Vertical slices, frontend-first
 > **Status:** Draft
 > **Date:** 2026-05-14
 
@@ -8,7 +8,7 @@
 
 ## 1. Strategy
 
-**Vertical slices over horizontal layers.** Each slice delivers a complete, visible, testable increment of the product. No slice depends on "all backend being done" or "all frontend being done."
+**Frontend-first, vertical slices.** Slice 2 builds the entire UI with mock data so it can be validated and refined before any backend code exists. Then each subsequent slice wires up a real backend, one capability at a time.
 
 ### 1.1 Agents
 
@@ -33,485 +33,578 @@
 ### 1.3 Slices Overview
 
 ```
-Slice 1: Hello World    Ping bout en bout
-Slice 2: Identity       Auth + sessions
-Slice 3: Traceroute     Deuxième outil continu
-Slice 4: DNS + TLS      Outils instantanés
-Slice 5: Platform       Admin, rate limiting, security filter, logging
-Slice 6: Polish         i18n, theming, responsive, RTL, tests, Docker prod
+Slice 1: Environment    Scaffolding, Docker, tooling
+Slice 2: Frontend UI    Toutes les pages avec mock data — validation UI
+Slice 3: Ping Backend   Data layer, WebSocket, subprocess executor, Ping API
+Slice 4: Identity       Auth (register, login, sessions, CSRF, email, preferences)
+Slice 5: Traceroute     Traceroute backend + intégration frontend
+Slice 6: DNS + TLS      Outils instantanés backend + intégration frontend
+Slice 7: Platform       Admin, rate limiting, security filter, logging, CLI
+Slice 8: Polish         i18n, theming, responsive, RTL, tests, Docker prod
 ```
 
 ---
 
-## 2. Slice 1 — Hello World (Ping bout en bout)
+## 2. Slice 1 — Environment
 
-**Goal** : l'application tourne dans Docker, un visiteur peut exécuter un ping et voir les résultats en temps réel via WebSocket.
+**Goal** : le projet est initialisé, buildable, et l'environnement Docker tourne.
 
-### 2.1 Backend Scaffolding
+### 2.1 Project Scaffolding
 
-| Agent | `backend-dev` |
+| Agent | `backend-dev` + `frontend-dev` |
 |---|---|
-| **Documents** | `spec-common.md` §2-4, `spec-backend.md` §1-2, `spec-backend.md` §8 |
+| **Documents** | `spec-common.md` §2, `spec-backend.md` §1, §8, `spec-frontend.md` §1 |
 | **Depends on** | Nothing |
 
-**Tasks** :
-- `pyproject.toml` + `uv.lock` (FastAPI, SQLAlchemy, asyncpg, aiosqlite, alembic, pydantic, argon2-cffi, structlog, redis, dnspython, cryptography, uuid7, click)
-- `app/main.py` — FastAPI app with lifespan, CORS
-- `app/config.py` — Pydantic BaseSettings (all env vars)
-- `app/database.py` — async SQLAlchemy engine, session DI
-- `app/models/__init__.py` — declarative base
-- `Dockerfile` multi-stage (build + runtime, non-root user, setcap ping)
-- `docker-compose.yml` + `docker-compose.dev.yml` + `Caddyfile`
+**Tasks (backend)** :
+- `src/backend/pyproject.toml` + `uv.lock` (FastAPI, SQLAlchemy, asyncpg, aiosqlite, alembic, pydantic, argon2-cffi, structlog, redis, dnspython, cryptography, uuid7, click, apscheduler)
+- `src/backend/.python-version` (3.14)
+- `src/backend/app/main.py` — FastAPI app with lifespan, CORS, health endpoint
+- `src/backend/app/config.py` — Pydantic BaseSettings (all env vars from `spec-common.md` §4)
+- `src/backend/app/database.py` — async SQLAlchemy engine, session DI
+- `src/backend/app/models/__init__.py` — declarative base
+- All empty `__init__.py` for package directories under `app/`
+- `src/backend/Dockerfile` — multi-stage, uv sync, non-root uid=1000, setcap ping/traceroute, healthcheck
 - `.env.example`
 
-### 2.2 Data Layer (Minimal)
+**Tasks (frontend)** :
+- `src/frontend/package.json` (React 19, Vite 6, React Router 7, Zustand 5, TanStack Query 5, Tailwind CSS 4, Radix UI, react-i18next, React Hook Form, Zod)
+- `src/frontend/vite.config.ts` — path aliases, dev proxy → backend:8000
+- `src/frontend/tailwind.config.ts` — `darkMode: 'class'`, CSS logical properties
+- `src/frontend/tsconfig.json` — strict
+- `src/frontend/index.html`
+- `src/frontend/src/App.tsx`, `Providers.tsx`, `Router.tsx`
+- Empty directory structure: `pages/`, `components/`, `hooks/`, `services/`, `stores/`, `i18n/`, `types/`
+- `src/frontend/Dockerfile` — Nginx serving built assets
+- `src/frontend/nginx.conf`
 
-| Agent | `backend-dev` |
+**Tasks (shared)** :
+- `docker-compose.yml` — 5 services (caddy, frontend, backend, postgres, redis)
+- `docker-compose.dev.yml` — dev override (SQLite, Vite dev server)
+- `Caddyfile` — reverse proxy with Let's Encrypt, security headers
+- `src/frontend/src/services/api.ts` — fetch wrapper (base URL `/api/v1`)
+
+### 2.2 Slice 1 Acceptance
+
+| Agent | `qa` + `lead` |
 |---|---|
-| **Documents** | `spec-backend.md` §4, `spec-common.md` §3 |
-| **Depends on** | 2.1 |
-
-**Tasks** :
-- Models: User, Session, ToolModule, RoleToolPermission, RateLimitConfig, ToolExecutionLog
-- Initial Alembic migration
-- Redis connection pool + session store
-
-### 2.3 WebSocket + Subprocess Executor
-
-| Agent | `backend-dev` |
-|---|---|
-| **Documents** | `spec-tools-live.md` §1, §2, §4 |
-| **Depends on** | 2.2 |
-
-**Tasks** :
-- `app/tools/base.py` — BaseTool, ToolDefinition, ExecutionContext, ToolResult
-- `app/tools/registry.py` — ToolRegistry
-- `app/tools/network/executor.py` — sandboxed subprocess runner (no shell, list args, `asyncio.wait_for`)
-- `app/websocket/manager.py` — WebSocket connection manager
-- `app/websocket/handlers/ping_ws.py` — Ping WebSocket handler (parse output → structured messages)
-- `app/tools/ping.py` — PingTool
-
-### 2.4 Ping API Endpoint
-
-| Agent | `backend-dev` |
-|---|---|
-| **Documents** | `spec-api-contract.md` §1, §6; `spec-backend.md` §3.3 |
-| **Depends on** | 2.3 |
-
-**Tasks** :
-- `app/api/v1/router.py` — aggregates v1 routers
-- `app/api/v1/endpoints/tools.py` — GET /tools, POST /tools/{tool_name}/execute, WS /tools/{tool_name}/stream
-- Session middleware (basic: read cookie, allow anonymous for now)
-- Wire into `main.py`
-
-### 2.5 Frontend Scaffolding
-
-| Agent | `frontend-dev` |
-|---|---|
-| **Documents** | `spec-frontend.md` §1-2, `spec-common.md` §2.4 |
-| **Depends on** | Nothing (parallel with backend) |
-
-**Tasks** :
-- Vite 6 + React 19 + TypeScript project
-- Tailwind CSS 4 (`darkMode: 'class'`, logical properties)
-- `App.tsx`, `Providers.tsx`, `Router.tsx`
-- Layout shell: top bar + sidebar (tool links) + content area
-- Stores: `authStore`, `themeStore`, `toolStore`
-- API client (`fetch` wrapper with CSRF)
-
-### 2.6 Ping Frontend Page
-
-| Agent | `frontend-dev` |
-|---|---|
-| **Documents** | `spec-tools-live.md` §1-2, `ui-spec.md` §4, §5.1, §12.1 |
-| **Depends on** | 2.5 |
-
-**Tasks** :
-- `useWebSocket.ts` — WebSocket hook (connect, send start, receive result/complete/error, cancel, cleanup)
-- `PingPage.tsx` — form (target, count, timeout, packet_size, advanced: df_bit, dscp, max_duration), Start/Stop button, output panel (table/text toggle, incremental rows, summary)
-- Route: `/ping`
-
-### 2.7 Slice 1 Acceptance
-
-| Agent | `qa` + `security` |
-|---|---|
-| **Documents** | `functional-spec.md` §3.1, `spec-tools-live.md` §2 |
+| **Documents** | `spec-common.md` §4 |
 
 **Verify** :
-- App starts with `docker compose up`
-- Visitor opens `/ping`, enters `8.8.8.8`, sees incremental results via WebSocket
-- Stop button works mid-execution
-- Invalid target shows inline error
-- Security review: subprocess uses list args (no `shell=True`), target resolved to IP
+- `docker compose up` → backend health check OK, frontend serves
+- `curl http://localhost:8000/health` → 200
+- Frontend dev server starts (`npm run dev`)
+- `uv run python -c "..."` executes in venv
 
 ---
 
-## 3. Slice 2 — Identity (Auth + Sessions)
+## 3. Slice 2 — Frontend UI (Mock Data)
 
-**Goal** : un utilisateur peut créer un compte, vérifier son email, se connecter, et ses préférences sont persistées.
+**Goal** : toutes les pages de l'application sont construites et navigables avec des données mockées. Le backend n'intervient pas — tout est simulé via des handlers MSW ou des hooks mockés. L'UI est validable et peaufinable sans dépendre du backend.
 
-### 3.1 Security Primitives
+### 3.1 UI Component Library
 
-| Agent | `backend-dev` |
+| Agent | `frontend-dev` |
 |---|---|
-| **Documents** | `spec-backend.md` §5.2-5.3, `spec-common.md` §3.1 |
-| **Depends on** | Slice 1 data layer (2.2) |
+| **Documents** | `spec-frontend.md` §1, `ui-spec.md` §1-4 |
+| **Depends on** | Slice 1 (3.1) |
 
 **Tasks** :
-- `app/security/password.py` — argon2id hash/verify, zxcvbn strength check
-- `app/security/tokens.py` — CSPRNG 256-bit token generate/hash/verify (constant-time)
-- `app/security/csrf.py` — Double Submit Cookie pattern
-- `app/security/address_filter.py` — BLOCKED_NETWORKS, `is_address_blocked()`, `filter_target()`
+- Atomic components: Button (primary/secondary/danger/ghost, loading, disabled), TextInput (focus, error, disabled, with icon), Select/Dropdown, ToggleSwitch, Checkbox, RadioButton, Badge/Tag, Tooltip, Modal/Dialog, ProgressBar, Spinner, Table (sortable, paginated), Pagination, Accordion, Tabs, Alert/Banner (success/warning/error/info, dismissible)
+- Layout components: TopBar (logo, lang switcher placeholder, theme toggle placeholder, user menu placeholder), Sidebar (tool links, admin entry for admin role), PageLayout (top bar + sidebar + content + footer)
 
-### 3.2 Auth Service
+### 3.2 Tool Pages (All 4)
 
-| Agent | `backend-dev` |
+| Agent | `frontend-dev` |
 |---|---|
-| **Documents** | `spec-backend.md` §3.2, `spec-api-contract.md` §3 |
+| **Documents** | `spec-tools-live.md` §2-3, `spec-tools-instant.md` §2-3, `ui-spec.md` §4-5, §12.1 |
 | **Depends on** | 3.1 |
 
 **Tasks** :
-- `app/services/auth_service.py` — register (pending user, send verification), login (verify password, check lock, create session), logout (delete session), verify-email, request-password-reset, reset-password, resend-verification
-- `app/services/session_service.py` — create, get, delete, list, enforce concurrent limit
-- `app/services/email_service.py` — SMTP client wrapper
-- `app/services/preference_service.py` — get/set preferences
-- `app/email/templates/` — Jinja2 verification + reset email templates
+- `ToolForm` component — parameter fields, validation, Start/Stop button, Reset, Advanced collapsible
+- `ToolOutput` component — empty/loading/results/error states, table/text toggle, copy button
+- `useMockToolExecution.ts` — simulates instant tool execution (200ms delay, returns fake data)
+- `useMockWebSocket.ts` — simulates WebSocket streaming (emits incremental results with timers, supports cancel)
+- `PingPage.tsx` — form (target, count, timeout, packet_size, advanced: df_bit, dscp, max_duration), output (table/text toggle, incremental rows, summary)
+- `TraceroutePage.tsx` — form (target, protocol, port, probes_per_hop, timeout, max_distance, dns_resolution), output (hop table/text, multipath, destination highlight)
+- `DnsLookupPage.tsx` — form (domain, record type checkboxes, DNS server dropdown + custom, CNAME toggle), output (grouped record cards, CNAME chain)
+- `SslViewerPage.tsx` — form (URL, SNI), output (cert chain cards, collapsible details, validation errors in red)
+- Routes: `/ping`, `/traceroute`, `/dns`, `/ssl` (redirect `/` to `/ping`)
+- Zustand `toolStore` — active tool, table/text toggle preference
 
-### 3.3 Auth API Endpoints
-
-| Agent | `backend-dev` |
-|---|---|
-| **Documents** | `spec-api-contract.md` §1-5, §9 |
-| **Depends on** | 3.2 |
-
-**Tasks** :
-- `app/api/v1/endpoints/auth.py` — all auth endpoints (register, login, logout, verify-email, resend-verification, request-password-reset, reset-password, csrf)
-- `app/api/v1/endpoints/preferences.py` — GET/PUT preferences
-- `app/api/v1/endpoints/sessions.py` — GET sessions, DELETE session
-- Rate limiting on auth endpoints (hardcoded limits)
-- User enumeration protection (constant-time responses)
-- Brute force protection (escalating `locked_until`)
-
-### 3.4 Middleware Stack
-
-| Agent | `backend-dev` |
-|---|---|
-| **Documents** | `spec-backend.md` §2, §5.4, `spec-api-contract.md` §1.5 |
-| **Depends on** | 3.3 |
-
-**Tasks** :
-- `app/middleware/session.py` — resolve session from cookie, attach user to request
-- `app/middleware/security_headers.py` — CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy
-- `app/middleware/rate_limit.py` — soft/hard limit enforcement
-- `app/api/errors.py` — custom exception handlers (validation error, auth error, rate limit, not found)
-
-### 3.5 Frontend Auth Pages
+### 3.3 Auth Pages
 
 | Agent | `frontend-dev` |
 |---|---|
 | **Documents** | `spec-api-contract.md` §3, `ui-spec.md` §10 |
-| **Depends on** | Slice 1 frontend (2.5) |
+| **Depends on** | 3.1 |
 
 **Tasks** :
-- `useAuth.ts` — login, logout, current user, CSRF handling
-- `LoginPage.tsx` — email + password, error display
-- `RegisterPage.tsx` — email + password + confirm + password requirements checklist
-- `VerifyEmailPage.tsx`, `VerifyEmailSentPage.tsx`
-- `ResetPasswordPage.tsx` — request + reset form
-- Auth guarding: redirect authenticated users away from auth pages, redirect visitors from protected routes
+- `LoginPage.tsx` — centered card, email + password + visibility toggle, error banner, links (forgot password, sign up)
+- `RegisterPage.tsx` — centered card, email + first name + last name + password + confirm, real-time password requirements checklist, on success → verification sent
+- `VerifyEmailPage.tsx` — handle token from URL, success/expired/already-verified states
+- `VerifyEmailSentPage.tsx` — mail icon + message + resend button (60s cooldown)
+- `ResetPasswordPage.tsx` — request form (email), reset form (new password + confirm, token from URL)
+- `ResetPasswordSuccessPage.tsx` — green check + link to login
+- Zustand `authStore` — mock current user (toggleable: visitor / authenticated / admin via dev tool)
+- Auth guarding: redirect authenticated away from auth pages, redirect visitors from protected routes, 403 for non-admin on admin routes
+- Dev toolbar: role switcher (visitor / user / admin) to test UI states
 
-### 3.6 Frontend Account Pages
+### 3.4 Account Pages
 
 | Agent | `frontend-dev` |
 |---|---|
-| **Documents** | `spec-api-contract.md` §4-5, `ui-spec.md` §3 (SCR-17/18/19) |
-| **Depends on** | 3.5 |
+| **Documents** | `spec-api-contract.md` §4-5, `ui-spec.md` §3 |
+| **Depends on** | 3.3 |
 
 **Tasks** :
-- `ProfilePage.tsx` — language, locale, theme preferences
-- `SessionsPage.tsx` — list + revoke
-- `AccountDeletePage.tsx` — password confirmation + delete
-- User menu in top bar (profile, sessions, logout)
+- `ProfilePage.tsx` — language dropdown, theme radio (light/dark/system), locale dropdown
+- `SessionsPage.tsx` — table with session list, revoke button, "current" badge
+- `AccountDeletePage.tsx` — password confirmation, delete button, confirmation dialog
+- User menu dropdown in top bar (preferences, sessions, logout)
+- Routes: `/account/preferences`, `/account/sessions`, `/account/delete`
 
-### 3.7 Slice 2 Acceptance
+### 3.5 Admin Pages
+
+| Agent | `frontend-dev` |
+|---|---|
+| **Documents** | `spec-api-contract.md` §7, `ui-spec.md` §9, §12.2 |
+| **Depends on** | 3.4 |
+
+**Tasks** :
+- Admin layout — horizontal tab bar (Users | Access | Rate Limits | Modules | Settings | Logs) within content area
+- `AdminUsersPage.tsx` — searchable/filterable user table (email search, status/role dropdowns), paginated
+- `AdminUserDetailPage.tsx` — info card (email, status badge, role, dates, failed attempts, lock status), action buttons (block/unblock, lock/unlock, delete), internal notes
+- `AdminAccessPage.tsx` — access matrix (tools × roles, toggle switches)
+- `AdminRateLimitsPage.tsx` — rate limit matrix (limit types × roles), click-to-edit, validation on blur
+- `AdminModulesPage.tsx` — module table (enabled toggle, roles link, settings gear), DNS server presets editor (IP + description, add/edit/delete/reorder)
+- `AdminSettingsPage.tsx` — global settings (log retention days)
+- `AdminLogsPage.tsx` — log viewer (filters: date range, user, tool, event type; paginated table; expandable rows; auto-refresh toggle)
+- Routes: all `/admin/*` routes
+- Admin guarding: redirect non-admins to 403, hide Admin sidebar entry for non-admins
+
+### 3.6 Slice 2 Acceptance
+
+| Agent | `qa` + `lead` + `frontend-dev` |
+|---|---|
+| **Documents** | `ui-spec.md` (entire), `functional-spec.md` §3-4 |
+
+**Verify (manual walkthrough)** :
+- Navigate all 4 tool pages → forms render, fake results appear, table/text toggle works, stop button works
+- Register flow → login flow → preferences → sessions → logout
+- Password reset request + reset form
+- Dev role switcher → admin sees admin sidebar + admin pages render with mock data
+- Admin: user table, access matrix toggles, rate limit editing, module toggles, log viewer
+- Responsive: resize to tablet/mobile widths, sidebar collapses, forms stack
+- All page states: empty, loading, success, error, disabled
+
+---
+
+## 4. Slice 3 — Ping Backend
+
+**Goal** : le backend Ping est réel. Le frontend Ping est branché dessus et abandonne ses mocks. Les autres pages restent mockées.
+
+### 4.1 Data Layer
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-backend.md` §4, `spec-common.md` §3 |
+| **Depends on** | Slice 1 |
+
+**Tasks** :
+- All SQLAlchemy models: User, Session, ToolModule, RoleToolPermission, RateLimitConfig, ToolExecutionLog, SecurityEventLog, AuditLog, UserPreference, EmailVerification, PasswordReset, DnsServerPreset, GlobalSetting
+- Initial Alembic migration
+- Redis connection pool + session store (skeleton: create/get/delete/list)
+- `src/backend/tests/conftest.py` (test DB SQLite fixtures)
+- `src/backend/tests/factories.py` (model factories)
+- Unit tests for models (creation, constraints)
+
+### 4.2 WebSocket + Subprocess Executor
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-tools-live.md` §1, §2, §4, `spec-backend.md` §9 |
+| **Depends on** | 4.1 |
+
+**Tasks** :
+- `app/tools/base.py` — BaseTool, ToolDefinition, ExecutionContext, ToolResult, ToolCategory, ToolParameter
+- `app/tools/registry.py` — ToolRegistry (explicit registration in lifespan)
+- `app/tools/network/executor.py` — sandboxed subprocess runner: Popen list args (no shell=True), asyncio.wait_for timeout, process group, SIGTERM→SIGKILL, stderr logged not exposed
+- `app/websocket/manager.py` — WebSocket connection manager (connect, disconnect, broadcast, heartbeat, idle cleanup)
+- `app/websocket/handlers/ping_ws.py` — parse ping output → structured messages (start/result/notice/complete/error)
+- `app/tools/ping.py` — PingTool
+- `app/security/address_filter.py` — BLOCKED_NETWORKS, `is_address_blocked()`, `filter_target()` via hardcoded external DNS resolver
+- Unit tests: mock subprocess, verify parsing, verify filter blocks private IPs
+
+### 4.3 Ping API Endpoint
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-api-contract.md` §1, §6, `spec-backend.md` §3.3 |
+| **Depends on** | 4.2 |
+
+**Tasks** :
+- `app/api/v1/router.py` — aggregates v1 routers
+- `app/api/v1/endpoints/tools.py` — GET /tools, POST /tools/{tool_name}/execute (skeleton for instant tools), WS /tools/{tool_name}/stream
+- `app/middleware/session.py` — read cookie, anonymous session for now
+- `app/api/errors.py` — custom exception handlers
+- GET /health with DB + Redis status
+- Wire address filter into tool execution path
+- Register PingTool in main.py lifespan
+- Integration tests: HTTP GET /tools, WebSocket ping to valid target, WebSocket rejected for blocked target
+
+### 4.4 Wire Frontend Ping
+
+| Agent | `frontend-dev` |
+|---|---|
+| **Documents** | `spec-tools-live.md` §1-2, `spec-api-contract.md` §1 |
+| **Depends on** | 4.3 |
+
+**Tasks** :
+- `useWebSocket.ts` — real WebSocket hook (connect with session cookie, send start/cancel, receive result/complete/error/notice, cleanup on disconnect)
+- `useToolExecution.ts` — mutation hook for instant tools (POST, render result/error)
+- Switch PingPage.tsx from mock to real hooks
+- Remove mock Ping data
+
+### 4.5 Slice 3 Acceptance
+
+| Agent | `qa` + `security` |
+|---|---|
+| **Documents** | `functional-spec.md` §3.1, `spec-tools-live.md` §2, §4 |
+
+**Verify** :
+- `docker compose up` → Ping 8.8.8.8 → incremental results via WebSocket
+- Stop button works mid-execution, partial results retained
+- Ping 127.0.0.1 → "Target not allowed"
+- Invalid target → validation error
+- No `shell=True` in subprocess code, target passed as IP only
+- `pytest src/backend/tests/` passes
+
+---
+
+## 5. Slice 4 — Identity (Auth Backend)
+
+**Goal** : le système d'authentification est réel. Les pages auth du frontend sont branchées.
+
+### 5.1 Security Primitives
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-backend.md` §5.2-5.3, `spec-common.md` §3.1 |
+| **Depends on** | Slice 3 data layer (4.1) |
+
+**Tasks** :
+- `app/security/password.py` — argon2id hash/verify, zxcvbn strength check (8-128 chars, upper+lower+digit, entropy ≥30 bits)
+- `app/security/tokens.py` — CSPRNG 256-bit: `secrets.token_urlsafe(32)`, SHA-256 hash, constant-time verify (`secrets.compare_digest`)
+- `app/security/csrf.py` — Double Submit Cookie pattern: `sakn_csrf` cookie (NOT httpOnly, SameSite=Lax), `X-CSRF-Token` header validation
+
+### 5.2 Auth Service
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-backend.md` §3.2, `spec-api-contract.md` §3 |
+| **Depends on** | 5.1 |
+
+**Tasks** :
+- `app/redis/session_store.py` — full Redis session store (create with TTL, get, delete, list user sessions, enforce concurrent limit, update activity/sliding expiration)
+- `app/services/email_service.py` — SMTP client wrapper
+- `app/services/auth_service.py`:
+  - `register_user` — create pending user, send verification email
+  - `verify_email` — validate token, mark verified
+  - `login` — verify password, check lock/block, create session, set cookies
+  - `logout` — delete session, clear cookies
+  - `request_password_reset` — send reset email (enumeration-safe)
+  - `reset_password` — validate token, set new password, terminate other sessions
+  - `resend_verification` — cooldown + rate limit enforcement
+- `app/services/session_service.py` — CRUD, concurrent limit, sliding expiration
+- `app/services/preference_service.py` — get/set per user or per session
+- `app/email/templates/` — Jinja2 verification + reset email templates
+
+### 5.3 Auth API Endpoints
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-api-contract.md` §1-5, §9 |
+| **Depends on** | 5.2 |
+
+**Tasks** :
+- `app/api/v1/endpoints/auth.py` — POST register, POST login, POST logout, POST verify-email, POST resend-verification, POST request-password-reset, POST reset-password, GET csrf
+- `app/api/v1/endpoints/preferences.py` — GET/PUT preferences
+- `app/api/v1/endpoints/sessions.py` — GET sessions, DELETE session/{id}
+- `app/middleware/security_headers.py` — CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy
+- Auth-specific rate limiting (hardcoded: login 10/IP/60s, register 3/IP/3600s, reset 3/email/86400s, resend 5/user/86400s)
+- Brute force protection: escalating `locked_until` (5→5min, 10→15min, 15→45min, 20+→90min)
+- User enumeration protection: constant-time responses, identical messages
+- Integration tests: register→verify→login→preferences→sessions→logout
+
+### 5.4 Wire Frontend Auth
+
+| Agent | `frontend-dev` |
+|---|---|
+| **Documents** | `spec-api-contract.md` §3-5 |
+| **Depends on** | 5.3 |
+
+**Tasks** :
+- `useAuth.ts` — real auth hook (login, logout, register, verify, reset, current user)
+- `services/auth.ts` — auth API calls
+- `services/preferences.ts` — preferences API calls
+- CSRF handling in api.ts (read `sakn_csrf` cookie, send `X-CSRF-Token` header, retry on 403)
+- Session middleware integration (redirect on 401, refresh user state)
+- Switch all auth pages from mock to real API calls
+- Remove dev role switcher toolbar
+
+### 5.5 Slice 4 Acceptance
 
 | Agent | `qa` + `security` |
 |---|---|
 | **Documents** | `functional-spec.md` §4, `spec-api-contract.md` §3 |
 
 **Verify** :
-- Register → verify email → login → see preferences → logout → login again
-- Brute force: 5 failed logins locks account temporarily
-- Duplicate email: "verification link sent" (enumeration protection)
-- CSRF: state-changing requests without header rejected
+- Register → verify email → login → preferences → sessions → logout → login again
+- 5 failed logins → temporary lock, 10 → 15min lock, counter resets on success
+- Duplicate email → "verification link sent" (enumeration protection)
+- CSRF: POST without header → 403; with header → 200
 - Session: httpOnly cookie, SameSite=Lax, sliding expiration
-- All auth error messages are constant-time and non-revealing
+- All auth error messages constant-time and non-revealing
 
 ---
 
-## 4. Slice 3 — Traceroute
+## 6. Slice 5 — Traceroute Backend
 
-**Goal** : deuxième outil continu opérationnel, pattern identique à Ping.
+**Goal** : Traceroute backend réel, frontend branché.
 
-### 4.1 Traceroute Backend
+### 6.1 Traceroute Backend
 
 | Agent | `backend-dev` |
 |---|---|
 | **Documents** | `spec-tools-live.md` §3-4 |
-| **Depends on** | Slice 1 backend (2.3) |
+| **Depends on** | Slice 3 executor + registry (4.2) |
 
 **Tasks** :
-- `app/websocket/handlers/traceroute_ws.py` — parse traceroute output → structured hop messages
-- `app/tools/traceroute.py` — TracerouteTool (UDP/ICMP/TCP modes, probes per hop, max distance)
+- `app/websocket/handlers/traceroute_ws.py` — parse traceroute output → structured hop messages (standard, timeout, multipath, destination reached)
+- `app/tools/traceroute.py` — TracerouteTool (UDP/ICMP/TCP modes)
+- Register in main.py
+- Unit tests: mock subprocess, verify parsing per protocol mode
 
-### 4.2 Traceroute Frontend
+### 6.2 Wire Frontend Traceroute
 
 | Agent | `frontend-dev` |
 |---|---|
-| **Documents** | `spec-tools-live.md` §3, `ui-spec.md` §5.2 |
-| **Depends on** | Slice 1 frontend (2.6) |
+| **Documents** | `spec-tools-live.md` §3 |
+| **Depends on** | 6.1 |
 
 **Tasks** :
-- `TraceroutePage.tsx` — form (target, protocol, port, probes_per_hop, timeout, max_distance, dns_resolution), output panel (hop table/text, incremental rows, multipath display, destination highlight)
-- Route: `/traceroute`
+- Switch TraceroutePage.tsx from mock to real WebSocket hook
+- Remove mock Traceroute data
 
-### 4.3 Slice 3 Acceptance
+### 6.3 Slice 5 Acceptance
 
 | Agent | `qa` + `security` |
 |---|---|
 | **Documents** | `functional-spec.md` §3.2 |
 
 **Verify** :
-- UDP, ICMP, TCP modes each produce correct output
-- DNS resolution ON shows hostnames, OFF shows raw IPs
-- Stop button works mid-trace
-- Command injection prevention: target passed as IP, no `shell=True`
+- UDP/ICMP/TCP modes produce correct output
+- DNS resolution ON/OFF works
 - Multipath routing displayed correctly
+- Command injection: target passed as IP, no shell=True
 
 ---
 
-## 5. Slice 4 — DNS Lookup + TLS/SSL Viewer
+## 7. Slice 6 — DNS Lookup + TLS/SSL Backend
 
-**Goal** : les 4 outils sont opérationnels.
+**Goal** : outils instantanés réels, frontend branché.
 
-### 5.1 DNS Lookup Backend
+### 7.1 DNS Lookup Backend
 
 | Agent | `backend-dev` |
 |---|---|
-| **Documents** | `spec-tools-instant.md` §2, `spec-backend.md` §9 |
-| **Depends on** | Slice 2 auth (3.2) — needs permission check |
+| **Documents** | `spec-tools-instant.md` §2 |
+| **Depends on** | Slice 3 (4.2) |
 
 **Tasks** :
-- `app/tools/dns_lookup.py` — DnsLookupTool (dnspython, multi-record-type, recursive CNAME, custom DNS server)
-- Register in `main.py`
+- `app/tools/dns_lookup.py` — DnsLookupTool (dnspython, multi-record-type, recursive CNAME with chain filtering, custom DNS server)
+- Register in main.py
+- Unit tests: mock dnspython, verify CNAME chain, verify blocked address in chain
 
-### 5.2 DNS Lookup Frontend
-
-| Agent | `frontend-dev` |
-|---|---|
-| **Documents** | `spec-tools-instant.md` §1-2, `ui-spec.md` §5.3 |
-| **Depends on** | Slice 1 frontend (2.6) |
-
-**Tasks** :
-- `DnsLookupPage.tsx` — form (domain, record type checkboxes, DNS server dropdown + custom, CNAME toggle), output panel (grouped record cards, CNAME chain)
-- `useToolExecution.ts` — mutation hook for instant tools (POST → render result)
-- Route: `/dns`
-
-### 5.3 TLS/SSL Viewer Backend
+### 7.2 TLS/SSL Viewer Backend
 
 | Agent | `backend-dev` |
 |---|---|
 | **Documents** | `spec-tools-instant.md` §3 |
-| **Depends on** | 5.1 (same pattern) |
+| **Depends on** | 7.1 (same pattern) |
 
 **Tasks** :
 - `app/tools/ssl_viewer.py` — SslViewerTool (ssl + socket + cryptography, full chain, validation, warning for < TLS 1.2, "revocation not checked" notice)
-- Register in `main.py`
+- Register in main.py
 
-### 5.4 TLS/SSL Viewer Frontend
+### 7.3 Wire Frontend DNS + TLS
 
 | Agent | `frontend-dev` |
 |---|---|
-| **Documents** | `spec-tools-instant.md` §3, `ui-spec.md` §5.4 |
-| **Depends on** | 5.2 (same pattern) |
+| **Documents** | `spec-tools-instant.md` §1-3 |
+| **Depends on** | 7.1, 7.2 |
 
 **Tasks** :
-- `SslViewerPage.tsx` — form (URL, SNI), output panel (certificate chain cards, collapsible details, validation errors in red, "revocation not checked" notice)
-- Route: `/ssl`
+- Switch DnsLookupPage.tsx and SslViewerPage.tsx from mock to `useToolExecution`
+- Remove mock DNS and TLS data
 
-### 5.5 Slice 4 Acceptance
+### 7.4 Slice 6 Acceptance
 
 | Agent | `qa` + `security` |
 |---|---|
 | **Documents** | `functional-spec.md` §3.3-3.4 |
 
 **Verify** :
-- DNS: A, MX, CNAME chain, NXDOMAIN, custom DNS server, IDN (Punycode)
-- TLS: valid cert (e.g., google.com), expired (expired.badssl.com), self-signed, wrong host
-- TLS < 1.2 shows warning, "revocation not checked" always visible
-- CNAME bypass: each hop in chain filtered
+- DNS: A, MX, CNAME chain, NXDOMAIN, custom server, IDN (Punycode)
+- TLS: valid cert, expired, self-signed, wrong host
+- TLS < 1.2 shows warning, "revocation not checked" visible
+- CNAME bypass: each hop filtered
 
 ---
 
-## 6. Slice 5 — Platform (Admin, Rate Limiting, Security Filter, Logging)
+## 8. Slice 7 — Platform (Admin, Rate Limiting, Security, Logging)
 
 **Goal** : la plateforme est administrable, protégée, et auditable.
 
-### 6.1 Rate Limiting Implementation
+### 8.1 Rate Limiting Implementation
 
 | Agent | `backend-dev` |
 |---|---|
-| **Documents** | `spec-backend.md` §6, `spec-api-contract.md` §9 (RATE_LIMIT_EXCEEDED) |
-| **Depends on** | Slice 2 middleware (3.4) |
+| **Documents** | `spec-backend.md` §6 |
+| **Depends on** | Slice 3 Redis (4.1) |
 
 **Tasks** :
-- `app/redis/rate_limit_store.py` — Redis sorted sets + Lua script, database fallback
-- `app/services/rate_limit_service.py` — `check()` + `increment()`, effective limit computation
-- Wire rate limit middleware to check on tool execution requests
-- Rate limit response headers (Retry-After, X-RateLimit-*)
-- Auth endpoint rate limits
+- `app/redis/rate_limit_store.py` — Redis sorted sets + Lua script (ZREMRANGEBYSCORE, ZCOUNT, ZADD, EXPIRE), database fallback
+- `app/services/rate_limit_service.py` — check() + increment(), effective limit = min(global, per_tool)
+- `app/middleware/rate_limit.py` — ASGI middleware, rate limit response headers (Retry-After, X-RateLimit-*)
+- Seed default RateLimitConfig rows
+- Seed default RoleToolPermission rows
+- Seed default ToolModule rows
+- Seed default DnsServerPreset rows
 
-### 6.2 Security Filter
-
-| Agent | `backend-dev` |
-|---|---|
-| **Documents** | `spec-backend.md` §5.1 |
-| **Depends on** | Slice 2 security primitives (3.1) |
-
-**Tasks** :
-- Wire `address_filter.py` into all tool execution paths (Ping, Traceroute, DNS) — filter before subprocess
-- DNS rebinding protection: resolve once, pass IP, re-check if re-resolution occurs
-- CNAME chain filtering for DNS Lookup
-- Log security refusals to SecurityEventLog
-
-### 6.3 Logging Infrastructure
+### 8.2 Logging Infrastructure
 
 | Agent | `backend-dev` |
 |---|---|
 | **Documents** | `spec-backend.md` §7 |
-| **Depends on** | 6.2 (needs security event log model) |
+| **Depends on** | 8.1 |
 
 **Tasks** :
-- `app/logs/logger.py` — structlog JSON to stdout, request ID propagation
-- `app/services/log_service.py` — log creation + querying
-- Models: SecurityEventLog, AuditLog (already in data layer)
-- Log cleanup scheduled task (apscheduler)
+- `app/logs/logger.py` — structlog JSON to stdout, request ID propagation via middleware
+- `app/services/log_service.py` — create logs (ToolExecutionLog, SecurityEventLog, AuditLog), query with filters + pagination
+- Log all tool executions, security refusals, auth events, admin actions
+- Log cleanup scheduled task (apscheduler, daily)
 
-### 6.4 Admin Backend
+### 8.3 Admin Backend
 
 | Agent | `backend-dev` |
 |---|---|
 | **Documents** | `spec-backend.md` §3.3, `spec-api-contract.md` §7 |
-| **Depends on** | 6.1, 6.2, 6.3 |
+| **Depends on** | 8.1, 8.2 |
 
 **Tasks** :
-- `app/api/v1/endpoints/admin_users.py` — CRUD, block/unblock, lock/unlock, notes, delete
+- `app/api/v1/endpoints/admin_users.py` — list (paginated, filterable), get, block/unblock, lock/unlock, notes, delete
 - `app/api/v1/endpoints/admin_tools.py` — list, enable/disable
-- `app/api/v1/endpoints/admin_rate_limits.py` — get/set rate limits (matrix)
-- `app/api/v1/endpoints/admin_modules.py` — module enable/disable, DNS server presets CRUD
-- `app/api/v1/endpoints/admin_logs.py` — tool execution, security events, audit log queries
-- `app/api/v1/endpoints/admin_settings.py` — global settings
-- `app/services/admin_service.py` — last admin protection, audit logging
-- `app/api/errors.py` — admin-specific error handling
+- `app/api/v1/endpoints/admin_rate_limits.py` — get/set (matrix validation)
+- `app/api/v1/endpoints/admin_modules.py` — enable/disable, DNS server presets CRUD + reorder
+- `app/api/v1/endpoints/admin_logs.py` — tool executions, security events, audit log (filter + paginate)
+- `app/api/v1/endpoints/admin_settings.py` — get/set global settings
+- `app/services/admin_service.py` — last admin protection, audit logging on admin actions
+- Admin middleware: verify admin role on all /admin/* routes
 
-### 6.5 Admin Frontend
-
-| Agent | `frontend-dev` |
-|---|---|
-| **Documents** | `spec-api-contract.md` §7, `ui-spec.md` §9, §12.2 |
-| **Depends on** | Slice 2 frontend (3.6) |
-
-**Tasks** :
-- Admin layout + admin tabs component
-- `AdminUsersPage.tsx` — searchable/filterable user table, user detail with actions
-- `AdminAccessPage.tsx` — access rights matrix (tools × roles, toggles)
-- `AdminRateLimitsPage.tsx` — rate limit matrix, click-to-edit, validation on blur
-- `AdminModulesPage.tsx` — module enable/disable + DNS server presets editor
-- `AdminSettingsPage.tsx` — global settings
-- `AdminLogsPage.tsx` — log viewer with filters, pagination, expandable rows, auto-refresh toggle
-- Admin guarding: redirect non-admins to 403
-
-### 6.6 CLI Bootstrap Tool
+### 8.4 CLI Bootstrap Tool
 
 | Agent | `backend-dev` |
 |---|---|
-| **Documents** | `spec-backend.md` §8.5, `spec-common.md` §4.1 |
-| **Depends on** | 6.4 |
+| **Documents** | `spec-common.md` §4.1 |
+| **Depends on** | 8.3 |
 
 **Tasks** :
 - `app/cli/main.py` — click/typer entry point
 - `app/cli/create_admin.py` — `sakn-cli create-admin --email ... --password ...`
 
-### 6.7 Slice 5 Acceptance
+### 8.5 Wire Frontend Admin
+
+| Agent | `frontend-dev` |
+|---|---|
+| **Documents** | `spec-api-contract.md` §7 |
+| **Depends on** | 8.3 |
+
+**Tasks** :
+- `services/admin.ts` — admin API calls
+- Switch all admin pages from mock to real API calls
+- Admin guarding: 403 redirect for non-admins
+
+### 8.6 Slice 7 Acceptance
 
 | Agent | `qa` + `security` |
 |---|---|
 | **Documents** | `functional-spec.md` §2, §5-6, `spec-backend.md` §6.3 |
 
 **Verify** :
-- Admin can block/unblock/lock/unlock/delete users
-- Access rights matrix: toggle visitor access → visitor can/cannot use tool
-- Rate limit matrix: set per-tool limit > global → rejected
-- Module: disable Ping → disappears from sidebar, direct URL shows "not available"
-- Log viewer: filter by date/user/tool/event, expand row
+- Admin can block/unblock/lock/unlock/delete users; last admin protected
+- Access matrix: toggle visitor access → takes effect immediately
+- Rate limit matrix: per-tool > global → rejected; 0 = no limit; changes immediate
+- Module: disable Ping → sidebar hides it, direct URL shows "not available"
+- DNS presets: add/edit/delete/reorder → auto-save
+- Log viewer: filters work, rows expandable, auto-refresh toggleable
 - Log retention setting takes effect
-- Security filter blocks private IPs (127.0.0.1, 10.x, 192.168.x, ::1, fc00::)
-- Rate limiting returns 429 with correct headers
-- Last admin cannot be deleted/demoted
+- Security filter blocks private/reserved/loopback IPs
+- Rate limiting: 429 with correct headers at soft and hard limits
 - First admin created via CLI, not auto-created
 
 ---
 
-## 7. Slice 6 — Polish (i18n, Theming, Responsive, Tests, Docker Prod)
+## 9. Slice 8 — Polish (i18n, Theming, Responsive, Tests, Docker Prod)
 
 **Goal** : produit complet, prêt pour la production.
 
-### 7.1 i18n
+### 9.1 i18n
 
 | Agent | `frontend-dev` + `backend-dev` |
 |---|---|
 | **Documents** | `spec-frontend.md` §6, `spec-api-contract.md` §10 |
-| **Depends on** | Slice 5 |
+| **Depends on** | Slice 7 |
 
 **Tasks (backend)** :
-- `app/i18n/en/messages.json` + `app/i18n/fr/messages.json` — backend error messages, system strings
+- `app/i18n/en/messages.json` + `app/i18n/fr/messages.json` — system messages, error strings
 
 **Tasks (frontend)** :
 - `src/i18n/resources.ts` — namespace loading
-- `en/` + `fr/` — common, tools, auth, admin namespaces
+- `en/` + `fr/` JSON namespaces: common, tools, auth, admin
 - All user-facing strings wrapped in `t()`
 - Language switcher in top bar
 
-### 7.2 Theme System
+### 9.2 Theme System
 
 | Agent | `frontend-dev` |
 |---|---|
 | **Documents** | `spec-frontend.md` §7, `ui-spec.md` §7 |
-| **Depends on** | 7.1 |
+| **Depends on** | 9.1 |
 
 **Tasks** :
 - Theme toggle in top bar (light/dark/system)
-- `themeStore` with `matchMedia` listener for `system`
-- CSS custom properties for all themed values
-- Both palettes compile correctly
+- `themeStore` with `matchMedia` listener for system
+- CSS custom properties for both palettes
 
-### 7.3 Responsive & Accessibility
+### 9.3 Responsive & Accessibility
 
 | Agent | `frontend-dev` |
 |---|---|
 | **Documents** | `ui-spec.md` §6, §11 |
-| **Depends on** | 7.2 |
+| **Depends on** | 9.2 |
 
 **Tasks** :
-- Responsive breakpoints (desktop/tablet/mobile)
+- Responsive breakpoints (desktop ≥1024, tablet 768-1023, mobile <768)
 - Collapsible sidebar, hamburger menu on mobile
 - Card-style tables on mobile
-- Keyboard navigation, focus management, aria-live regions
-- Contrast compliance (both themes)
-- RTL readiness (CSS logical properties everywhere)
-- 200% zoom, reduced motion support
+- Keyboard navigation, focus management, aria-live for WebSocket updates
+- Contrast compliance both themes (4.5:1 normal, 3:1 large)
+- RTL readiness: CSS logical properties everywhere
+- Reduced motion support, 200% zoom
 
-### 7.4 Tests
+### 9.4 Tests
 
 | Agent | `qa` |
 |---|---|
@@ -522,67 +615,71 @@ Slice 6: Polish         i18n, theming, responsive, RTL, tests, Docker prod
 - Backend unit tests (address filter, tool registry, auth service, rate limiting)
 - Backend integration tests (auth API, tool execution, admin API)
 - Frontend component tests (auth forms, tool pages, admin pages)
-- E2E tests with Playwright (happy paths: visitor uses Ping, user registers and logs in, admin configures)
+- E2E tests with Playwright (happy paths: visitor uses Ping, user registers+logs in, admin configures)
 - Security tests (address filter bypass, rate limit enforcement, CSRF, enumeration, brute force)
 
-### 7.5 Docker Production
+### 9.5 Docker Production
 
 | Agent | `backend-dev` |
 |---|---|
 | **Documents** | `spec-backend.md` §8 |
-| **Depends on** | 7.4 |
+| **Depends on** | 9.4 |
 
 **Tasks** :
-- Finalize `docker-compose.yml` with proper health checks, restart policies, secrets
-- Test full stack from scratch: `docker compose up` → working app
-- Caddy TLS configuration validation
+- Finalize docker-compose.yml with health checks, restart policies, secrets
 - Startup script: wait for DB + Redis → migrate → start
+- Test full stack: `docker compose up` → working app
+- Caddy TLS configuration validation
 
-### 7.6 Slice 6 Acceptance
+### 9.6 Slice 8 Acceptance
 
 | Agent | `qa` + `security` + `lead` |
 |---|---|
 | **Documents** | All |
 
 **Verify** :
-- All UI strings in both EN and FR
-- Theme toggle cycles light → dark → system without flash
-- App usable at 800px, 400px, and 200% zoom
+- All UI in EN and FR, untranslated strings fall back to EN
+- Theme toggle cycles light→dark→system without flash
+- App usable at 800px, 400px, 200% zoom
 - All E2E tests pass
-- Full Docker production deploy works
-- Final security review: no exposed secrets, all cookies secure, CSP enforced
+- Full Docker prod deploy works
+- Final security review: no exposed secrets, cookies secure, CSP enforced
 
 ---
 
-## 8. Dependency Graph
+## 10. Dependency Graph
 
 ```
-Slice 1: Hello World     ─────────────────────────────┐
-                                                       │
-Slice 2: Identity        ───────────────────────┐      │
-                                                 │      │
-Slice 3: Traceroute      ──────────┐            │      │
-                                    │            │      │
-Slice 4: DNS + TLS        ──────────┤            │      │
-                                    │            │      │
-Slice 5: Platform          ─────────┼────────────┼──────┤
-                                    │            │      │
-Slice 6: Polish            ─────────┴────────────┴──────┘
+Slice 1: Environment     ─────────────────────────┐
+                                                   │
+Slice 2: Frontend UI     ─────────────────────┐    │
+                                               │    │
+Slice 3: Ping Backend    ──────────┐          │    │
+                                    │          │    │
+Slice 4: Identity         ──────────┤          │    │
+                                    │          │    │
+Slice 5: Traceroute       ──────────┤          │    │
+                                    │          │    │
+Slice 6: DNS + TLS        ──────────┤          │    │
+                                    │          │    │
+Slice 7: Platform         ──────────┼──────────┼────┤
+                                    │          │    │
+Slice 8: Polish           ──────────┴──────────┴────┘
 ```
 
-Slices 3 and 4 can run in parallel (both depend on Slice 2 for auth + Slice 1 for tool patterns). Slice 5 requires auth (Slice 2) and tools (Slices 1-4). Slice 6 requires everything.
-
-Within each slice, backend and frontend tasks can run in parallel.
+Slices 5 and 6 can run in parallel (both depend on Slice 4 for auth). Slice 2 is independent of backend slices — frontend UI is built and validated in isolation. Each backend slice (3-7) wires up one capability at a time.
 
 ---
 
-## 9. Visibility Milestones
+## 11. Visibility Milestones
 
-| Slice Complete | What You Can See |
+| Slice | What You Can See |
 |---|---|
-| 1 | `docker compose up` → browser → ping 8.8.8.8 → live results rolling in |
-| 2 | Register → verify email → login → preferences → logout |
-| 3 | Traceroute to google.com, watch hops appear one by one |
-| 4 | DNS lookup with CNAME chain, TLS cert chain with validation |
-| 5 | Admin panel: block a user, change rate limits, view logs |
-| 6 | French UI, dark mode, mobile-friendly, production Docker |
+| 1 | `docker compose up` → backend health OK, frontend serves |
+| 2 | Navigate all pages, tools produce fake results, auth flows work with dev role switcher, admin panel functional — **UI fully validatable** |
+| 3 | Ping 8.8.8.8 → real live results via WebSocket |
+| 4 | Register → verify email → login → preferences → sessions → logout |
+| 5 | Traceroute to google.com, hops appear one by one |
+| 6 | DNS query returns real records, TLS cert chain renders with validation |
+| 7 | Admin panel controls real data: block user, change rate limits, view real logs |
+| 8 | French UI, dark mode, mobile-friendly, production Docker |
