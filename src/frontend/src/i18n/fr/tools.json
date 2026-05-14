@@ -1,0 +1,62 @@
+{
+  "ping": {
+    "name": "Ping",
+    "description": "Tester la connectivité réseau avec des requêtes ICMP",
+    "target_label": "Cible",
+    "target_desc": "Adresse IP à pinger",
+    "count_label": "Nombre",
+    "count_desc": "Nombre de pings (0 = illimité)",
+    "timeout_label": "Timeout (s)",
+    "timeout_desc": "Délai par paquet",
+    "packet_size_label": "Taille paquet (octets)",
+    "packet_size_desc": "Taille du paquet ICMP",
+    "df_bit_label": "Bit DF",
+    "df_bit_desc": "Drapeau Don't Fragment",
+    "dscp_label": "DSCP",
+    "dscp_desc": "Classe de trafic (0-63)",
+    "max_duration_label": "Durée max (s)",
+    "max_duration_desc": "Limite d'arrêt forcé"
+  },
+  "traceroute": {
+    "name": "Traceroute",
+    "description": "Tracer le chemin réseau vers une destination",
+    "target_label": "Cible",
+    "target_desc": "Adresse IP de destination",
+    "protocol_label": "Protocole",
+    "protocol_desc": "Protocole de transport",
+    "port_label": "Port",
+    "port_desc": "Port de destination",
+    "probes_label": "Sondes par saut",
+    "probes_desc": "Nombre de sondes par saut",
+    "timeout_label": "Timeout (s)",
+    "timeout_desc": "Délai par sonde",
+    "max_distance_label": "Sauts max",
+    "max_distance_desc": "Nombre maximum de sauts",
+    "dns_resolution_label": "Résolution DNS",
+    "dns_resolution_desc": "Résoudre les noms d'hôte",
+    "resolving": "Résolution des noms d'hôte"
+  },
+  "dns": {
+    "name": "DNS Lookup",
+    "description": "Interroger les enregistrements DNS d'un domaine",
+    "target_label": "Domaine",
+    "target_desc": "Nom de domaine à interroger",
+    "resolver_label": "Serveur DNS",
+    "resolver_desc": "Résolveur DNS à utiliser",
+    "cname_label": "CNAME récursif",
+    "cname_desc": "Suivre la chaîne CNAME",
+    "record_type_label": "Types d'enregistrement",
+    "record_type_desc": "Sélectionner les types à interroger",
+    "no_records": "Aucun enregistrement trouvé."
+  },
+  "ssl": {
+    "name": "Visualiseur TLS/SSL",
+    "description": "Récupérer et inspecter les certificats SSL/TLS",
+    "url_label": "URL",
+    "url_desc": "URL ou nom d'hôte du serveur",
+    "sni_label": "SNI",
+    "sni_desc": "Server Name Indication (optionnel)"
+  },
+  "tls_warning": "Connexion en {{version}}. Le minimum recommandé est TLS 1.2.",
+  "revocation_not_checked": "Le statut de révocation du certificat n'a pas été vérifié."
+}

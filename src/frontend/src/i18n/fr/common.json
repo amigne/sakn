@@ -1,0 +1,23 @@
+{
+  "loading": "Chargement...",
+  "error": "Une erreur est survenue.",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "close": "Fermer",
+  "yes": "Oui",
+  "no": "Non",
+  "search": "Rechercher",
+  "filter": "Filtrer",
+  "next": "Suivant",
+  "previous": "Précédent",
+  "page_info": "{{start}}-{{end}} sur {{total}}",
+  "not_found": "Page introuvable.",
+  "start": "Démarrer",
+  "stop": "Arrêter",
+  "reset": "Réinitialiser",
+  "copy": "Copier",
+  "table": "Tableau",
+  "text": "Texte",
+  "advanced": "Avancé",
+  "output": "Résultat"
+}

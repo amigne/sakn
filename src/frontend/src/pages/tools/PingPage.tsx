@@ -1,0 +1,262 @@
+import { useState, useCallback, useEffect } from "react";
+import PageLayout from "@/components/layout/PageLayout";
+import ToolForm from "@/components/tool/ToolForm";
+import ToolOutput from "@/components/tool/ToolOutput";
+import { useMockPingWebSocket } from "@/hooks/useMockToolExecution";
+import { useToolStore } from "@/stores/toolStore";
+import { TextInput, ToggleSwitch, Badge, ProgressBar } from "@/components/ui";
+import type { PingResult, PingSummary } from "@/types/tool";
+
+interface PingFormData {
+  target: string;
+  count: number;
+  timeout: number;
+  packet_size: number;
+  df_bit: boolean;
+  dscp: number;
+  max_duration: number;
+}
+
+const defaults: PingFormData = {
+  target: "8.8.8.8",
+  count: 4,
+  timeout: 10,
+  packet_size: 56,
+  df_bit: false,
+  dscp: 0,
+  max_duration: 30,
+};
+
+export default function PingPage() {
+  const displayMode = useToolStore((s) => s.displayMode.ping);
+  const setDisplayMode = useToolStore((s) => s.setDisplayMode);
+
+  const [form, setForm] = useState<PingFormData>({ ...defaults });
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<keyof PingFormData, string>>>({});
+  const { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset: resetOutput } = useMockPingWebSocket();
+
+  const pingResults = results as PingResult[];
+  const pingSummary = summary as PingSummary | null;
+
+  useEffect(() => {
+    useToolStore.getState().setActiveTool("ping");
+  }, []);
+
+  const validate = (): boolean => {
+    const errs: typeof errors = {};
+    if (!form.target.trim()) errs.target = "Target is required.";
+    if (form.count < 0 || form.count > 100) errs.count = "1-100";
+    if (form.timeout < 1 || form.timeout > 60) errs.timeout = "1-60";
+    if (form.packet_size < 8 || form.packet_size > 65507) errs.packet_size = "8-65507";
+    if (form.dscp < 0 || form.dscp > 63) errs.dscp = "0-63";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleStart = useCallback(() => {
+    if (!validate()) return;
+    resetOutput();
+    start({ ...form });
+  }, [form, start, resetOutput]);
+
+  const handleReset = useCallback(() => {
+    setForm({ ...defaults });
+    setErrors({});
+    resetOutput();
+  }, [resetOutput]);
+
+  const update = (field: keyof PingFormData, value: string | number | boolean) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  };
+
+  const isRunning = status === "running";
+
+  const copyResults = () => {
+    const text = pingResults.map((r) => {
+      if (r.status === "timeout") return `Request timeout for icmp_seq ${r.seq}`;
+      return `Reply from ${form.target}: bytes=${r.bytes} time=${r.rtt_ms}ms TTL=${r.ttl}`;
+    }).join("\n");
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
+
+  return (
+    <PageLayout>
+      <ToolForm
+        title="Ping"
+        advanced={
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">DF Bit</span>
+              <ToggleSwitch checked={form.df_bit} onChange={(v) => update("df_bit", v)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">DSCP (0-63)</span>
+              <TextInput type="number" min={0} max={63} value={form.dscp} onChange={(e) => update("dscp", Number(e.target.value))} error={errors.dscp} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Max Duration (s)</span>
+              <TextInput type="number" min={1} max={300} value={form.max_duration} onChange={(e) => update("max_duration", Number(e.target.value))} />
+            </label>
+          </>
+        }
+        advancedOpen={advancedOpen}
+        onToggleAdvanced={() => setAdvancedOpen(!advancedOpen)}
+        isRunning={isRunning}
+        onStart={handleStart}
+        onReset={handleReset}
+        onStop={cancel}
+        startLabel={`Execute${(form.count ?? 4) > 0 ? ` (${form.count ?? 4} pings)` : ""}`}
+        outputControls={
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => setDisplayMode("ping", "table")}
+              className={`px-2 py-1 rounded text-xs ${displayMode === "table" ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400" : "text-[var(--color-text-secondary)]"}`}
+            >Table</button>
+            <button
+              onClick={() => setDisplayMode("ping", "text")}
+              className={`px-2 py-1 rounded text-xs ${displayMode === "text" ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400" : "text-[var(--color-text-secondary)]"}`}
+            >Text</button>
+          </div>
+        }
+      >
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Target</span>
+          <TextInput type="text" placeholder="8.8.8.8" value={form.target} onChange={(e) => update("target", e.target.value)} error={errors.target} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Count (0 = unlimited)</span>
+          <TextInput type="number" min={0} max={100} value={form.count} onChange={(e) => update("count", Number(e.target.value))} error={errors.count} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Timeout (s)</span>
+          <TextInput type="number" min={1} max={60} value={form.timeout} onChange={(e) => update("timeout", Number(e.target.value))} error={errors.timeout} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Packet Size (bytes)</span>
+          <TextInput type="number" min={8} max={65507} value={form.packet_size} onChange={(e) => update("packet_size", Number(e.target.value))} error={errors.packet_size} />
+        </label>
+      </ToolForm>
+
+      <ToolOutput
+        status={status}
+        onCopy={pingResults.length > 0 ? copyResults : undefined}
+        viewToggle={undefined}
+      >
+        {status !== "idle" && (
+          <>
+            {isRunning && <ProgressBar value={currentSeq} max={form.count || pingResults.length + 5} className="mb-3" />}
+            {displayMode === "table" ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)]">
+                    <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Seq</th>
+                    <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Status</th>
+                    <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">RTT (ms)</th>
+                    <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">TTL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pingResults.map((r) => (
+                    <tr key={r.seq} className="border-b border-[var(--color-border)]">
+                      <td className="px-3 py-1 text-[var(--color-text)]">{r.seq}</td>
+                      <td className="px-3 py-1">
+                        <Badge variant={r.status === "ok" ? "success" : r.status === "timeout" ? "warning" : "error"}>
+                          {r.status}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-1 font-mono text-[var(--color-text)]">{r.rtt_ms ?? "-"}</td>
+                      <td className="px-3 py-1 font-mono text-[var(--color-text)]">{r.ttl ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <pre className="font-mono text-sm text-[var(--color-text)] whitespace-pre-wrap">
+                {pingResults.map((r) => {
+                  if (r.status === "timeout") return `Request timeout for icmp_seq ${r.seq}`;
+                  return `Reply from ${form.target}: bytes=${r.bytes} time=${r.rtt_ms}ms TTL=${r.ttl}`;
+                }).join("\n")}
+              </pre>
+            )}
+
+            {(status === "completed" || status === "stopped") && (
+              <>
+                <hr className="my-3 border-[var(--color-border)]" />
+                <div className="text-sm">
+                  <h3 className="font-semibold text-[var(--color-text)] mb-2">Summary</h3>
+                  {terminatedBy === "user" && (
+                    <p className="text-sm text-warning-600 dark:text-warning-500 mb-2">Execution stopped by user.</p>
+                  )}
+                  {pingSummary && (
+                    <>
+                      {displayMode === "table" ? (
+                        <>
+                          <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-1">Packets</h4>
+                          <table className="w-full max-w-xs mb-3 text-sm">
+                            <thead>
+                              <tr className="border-b border-[var(--color-border)]">
+                                <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Sent</th>
+                                <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Received</th>
+                                <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Lost</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.transmitted}</td>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.received}</td>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.lost} ({pingSummary.loss_pct}%)</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </>
+                      ) : (
+                        <pre className="font-mono text-sm text-[var(--color-text)] mb-3">
+                          {`## Packets\n| Sent | Received | Lost |\n| ${pingSummary.transmitted} | ${pingSummary.received} | ${pingSummary.lost} |\n| 100% | ${(100 - pingSummary.loss_pct).toFixed(1)}% | ${pingSummary.loss_pct}% |`}
+                        </pre>
+                      )}
+
+                      {pingSummary.rtt_min_ms !== null ? (
+                        displayMode === "table" ? (
+                          <>
+                            <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-1 mt-3">RTT</h4>
+                            <table className="w-full max-w-lg text-sm">
+                              <thead>
+                                <tr className="border-b border-[var(--color-border)]">
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Min</th>
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Average</th>
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Max</th>
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Std Dev</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_min_ms} ms</td>
+                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_avg_ms} ms</td>
+                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_max_ms} ms</td>
+                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_stddev_ms ?? "—"}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </>
+                        ) : (
+                          <pre className="font-mono text-sm text-[var(--color-text)]">
+                            {`## RTT\n| Minimum | Average | Maximum | Std deviation |\n| ${pingSummary.rtt_min_ms} ms | ${pingSummary.rtt_avg_ms} ms | ${pingSummary.rtt_max_ms} ms | ${pingSummary.rtt_stddev_ms ?? "—"} |`}
+                          </pre>
+                        )
+                      ) : (
+                        <p className="text-sm text-[var(--color-text-secondary)]">No RTT statistics available.</p>
+                      )}
+                    </>
+                  )}
+                  {duration && <p className="text-xs text-[var(--color-text-secondary)] mt-2">Duration: {(duration / 1000).toFixed(1)}s</p>}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </ToolOutput>
+    </PageLayout>
+  );
+}

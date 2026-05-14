@@ -1,0 +1,23 @@
+{
+  "loading": "Loading...",
+  "error": "An error occurred.",
+  "save": "Save",
+  "cancel": "Cancel",
+  "close": "Close",
+  "yes": "Yes",
+  "no": "No",
+  "search": "Search",
+  "filter": "Filter",
+  "next": "Next",
+  "previous": "Previous",
+  "page_info": "{{start}}-{{end}} of {{total}}",
+  "not_found": "Page not found.",
+  "start": "Start",
+  "stop": "Stop",
+  "reset": "Reset",
+  "copy": "Copy",
+  "table": "Table",
+  "text": "Text",
+  "advanced": "Advanced",
+  "output": "Output"
+}

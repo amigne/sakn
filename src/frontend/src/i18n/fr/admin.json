@@ -1,0 +1,23 @@
+{
+  "users": "Utilisateurs",
+  "access": "Accès",
+  "rate_limits": "Limites de débit",
+  "modules": "Modules",
+  "settings": "Paramètres",
+  "logs": "Journaux",
+  "user_management": "Gestion des utilisateurs",
+  "access_rights": "Droits d'accès",
+  "module_activation": "Activation des modules",
+  "global_settings": "Paramètres globaux",
+  "log_viewer": "Visionneuse de journaux",
+  "block": "Bloquer",
+  "unblock": "Débloquer",
+  "lock": "Verrouiller",
+  "unlock": "Déverrouiller",
+  "delete": "Supprimer",
+  "admin_notes": "Notes admin",
+  "dns_presets": "Préréglages serveurs DNS",
+  "tool_executions": "Exécutions d'outils",
+  "security_events": "Événements de sécurité",
+  "audit": "Audit"
+}

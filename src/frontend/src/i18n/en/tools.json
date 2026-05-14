@@ -1,0 +1,62 @@
+{
+  "ping": {
+    "name": "Ping",
+    "description": "Test network connectivity with ICMP echo requests",
+    "target_label": "Target",
+    "target_desc": "IP address to ping",
+    "count_label": "Count",
+    "count_desc": "Number of pings (0 = unlimited)",
+    "timeout_label": "Timeout (s)",
+    "timeout_desc": "Per-packet timeout",
+    "packet_size_label": "Packet Size (bytes)",
+    "packet_size_desc": "ICMP packet size",
+    "df_bit_label": "DF Bit",
+    "df_bit_desc": "Don't Fragment flag",
+    "dscp_label": "DSCP",
+    "dscp_desc": "Traffic class (0-63)",
+    "max_duration_label": "Max Duration (s)",
+    "max_duration_desc": "Hard stop limit"
+  },
+  "traceroute": {
+    "name": "Traceroute",
+    "description": "Trace network path to a destination",
+    "target_label": "Target",
+    "target_desc": "IP address to trace",
+    "protocol_label": "Protocol",
+    "protocol_desc": "Transport protocol",
+    "port_label": "Port",
+    "port_desc": "Destination port",
+    "probes_label": "Probes per Hop",
+    "probes_desc": "Number of probes per hop",
+    "timeout_label": "Timeout (s)",
+    "timeout_desc": "Per-probe timeout",
+    "max_distance_label": "Max Hops",
+    "max_distance_desc": "Maximum number of hops",
+    "dns_resolution_label": "DNS Resolution",
+    "dns_resolution_desc": "Resolve hostnames",
+    "resolving": "Resolving hostnames"
+  },
+  "dns": {
+    "name": "DNS Lookup",
+    "description": "Query DNS records for a domain",
+    "target_label": "Domain",
+    "target_desc": "Domain name to query",
+    "resolver_label": "DNS Server",
+    "resolver_desc": "DNS resolver to use",
+    "cname_label": "Recursive CNAME",
+    "cname_desc": "Follow CNAME chain",
+    "record_type_label": "Record Types",
+    "record_type_desc": "Select record types to query",
+    "no_records": "No records found."
+  },
+  "ssl": {
+    "name": "TLS/SSL Certificate Viewer",
+    "description": "Fetch and inspect SSL/TLS certificates",
+    "url_label": "URL",
+    "url_desc": "Server URL or hostname",
+    "sni_label": "SNI",
+    "sni_desc": "Server Name Indication (optional)"
+  },
+  "tls_warning": "Connection uses {{version}}. Minimum recommended is TLS 1.2.",
+  "revocation_not_checked": "Certificate revocation status was not checked."
+}

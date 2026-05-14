@@ -1,0 +1,23 @@
+{
+  "users": "Users",
+  "access": "Access",
+  "rate_limits": "Rate Limits",
+  "modules": "Modules",
+  "settings": "Settings",
+  "logs": "Logs",
+  "user_management": "User Management",
+  "access_rights": "Access Rights",
+  "module_activation": "Module Activation",
+  "global_settings": "Global Settings",
+  "log_viewer": "Log Viewer",
+  "block": "Block",
+  "unblock": "Unblock",
+  "lock": "Lock",
+  "unlock": "Unlock",
+  "delete": "Delete",
+  "admin_notes": "Admin Notes",
+  "dns_presets": "DNS Server Presets",
+  "tool_executions": "Tool Executions",
+  "security_events": "Security Events",
+  "audit": "Audit"
+}
