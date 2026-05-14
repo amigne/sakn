@@ -34,6 +34,7 @@ export default function PingPage() {
   const [form, setForm] = useState<PingFormData>({ ...defaults });
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof PingFormData, string>>>({});
+  const [runCount, setRunCount] = useState(defaults.count);
   const { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset: resetOutput } = useMockPingWebSocket();
 
   const pingResults = results as PingResult[];
@@ -57,6 +58,7 @@ export default function PingPage() {
   const handleStart = useCallback(() => {
     if (!validate()) return;
     resetOutput();
+    setRunCount(form.count);
     start({ ...form });
   }, [form, start, resetOutput]);
 
@@ -146,7 +148,7 @@ export default function PingPage() {
       >
         {status !== "idle" && (
           <>
-            {isRunning && <ProgressBar value={currentSeq} max={form.count || pingResults.length + 5} className="mb-3" />}
+            {isRunning && <ProgressBar value={currentSeq} max={runCount || pingResults.length + 5} className="mb-3" />}
             {displayMode === "table" ? (
               <table className="w-full text-sm">
                 <thead>
@@ -206,14 +208,19 @@ export default function PingPage() {
                               <tr>
                                 <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.transmitted}</td>
                                 <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.received}</td>
-                                <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.lost} ({pingSummary.loss_pct}%)</td>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.lost}</td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text-secondary)]">100%</td>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text-secondary)]">{(100 - pingSummary.loss_pct).toFixed(1)}%</td>
+                                <td className="px-3 py-1 font-mono text-[var(--color-text-secondary)]">{pingSummary.loss_pct}%</td>
                               </tr>
                             </tbody>
                           </table>
                         </>
                       ) : (
                         <pre className="font-mono text-sm text-[var(--color-text)] mb-3">
-                          {`## Packets\n| Sent | Received | Lost |\n| ${pingSummary.transmitted} | ${pingSummary.received} | ${pingSummary.lost} |\n| 100% | ${(100 - pingSummary.loss_pct).toFixed(1)}% | ${pingSummary.loss_pct}% |`}
+                          {`Packets: sent = ${pingSummary.transmitted}, received = ${pingSummary.received} (${(100 - pingSummary.loss_pct).toFixed(1)}%), lost = ${pingSummary.lost} (${pingSummary.loss_pct}%)`}
                         </pre>
                       )}
 
@@ -242,7 +249,8 @@ export default function PingPage() {
                           </>
                         ) : (
                           <pre className="font-mono text-sm text-[var(--color-text)]">
-                            {`## RTT\n| Minimum | Average | Maximum | Std deviation |\n| ${pingSummary.rtt_min_ms} ms | ${pingSummary.rtt_avg_ms} ms | ${pingSummary.rtt_max_ms} ms | ${pingSummary.rtt_stddev_ms ?? "—"} |`}
+                            {`Approximate round trip times in milliseconds:
+    Minimum = ${pingSummary.rtt_min_ms}ms, Maximum = ${pingSummary.rtt_max_ms}ms, Average = ${pingSummary.rtt_avg_ms}ms, Std deviation = ${pingSummary.rtt_stddev_ms ?? "-"}`}
                           </pre>
                         )
                       ) : (

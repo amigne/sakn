@@ -34,6 +34,7 @@ export default function TraceroutePage() {
   const [form, setForm] = useState<TracerouteFormData>({ ...defaults });
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TracerouteFormData, string>>>({});
+  const [runConfig, setRunConfig] = useState<{ probes_per_hop: number; max_distance: number }>({ probes_per_hop: defaults.probes_per_hop, max_distance: defaults.max_distance });
   const { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset: resetOutput } = useMockTracerouteWebSocket();
 
   const hops = results as TracerouteHop[];
@@ -56,6 +57,7 @@ export default function TraceroutePage() {
   const handleStart = useCallback(() => {
     if (!validate()) return;
     resetOutput();
+    setRunConfig({ probes_per_hop: form.probes_per_hop, max_distance: form.max_distance });
     start({ ...form });
   }, [form, start, resetOutput]);
 
@@ -150,7 +152,7 @@ export default function TraceroutePage() {
       >
         {!isIdle && hops.length > 0 && (
           <>
-            {isRunning && <ProgressBar value={currentSeq} max={form.max_distance} className="mb-3" />}
+            {isRunning && <ProgressBar value={currentSeq} max={runConfig.max_distance} className="mb-3" />}
             {displayMode === "table" ? (
               <table className="w-full text-sm">
                 <thead>
@@ -158,7 +160,7 @@ export default function TraceroutePage() {
                     <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-12">Hop</th>
                     <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">IP</th>
                     <th scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Hostname</th>
-                    {Array(form.probes_per_hop).fill(null).map((_, i) => (
+                    {Array(runConfig.probes_per_hop).fill(null).map((_, i) => (
                       <th key={i} scope="col" className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Probe {i + 1}</th>
                     ))}
                   </tr>

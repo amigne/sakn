@@ -16,7 +16,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
           )}
           <input
             ref={ref}
-            className={`focus-ring w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50
+            className={`focus-ring w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50 dark:[color-scheme:dark]
               ${icon && iconPosition === "start" ? "ps-10" : ""}
               ${icon && iconPosition === "end" ? "pe-10" : ""}
               ${error ? "border-error-500 focus:border-error-500" : "border-[var(--color-border)]"}

@@ -157,16 +157,24 @@ Request timeout for icmp_seq 3
 Reply from 8.8.8.8: bytes=56 time=13.1ms TTL=64
 ```
 
-**Summary** (after completion):
+**Summary** (after completion) — Table view:
 ```
-## Packets
+Packets:
 | Sent | Received | Lost |
 |    4 |        3 |    1 |
 | 100% |      75% |  25% |
 
-## RTT
+RTT:
 | Minimum | Average | Maximum | Std deviation |
 | 11.8 ms | 12.4 ms | 13.1 ms |           0.5 |
+```
+
+**Summary** (after completion) — Text view:
+```
+Packets: sent = 4, received = 3 (75%), lost = 1 (25%)
+
+Approximate round trip times in milliseconds:
+    Minimum = 11.8ms, Maximum = 13.1ms, Average = 12.4ms, Std deviation = 0.5
 ```
 
 All lost → only Packets table, "No RTT statistics available."
@@ -297,9 +305,11 @@ Same top bar + sidebar as main app. Admin sub-navigation via horizontal tab bar 
 
 **Access Rights**: matrix — rows = tools, columns = roles. Each cell = toggle switch. Changes save immediately.
 
-**Rate Limiting**: matrix — rows = limit types (Global Soft/Hard, per-tool), columns split into Visitor (Session), Visitor (IP), Authenticated, Admin. Cells editable (click-to-edit, blur-to-save). Validation: per-tool ≤ global. "Reset to defaults" button.
+**Rate Limiting**: two tables.
+  - *Global limits*: rows = roles, columns = Soft limit (/s) + Hard limit (/h). Soft limit = requests per second (short window, 1s). Hard limit = requests per hour (long window, 1h). Exceeding either blocks the user. Cells editable (click-to-edit, blur-to-save).
+  - *Per-tool limits*: optional overrides for specific tools. Rows = role + tool pairs, with an add-row form at the top of the table. Role + tool pair must be unique. Columns = Role, Tool, Soft limit (/s), Hard limit (/h), Delete button. Validation: per-tool ≤ global for the same role. "Reset to defaults" button restores both tables.
 
-**Module Activation**: table — rows = tools, columns = Enabled toggle, Roles link, Settings gear icon. DNS Lookup settings: editable table of DNS server presets (IP + Description), with add/edit/delete/reorder. Defaults: Google (8.8.8.8), Cloudflare (1.1.1.1), Quad9 (9.9.9.9). Auto-save on each action.
+**Module Activation**: table — rows = tools, columns = Enabled toggle (centered), Settings gear icon (centered). DNS Lookup settings: editable table of DNS server presets (IP + Description), with add/edit/delete/reorder. IP addresses validated as IPv4 before saving. Adding a preset keeps the modal open to show the updated list. Defaults: Google (8.8.8.8), Cloudflare (1.1.1.1), Quad9 (9.9.9.9). Auto-save on each action.
 
 **Log Viewer**: filterable (date range, user, tool, event type), paginated table. Click row to expand full details. Auto-refresh with pause toggle.
 

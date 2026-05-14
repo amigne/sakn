@@ -25,7 +25,6 @@ function makeMock(): AccessPermission[] {
 
 export default function AdminAccessPage() {
   const [permissions, setPermissions] = useState<AccessPermission[]>(makeMock());
-  const [saved, setSaved] = useState(false);
 
   const toggle = (tool: string, role: string) => {
     setPermissions((prev) =>
@@ -33,19 +32,13 @@ export default function AdminAccessPage() {
         p.tool_name === tool && p.role === role ? { ...p, allowed: !p.allowed } : p
       )
     );
-    setSaved(false);
-  };
-
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
     <AdminLayout title="Access Rights">
       <div className="card p-4 max-w-md">
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          Toggle tool access per role. Changes take effect immediately.
+          Toggle tool access per role. Changes are saved immediately.
         </p>
 
         <table className="w-full text-sm">
@@ -64,11 +57,13 @@ export default function AdminAccessPage() {
                 {roles.map((role) => {
                   const perm = permissions.find((p) => p.tool_name === tool && p.role === role);
                   return (
-                    <td key={role} className="px-3 py-2 text-center">
-                      <ToggleSwitch
-                        checked={perm?.allowed ?? false}
-                        onChange={() => toggle(tool, role)}
-                      />
+                    <td key={role} className="px-3 py-2">
+                      <div className="flex justify-center">
+                        <ToggleSwitch
+                          checked={perm?.allowed ?? false}
+                          onChange={() => toggle(tool, role)}
+                        />
+                      </div>
                     </td>
                   );
                 })}
@@ -76,10 +71,6 @@ export default function AdminAccessPage() {
             ))}
           </tbody>
         </table>
-
-        <button onClick={handleSave} className="mt-4 text-sm text-primary-600 hover:text-primary-700">
-          {saved ? "Saved" : "Save Changes"}
-        </button>
       </div>
     </AdminLayout>
   );

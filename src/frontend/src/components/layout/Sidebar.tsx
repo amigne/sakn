@@ -48,6 +48,7 @@ export default function Sidebar() {
 
       {role === "administrator" && (
         <>
+          <div className="flex-1" />
           <hr className="mx-3 my-2 border-gray-200 dark:border-gray-700" />
           <div className="px-3 py-1 text-xs font-semibold uppercase text-gray-500 tracking-wide">
             Administration

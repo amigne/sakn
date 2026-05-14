@@ -30,6 +30,7 @@ export default function AdminModulesPage() {
   const [editingPreset, setEditingPreset] = useState<DnsServerPreset | null>(null);
   const [presetIp, setPresetIp] = useState("");
   const [presetDesc, setPresetDesc] = useState("");
+  const [presetError, setPresetError] = useState("");
 
   const toggleModule = (name: string) => {
     setModules((prev) => prev.map((m) => (m.name === name ? { ...m, enabled: !m.enabled } : m)));
@@ -39,17 +40,39 @@ export default function AdminModulesPage() {
     setEditingPreset(preset);
     setPresetIp(preset.ip_address);
     setPresetDesc(preset.description);
+    setPresetError("");
     setShowDnsEditor(true);
   };
 
+  const isValidIp = (ip: string): boolean => {
+    const ipv4Re = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const m = ipv4Re.exec(ip);
+    if (!m) return false;
+    return m.slice(1).every((o) => parseInt(o, 10) <= 255);
+  };
+
   const savePreset = () => {
+    setPresetError("");
+    if (!isValidIp(presetIp.trim())) {
+      setPresetError("Invalid IPv4 address.");
+      return;
+    }
+    if (!presetDesc.trim()) {
+      setPresetError("Description is required.");
+      return;
+    }
     if (editingPreset) {
       setDnsPresets((prev) => prev.map((p) => (p.id === editingPreset.id ? { ...p, ip_address: presetIp, description: presetDesc } : p)));
+      setEditingPreset(null);
+      setPresetIp("");
+      setPresetDesc("");
+      setShowDnsEditor(false);
     } else {
       const id = String(Date.now());
       setDnsPresets((prev) => [...prev, { id, ip_address: presetIp, description: presetDesc, sort_order: prev.length }]);
+      setPresetIp("");
+      setPresetDesc("");
     }
-    setShowDnsEditor(false);
   };
 
   const deletePreset = (id: string) => {
@@ -85,18 +108,22 @@ export default function AdminModulesPage() {
               {modules.map((mod) => (
                 <tr key={mod.name} className="border-b border-[var(--color-border)]">
                   <td className="px-3 py-2 font-medium text-[var(--color-text)]">{mod.display}</td>
-                  <td className="px-3 py-2 text-center">
-                    <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name)} />
+                  <td className="px-3 py-2">
+                    <div className="flex justify-center">
+                      <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name)} />
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    {mod.hasSettings && (
-                      <button onClick={() => setShowDnsEditor(true)} className="text-primary-600 hover:text-primary-700">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </button>
-                    )}
+                  <td className="px-3 py-2">
+                    <div className="flex justify-center">
+                      {mod.hasSettings && (
+                        <button onClick={() => setShowDnsEditor(true)} className="text-primary-600 hover:text-primary-700">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -123,9 +150,13 @@ export default function AdminModulesPage() {
 
             <hr className="border-[var(--color-border)]" />
 
+            {presetError && (
+              <p className="text-xs text-error-600 dark:text-error-500">{presetError}</p>
+            )}
+
             <div className="flex gap-2">
-              <TextInput placeholder="IP Address" value={presetIp} onChange={(e) => setPresetIp(e.target.value)} />
-              <TextInput placeholder="Description" value={presetDesc} onChange={(e) => setPresetDesc(e.target.value)} />
+              <TextInput placeholder="IP Address" value={presetIp} onChange={(e) => { setPresetIp(e.target.value); setPresetError(""); }} />
+              <TextInput placeholder="Description" value={presetDesc} onChange={(e) => { setPresetDesc(e.target.value); setPresetError(""); }} />
               <Button size="sm" onClick={savePreset}>{editingPreset ? "Update" : "Add"}</Button>
             </div>
 

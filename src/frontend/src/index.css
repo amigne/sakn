@@ -33,32 +33,30 @@
   --color-info-500: #3b82f6;
   --color-info-600: #2563eb;
 
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+}
+
+/* Application color tokens — defined as plain CSS custom properties
+   so :root and .dark can override them predictably. */
+:root {
   --color-surface: #ffffff;
   --color-surface-alt: #f5f5f5;
   --color-border: #d0d0d0;
   --color-text: #1a1a1a;
   --color-text-secondary: #666666;
+}
 
-  --color-surface-dark: #1a1a1a;
-  --color-surface-alt-dark: #2a2a2a;
-  --color-border-dark: #404040;
-  --color-text-dark: #e5e5e5;
-  --color-text-secondary-dark: #999999;
-
-  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+.dark {
+  --color-surface: #1a1a1a;
+  --color-surface-alt: #2a2a2a;
+  --color-border: #404040;
+  --color-text: #e5e5e5;
+  --color-text-secondary: #999999;
 }
 
 @layer base {
   html {
     @apply bg-[var(--color-surface-alt)] text-[var(--color-text)];
-  }
-
-  .dark & {
-    --color-surface: var(--color-surface-dark);
-    --color-surface-alt: var(--color-surface-alt-dark);
-    --color-border: var(--color-border-dark);
-    --color-text: var(--color-text-dark);
-    --color-text-secondary: var(--color-text-secondary-dark);
   }
 
   body {
