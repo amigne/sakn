@@ -96,6 +96,7 @@ export interface SslCertInfo {
   is_self_signed: boolean;
   name_mismatch: boolean;
   is_weak_key: boolean;
+  is_untrusted: boolean;
 }
 
 export interface SslResult {

@@ -120,10 +120,14 @@ class SslViewerTool(BaseTool):
 
         # Step 3: Parse all certificates
         all_ders = [leaf_der] + intermediates_der
-        for der_data in all_ders:
+        for idx, der_data in enumerate(all_ders):
             try:
                 cert = x509.load_der_x509_certificate(der_data)
-                certinfo = self._parse_cert(cert, hostname)
+                certinfo = self._parse_cert(cert, hostname, is_leaf=(idx == 0))
+                # When the chain is not trusted by the system, the root cert
+                # (last in the chain) is the one not in the system CA store.
+                is_last = (idx == len(all_ders) - 1)
+                certinfo["is_untrusted"] = not chain_valid and is_last
                 certificates.append(certinfo)
             except Exception as e:
                 logger.warning("Failed to parse certificate: %s", e)
@@ -180,18 +184,15 @@ class SslViewerTool(BaseTool):
                 tls_version = ssock.version() or "Unknown"
                 cipher_info = ssock.cipher() or (None, None, None)
                 cipher_suite = cipher_info[0] or "Unknown"
-                leaf_der = ssock.getpeercert(binary_form=True)
 
-                # Try to get intermediates
-                intermediates: list[bytes] = []
+                # Full certificate chain (leaf + intermediates + root)
                 try:
-                    extra_chain = ctx.get_ca_certs()
-                    if extra_chain:
-                        for entry in extra_chain:
-                            if "binary" in entry:
-                                intermediates.append(entry["binary"])
+                    full_chain: list[bytes] = ssock.get_unverified_chain()
                 except Exception:
-                    pass
+                    full_chain = [ssock.getpeercert(binary_form=True)]
+
+                leaf_der = full_chain[0] if full_chain else ssock.getpeercert(binary_form=True)
+                intermediates = full_chain[1:] if len(full_chain) > 1 else []
 
         return leaf_der, intermediates, tls_version, cipher_suite
 
@@ -211,7 +212,22 @@ class SslViewerTool(BaseTool):
         return bool(TLS_VERSION_WARNING_PATTERN.match(tls_version))
 
     @staticmethod
-    def _parse_cert(cert: x509.Certificate, hostname: str) -> dict[str, Any]:
+    def _load_trusted_fingerprints() -> set[str]:
+        """Return SHA-256 fingerprints of all certificates in the system CA store."""
+        fps: set[str] = set()
+        try:
+            ctx = ssl.create_default_context()
+            for entry in ctx.get_ca_certs():
+                der = entry.get("binary")
+                if der:
+                    cert = x509.load_der_x509_certificate(der)
+                    fps.add(cert.fingerprint(hashes.SHA256()).hex(":"))
+        except Exception:
+            pass
+        return fps
+
+    @staticmethod
+    def _parse_cert(cert: x509.Certificate, hostname: str, *, is_leaf: bool = False) -> dict[str, Any]:
         """Extract structured info from a certificate."""
         # Subject / Issuer
         subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
@@ -253,12 +269,25 @@ class SslViewerTool(BaseTool):
         now = datetime.now(tz=timezone.utc)
         is_expired = now > cert.not_valid_after_utc
 
-        # Self-signed
-        is_self_signed = cert.issuer == cert.subject
+        # Is this a CA certificate? (BasicConstraints: CA=True)
+        is_ca = False
+        try:
+            bc_ext = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+            is_ca = bc_ext.value.ca or False
+        except x509.ExtensionNotFound:
+            pass
 
-        # Hostname match check (leaf cert only)
+        # Self-signed: normal for root/intermediate CAs, suspicious for end-entity certs.
+        is_self_signed = cert.issuer == cert.subject
+        if is_ca and is_self_signed:
+            # A self-signed CA is a root — not an issue by itself.
+            # Its trust comes from the system CA store, checked via chain_valid.
+            is_self_signed = False
+
+        # Hostname match check — only applies to the leaf (end-entity) certificate.
+        # Intermediate and root CA certs are not expected to carry the server's hostname.
         name_mismatch = False
-        if hostname:
+        if is_leaf and hostname:
             name_mismatch = not _hostname_matches(hostname, sans, subject_cn)
 
         # Weak key check
@@ -313,6 +342,7 @@ class SslViewerTool(BaseTool):
                             "is_self_signed": {"type": "boolean"},
                             "name_mismatch": {"type": "boolean"},
                             "is_weak_key": {"type": "boolean"},
+                            "is_untrusted": {"type": "boolean"},
                         },
                     },
                 },

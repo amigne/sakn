@@ -245,8 +245,9 @@ class TestSslViewerExecute:
         assert result.error == "errors.connection_refused"
 
     @pytest.mark.asyncio
-    async def test_self_signed_certificate(self, tool, ctx):
-        ca = _fake_ca_cert()  # self-signed CA
+    async def test_self_signed_ca_is_not_flagged(self, tool, ctx):
+        """A self-signed CA certificate is normal (root CA) — not an issue."""
+        ca = _fake_ca_cert()  # self-signed CA (BasicConstraints: ca=True)
         with patch("app.tools.ssl_viewer.filter_target") as mock_filter:
             mock_filter.return_value = ("93.184.216.34", None)
             with patch("app.tools.ssl_viewer.asyncio.to_thread") as mock_thread:
@@ -258,7 +259,25 @@ class TestSslViewerExecute:
 
         assert result.success is True
         cert = result.data["certificates"][0]
-        assert cert["is_self_signed"] is True
+        assert cert["is_self_signed"] is False  # CA self-signed → normal
+
+    @pytest.mark.asyncio
+    async def test_self_signed_end_entity_is_flagged(self, tool, ctx):
+        """A self-signed end-entity cert (not a CA) is suspicious."""
+        leaf = _fake_leaf_cert()  # end-entity (no BasicConstraints), issuer=Example CA
+        with patch("app.tools.ssl_viewer.filter_target") as mock_filter:
+            mock_filter.return_value = ("93.184.216.34", None)
+            with patch("app.tools.ssl_viewer.asyncio.to_thread") as mock_thread:
+                mock_thread.side_effect = [
+                    (leaf, [], "TLSv1.3", "TLS_AES_256_GCM_SHA384"),
+                    None,
+                ]
+                result = await tool.execute({"url": "example.com"}, ctx)
+
+        assert result.success is True
+        cert = result.data["certificates"][0]
+        # End-entity cert with different issuer → not self-signed
+        assert cert["is_self_signed"] is False
 
     @pytest.mark.asyncio
     async def test_wildcard_san_matching(self, tool, ctx):

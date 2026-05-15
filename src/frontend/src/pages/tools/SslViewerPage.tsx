@@ -81,8 +81,13 @@ export default function SslViewerPage() {
     if (cert.is_self_signed) issues.push("Self-signed");
     if (cert.name_mismatch) issues.push("Name mismatch");
     if (cert.is_weak_key) issues.push("Weak key");
+    if (cert.is_untrusted) issues.push("Untrusted");
     return issues;
   };
+
+  /** Red-text class for fields flagged by a certificate issue. */
+  const errColor = "text-error-600 dark:text-error-500";
+  const okColor = "text-[var(--color-text)]";
 
   return (
     <PageLayout>
@@ -135,8 +140,6 @@ export default function SslViewerPage() {
                 {sslResult.warnings.map((w, i) => <Alert key={i} variant="warning">{w}</Alert>)}
               </div>
             )}
-            <Alert variant="info">Certificate revocation status was not checked.</Alert>
-
             <Accordion
               items={sslResult.certificates.map((cert, i) => {
                 const issues = certIssues(cert);
@@ -154,23 +157,23 @@ export default function SslViewerPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Subject</span>
-                          <p className="font-mono text-xs text-[var(--color-text)]">{cert.subject}</p>
+                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.name_mismatch || cert.is_untrusted ? errColor : okColor}`}>{cert.subject}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Issuer</span>
-                          <p className="font-mono text-xs text-[var(--color-text)]">{cert.issuer}</p>
+                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.is_untrusted ? errColor : okColor}`}>{cert.issuer}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Valid From</span>
-                          <p className="font-mono text-xs text-[var(--color-text)]">{formatDate(cert.valid_from)}</p>
+                          <p className={`font-mono text-xs ${cert.is_expired ? errColor : okColor}`}>{formatDate(cert.valid_from)}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Valid Until</span>
-                          <p className="font-mono text-xs text-[var(--color-text)]">{formatDate(cert.valid_until)}</p>
+                          <p className={`font-mono text-xs ${cert.is_expired ? errColor : okColor}`}>{formatDate(cert.valid_until)}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Key Algorithm</span>
-                          <p className="font-mono text-xs text-[var(--color-text)]">{cert.key_algorithm} {cert.key_size} bits</p>
+                          <p className={`font-mono text-xs ${cert.is_weak_key ? errColor : okColor}`}>{cert.key_algorithm} {cert.key_size} bits</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Signature</span>
@@ -179,9 +182,9 @@ export default function SslViewerPage() {
                       </div>
                       {cert.sans.length > 0 && (
                         <div>
-                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Subject Alternative Names</span>
+                          <span className={`text-xs font-semibold ${cert.name_mismatch ? errColor : 'text-[var(--color-text-secondary)]'}`}>Subject Alternative Names</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {cert.sans.map((san) => <Badge key={san} variant="neutral">{san}</Badge>)}
+                            {cert.sans.map((san) => <Badge key={san} variant={cert.name_mismatch ? "error" : "neutral"}>{san}</Badge>)}
                           </div>
                         </div>
                       )}
