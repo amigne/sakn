@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import TopBar from "./TopBar";
 import Sidebar from "./Sidebar";
 
@@ -95,7 +96,9 @@ export default function PageLayout({ children }: PageLayoutProps) {
         </main>
       </div>
       <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1 text-center text-xs text-gray-500 dark:text-gray-400">
-        SAKN v0.0.1 — Swiss Army Knife for Network Engineers
+        SAKN v0.0.1 — Swiss Army Knife for Network Engineers — Copyright © 2026 Yann GAUTERON
+        {" "}·{" "}
+        <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">Privacy</Link>
       </footer>
     </div>
   );

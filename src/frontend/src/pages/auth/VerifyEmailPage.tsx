@@ -1,20 +1,35 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Alert, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const verifyEmail = useAuthStore((s) => s.verifyEmail);
   const [state, setState] = useState<"loading" | "success" | "expired" | "already-verified">("loading");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!token) { setState("expired"); return; }
-    const timer = setTimeout(() => {
-      // Mock: if token starts with "valid", success; else expired
-      setState(token.startsWith("valid") ? "success" : "expired");
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [token]);
+
+    let cancelled = false;
+    const verify = async () => {
+      try {
+        const msg = await verifyEmail(token);
+        if (!cancelled) {
+          setMessage(msg);
+          setState("success");
+        }
+      } catch {
+        if (!cancelled) {
+          setState("expired");
+        }
+      }
+    };
+    verify();
+    return () => { cancelled = true; };
+  }, [token, verifyEmail]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
@@ -35,7 +50,7 @@ export default function VerifyEmailPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">Email Verified</h1>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Your email has been verified. You can now sign in.</p>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{message || "Your email has been verified. You can now sign in."}</p>
             <Link to="/login" className="mt-4 inline-block">
               <Button>Sign In</Button>
             </Link>
@@ -49,12 +64,10 @@ export default function VerifyEmailPage() {
             </svg>
             <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">Verification Link Expired</h1>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">This verification link has expired or is invalid.</p>
-            <Button variant="primary" className="mt-4">Send New Verification Link</Button>
+            <Link to="/login" className="mt-4 inline-block">
+              <Button>Return to Login</Button>
+            </Link>
           </>
-        )}
-
-        {state === "already-verified" && (
-          <Alert variant="info">This email is already verified. You can sign in.</Alert>
         )}
       </div>
     </div>

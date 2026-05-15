@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import { useAuthStore } from "@/stores/authStore";
+import { ApiError } from "@/services/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const setDevRole = useAuthStore((s) => s.setDevRole);
+  const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,15 +18,18 @@ export default function LoginPage() {
     setError(null);
     if (!email || !password) { setError("Email and password are required."); return; }
     setLoading(true);
-    // Mock login
-    await new Promise((r) => setTimeout(r, 500));
-    if (email.includes("admin")) {
-      setDevRole("administrator");
-    } else {
-      setDevRole("authenticated");
+    try {
+      await login(email, password);
+      navigate("/ping");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    navigate("/ping");
   };
 
   return (
@@ -83,6 +87,7 @@ export default function LoginPage() {
         <div className="mt-4 text-center text-sm space-y-2">
           <p><Link to="/reset-password" className="text-primary-600 hover:text-primary-700">Forgot password?</Link></p>
           <p className="text-[var(--color-text-secondary)]">Don't have an account? <Link to="/register" className="text-primary-600 hover:text-primary-700">Sign up</Link></p>
+          <p><Link to="/ping" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">Continue as guest</Link></p>
         </div>
       </div>
     </div>

@@ -346,8 +346,8 @@ Slice 8: Polish         i18n, theming, responsive, RTL, tests, Docker prod
 
 **Tasks** :
 - `useAuth.ts` — real auth hook (login, logout, register, verify, reset, current user)
-- `services/auth.ts` — auth API calls
-- `services/preferences.ts` — preferences API calls
+- `services/authService.ts` — auth API calls
+- `services/preferencesService.ts` — preferences API calls
 - CSRF handling in api.ts (read `sakn_csrf` cookie, send `X-CSRF-Token` header, retry on 403)
 - Session middleware integration (redirect on 401, refresh user state)
 - Switch all auth pages from mock to real API calls

@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI) -> Any:
     except Exception:
         logger.warning("Redis unavailable, continuing without it")
 
+    # Ensure tables exist (idempotent — safe to call even after alembic migrations)
+    from app.models import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     # Tool registry
     from app.tools.registry import ToolRegistry
     from app.tools.ping import PingTool
@@ -66,10 +72,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session middleware (anonymous for Slice 3)
+# Session middleware
 from app.middleware.session import SessionMiddleware
 
 app.add_middleware(SessionMiddleware)
+
+# Security headers
+from app.middleware.security_headers import SecurityHeadersMiddleware
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # API router
 from app.api.v1.router import v1_router

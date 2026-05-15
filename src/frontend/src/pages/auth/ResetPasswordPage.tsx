@@ -2,25 +2,41 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
+import { useAuthStore } from "@/stores/authStore";
+import { ApiError } from "@/services/api";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const requestReset = useAuthStore((s) => s.requestPasswordReset);
+  const resetPassword = useAuthStore((s) => s.resetPassword);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) { setError("Email is required."); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setLoading(false);
-    setSuccess(true);
+    setError(null);
+    try {
+      const msg = await requestReset(email);
+      setSuccessMsg(msg);
+      setSuccess(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = async (e: React.FormEvent) => {
@@ -28,14 +44,23 @@ export default function ResetPasswordPage() {
     setError(null);
     if (!password || !passwordConfirm) { setError("All fields are required."); return; }
     if (password !== passwordConfirm) { setError("Passwords do not match."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!token) { setError("Missing reset token."); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setLoading(false);
-    setSuccess(true);
+    try {
+      const msg = await resetPassword(token, password, passwordConfirm);
+      setSuccessMsg(msg);
+      setSuccess(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // If success after reset form, show success message
   if (success && token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
@@ -44,7 +69,7 @@ export default function ResetPasswordPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">Password Reset</h1>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Your password has been reset. You can now sign in.</p>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{successMsg}</p>
           <Link to="/login" className="mt-4 inline-block">
             <Button>Sign In</Button>
           </Link>
@@ -53,7 +78,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // Request form (no token)
   if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
@@ -61,11 +85,8 @@ export default function ResetPasswordPage() {
           <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">Reset Password</h1>
 
           {success && (
-            <Alert variant="success" className="mb-4">
-              If this email is registered, a reset link has been sent.
-            </Alert>
+            <Alert variant="success" className="mb-4">{successMsg}</Alert>
           )}
-
           {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
           <form onSubmit={handleRequest} className="space-y-4">
@@ -84,7 +105,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // Reset form (with token)
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">

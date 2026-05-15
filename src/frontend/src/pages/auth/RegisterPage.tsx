@@ -2,9 +2,12 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
+import { useAuthStore } from "@/stores/authStore";
+import { ApiError } from "@/services/api";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const register = useAuthStore((s) => s.register);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -17,13 +20,21 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email || !password || !passwordConfirm) { setError("All fields are required."); return; }
+    if (!email || !firstName || !lastName || !password || !passwordConfirm) { setError("All fields are required."); return; }
     if (password !== passwordConfirm) { setError("Passwords do not match."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setLoading(false);
-    navigate("/verify-email-sent", { state: { email } });
+    try {
+      await register(email, password, passwordConfirm, firstName, lastName);
+      navigate("/verify-email-sent", { state: { email } });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,12 +52,12 @@ export default function RegisterPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">First Name</span>
-              <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
+              <span className="text-sm font-medium text-[var(--color-text)]">First Name *</span>
+              <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Last Name</span>
-              <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+              <span className="text-sm font-medium text-[var(--color-text)]">Last Name *</span>
+              <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />
             </label>
           </div>
 

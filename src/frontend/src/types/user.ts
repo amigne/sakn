@@ -5,6 +5,8 @@ export type ThemeMode = "light" | "dark" | "system";
 export interface User {
   id: string;
   email: string;
+  first_name: string;
+  last_name: string;
   role: UserRole;
   status: UserStatus;
   email_verified: boolean;

@@ -23,11 +23,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed = false, onNavigate, onToggle, showToggle = false }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
-  const devRole = useAuthStore((s) => s.devRole);
-  const role = devRole === "visitor" ? "visitor"
-    : devRole === "administrator" ? "administrator"
-    : devRole === "authenticated" ? "authenticated"
-    : user?.role ?? "visitor";
+  const role = user?.role ?? "visitor";
 
   return (
     <nav

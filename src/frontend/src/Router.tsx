@@ -14,6 +14,7 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 import ProfilePage from "@/pages/account/ProfilePage";
 import SessionsPage from "@/pages/account/SessionsPage";
 import AccountDeletePage from "@/pages/account/AccountDeletePage";
+import PrivacyPage from "@/pages/PrivacyPage";
 // Admin
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "@/pages/admin/AdminUserDetailPage";
@@ -44,6 +45,9 @@ export default function Router() {
       <Route path="/account/preferences" element={<ProfilePage />} />
       <Route path="/account/sessions" element={<SessionsPage />} />
       <Route path="/account/delete" element={<AccountDeletePage />} />
+
+      {/* Legal */}
+      <Route path="/privacy" element={<PrivacyPage />} />
 
       {/* Admin routes */}
       <Route path="/admin/users" element={<AdminUsersPage />} />
