@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { useMockTracerouteWebSocket } from "@/hooks/useMockToolExecution";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToolStore } from "@/stores/toolStore";
 import { TextInput, Select, ToggleSwitch, Badge, ProgressBar } from "@/components/ui";
 import type { TracerouteHop } from "@/types/tool";
@@ -17,12 +17,18 @@ interface TracerouteFormData {
   dns_resolution: boolean;
 }
 
+interface TracerouteSummary {
+  hops_probed: number;
+  destination_reached: boolean;
+  total_time_ms: number;
+}
+
 const defaults: TracerouteFormData = {
   target: "8.8.8.8",
   protocol: "udp",
   port: 33434,
   probes_per_hop: 3,
-  timeout: 5,
+  timeout: 1,
   max_distance: 30,
   dns_resolution: true,
 };
@@ -35,9 +41,10 @@ export default function TraceroutePage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TracerouteFormData, string>>>({});
   const [runConfig, setRunConfig] = useState<{ probes_per_hop: number; max_distance: number }>({ probes_per_hop: defaults.probes_per_hop, max_distance: defaults.max_distance });
-  const { status, results, summary, terminatedBy, duration, currentSeq, start, cancel, reset: resetOutput } = useMockTracerouteWebSocket();
+  const { status, results, summary, terminatedBy, duration, error, connect, cancel, reset: resetOutput } = useWebSocket<TracerouteHop, TracerouteSummary>({ toolName: "traceroute" });
 
   const hops = results as TracerouteHop[];
+  const tracerouteSummary = summary as TracerouteSummary | null;
 
   useEffect(() => {
     useToolStore.getState().setActiveTool("traceroute");
@@ -58,8 +65,8 @@ export default function TraceroutePage() {
     if (!validate()) return;
     resetOutput();
     setRunConfig({ probes_per_hop: form.probes_per_hop, max_distance: form.max_distance });
-    start({ ...form });
-  }, [form, start, resetOutput]);
+    connect({ ...form });
+  }, [form, connect, resetOutput]);
 
   const handleReset = useCallback(() => {
     setForm({ ...defaults });
@@ -76,11 +83,52 @@ export default function TraceroutePage() {
   const isIdle = status === "idle";
 
   const copyResults = () => {
-    const text = hops.map((h) => {
-      if (!h.ip) return `Hop: * * *`;
-      const probeStr = h.probes.map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join(" ");
-      return `Hop ${h.ip} ${h.hostname ?? ""} ${probeStr}`;
-    }).join("\n");
+    let text: string;
+    if (displayMode === "table") {
+      const headers = ["Hop", "IP", "Hostname", ...Array(runConfig.probes_per_hop).fill(null).map((_, i) => `Probe ${i + 1}`)];
+      const sep = headers.map(() => "---");
+      const rows = hops.map((h, idx) => {
+        const hop = String(idx + 1);
+        if (h.multipath && h.paths) {
+          return h.paths.map((p, pi) => {
+            const cells = [
+              pi === 0 ? hop : "",
+              p.ip ?? "*",
+              p.hostname || "",
+              ...p.probes.map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*"),
+            ];
+            return `| ${cells.join(" | ")} |`;
+          }).join("\n");
+        }
+        const cells = [
+          hop,
+          h.ip ?? "*",
+          h.hostname || "",
+          ...h.probes.map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*"),
+        ];
+        return `| ${cells.join(" | ")} |`;
+      });
+      text = [
+        `| ${headers.join(" | ")} |`,
+        `| ${sep.join(" | ")} |`,
+        ...rows,
+        "",
+        summary ? `**${tracerouteSummary?.destination_reached ? "Destination reached" : "Destination not reached"}** — ${tracerouteSummary?.hops_probed} hops, ${duration ? (duration / 1000).toFixed(1) + "s" : ""}` : "",
+      ].join("\n");
+    } else {
+      text = hops.map((h, idx) => {
+        if (h.multipath && h.paths) {
+          return h.paths.map((p) => {
+            const probeStr = p.probes.map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*").join("  ");
+            return `${idx + 1}  ${p.ip ?? "*"}${p.hostname ? ` (${p.hostname})` : ""}  ${probeStr}`;
+          }).join("\n");
+        }
+        if (!h.ip) return `${idx + 1}  * * *`;
+        const probeStr = h.probes.map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
+        const label = h.ip === "[hidden]" ? "[hidden]" : `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}`;
+        return `${idx + 1}  ${label}  ${probeStr}${h.reached ? "  <- Destination" : ""}`;
+      }).join("\n");
+    }
     navigator.clipboard.writeText(text).catch(() => {});
   };
 
@@ -148,11 +196,12 @@ export default function TraceroutePage() {
 
       <ToolOutput
         status={status}
+        error={error}
         onCopy={hops.length > 0 ? copyResults : undefined}
       >
         {!isIdle && hops.length > 0 && (
           <>
-            {isRunning && <ProgressBar value={currentSeq} max={runConfig.max_distance} className="mb-3" />}
+            {isRunning && <ProgressBar value={hops.length} max={runConfig.max_distance} className="mb-3" />}
             {displayMode === "table" ? (
               <table className="w-full text-sm">
                 <thead>
@@ -166,26 +215,51 @@ export default function TraceroutePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {hops.map((h, idx) => (
-                    <tr key={idx} className={`border-b border-[var(--color-border)] ${h.reached ? "bg-success-50 dark:bg-success-700/10" : ""}`}>
-                      <td className="px-3 py-1 font-mono text-[var(--color-text)]">{idx + 1}</td>
-                      <td className="px-3 py-1 font-mono text-[var(--color-text)]">{h.ip ?? "*"}</td>
-                      <td className="px-3 py-1 text-[var(--color-text)]">
-                        {h.hostname ?? (h.ip ? "*" : "")}
-                        {h.reached && <Badge variant="success" className="ms-2">Destination</Badge>}
-                      </td>
-                      {h.probes.map((p, pi) => (
-                        <td key={pi} className="px-3 py-1 font-mono text-[var(--color-text)]">
-                          {p.status === "ok" ? `${p.rtt_ms} ms` : <span className="text-[var(--color-text-secondary)]">*</span>}
+                  {hops.map((h, idx) => {
+                    if (h.multipath && h.paths) {
+                      return h.paths.map((p, pi) => (
+                        <tr key={`${idx}-${pi}`} className={`border-b border-[var(--color-border)] ${h.reached ? "bg-success-50 dark:bg-success-700/10" : ""}`}>
+                          <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pi === 0 ? idx + 1 : ""}</td>
+                          <td className="px-3 py-1 font-mono text-[var(--color-text)]">{p.ip}</td>
+                          <td className="px-3 py-1 text-[var(--color-text)]">
+                            {p.hostname ?? ""}
+                            {h.reached && pi === 0 && <Badge variant="success" className="ms-2">Destination</Badge>}
+                          </td>
+                          {p.probes.map((pr, pri) => (
+                            <td key={pri} className="px-3 py-1 font-mono text-[var(--color-text)]">
+                              {pr.status === "ok" ? `${pr.rtt_ms} ms` : <span className="text-[var(--color-text-secondary)]">*</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      ));
+                    }
+                    return (
+                      <tr key={idx} className={`border-b border-[var(--color-border)] ${h.reached ? "bg-success-50 dark:bg-success-700/10" : ""}`}>
+                        <td className="px-3 py-1 font-mono text-[var(--color-text)]">{idx + 1}</td>
+                        <td className="px-3 py-1 font-mono text-[var(--color-text)]">{h.ip ?? "*"}</td>
+                        <td className="px-3 py-1 text-[var(--color-text)]">
+                          {h.hostname ?? ((h.ip && h.ip !== '[hidden]') ? "*" : "")}
+                          {h.reached && <Badge variant="success" className="ms-2">Destination</Badge>}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        {h.probes.map((p, pi) => (
+                          <td key={pi} className="px-3 py-1 font-mono text-[var(--color-text)]">
+                            {p.status === "ok" ? `${p.rtt_ms} ms` : <span className="text-[var(--color-text-secondary)]">*</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
               <pre className="font-mono text-sm text-[var(--color-text)] whitespace-pre-wrap">
                 {hops.map((h, idx) => {
+                  if (h.multipath && h.paths) {
+                    return h.paths.map((p) => {
+                      const probeStr = p.probes.map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*").join("  ");
+                      return `${idx + 1}  ${p.ip}${p.hostname ? ` (${p.hostname})` : ""}  ${probeStr}`;
+                    }).join("\n");
+                  }
                   const probeStr = h.probes.map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
                   const label = h.ip
                     ? `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}`
@@ -203,10 +277,10 @@ export default function TraceroutePage() {
                   {terminatedBy === "user" && (
                     <p className="text-sm text-warning-600 dark:text-warning-500 mb-2">Execution stopped by user.</p>
                   )}
-                  {summary && (
+                  {tracerouteSummary && (
                     <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-[var(--color-text)]">
-                      <span>Hops probed: <strong>{summary.hops_probed as number}</strong></span>
-                      <span>Destination: <Badge variant={summary.destination_reached ? "success" : "warning"}>{summary.destination_reached ? "Reached" : "Not reached"}</Badge></span>
+                      <span>Hops probed: <strong>{tracerouteSummary.hops_probed}</strong></span>
+                      <span>Destination: <Badge variant={tracerouteSummary.destination_reached ? "success" : "warning"}>{tracerouteSummary.destination_reached ? "Reached" : "Not reached"}</Badge></span>
                       {duration && <span>Duration: {(duration / 1000).toFixed(1)}s</span>}
                     </div>
                   )}

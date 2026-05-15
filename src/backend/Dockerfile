@@ -13,8 +13,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping traceroute dnsutils openssl ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
-RUN setcap cap_net_raw+ep /usr/bin/ping \
-    && setcap cap_net_raw+ep /usr/sbin/traceroute
 COPY --from=builder /app/.venv /app/.venv
 COPY app/ ./app/
 COPY tests/ ./tests/

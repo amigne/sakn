@@ -32,7 +32,7 @@ BLOCKED_NETWORKS = [
 ]
 
 
-def _is_ip_blocked(target_ip: str) -> bool:
+def is_ip_blocked(target_ip: str) -> bool:
     """Check if an IP address is in the blocked networks list."""
     try:
         ip = ip_address(target_ip)
@@ -75,7 +75,7 @@ async def filter_target(target: str) -> tuple[str, str | None]:
     try:
         ip = ip_address(target)
         ip_str = str(ip)
-        if _is_ip_blocked(ip_str):
+        if is_ip_blocked(ip_str):
             return "", "errors.target_not_allowed"
         return ip_str, None
     except ValueError:
@@ -88,7 +88,7 @@ async def filter_target(target: str) -> tuple[str, str | None]:
 
     # Check each resolved IP
     for ip_str in ips:
-        if _is_ip_blocked(ip_str):
+        if is_ip_blocked(ip_str):
             return "", "errors.target_not_allowed"
 
     return ips[0], None

@@ -1,6 +1,6 @@
 import pytest
 
-from app.security.address_filter import _is_ip_blocked, filter_target, BLOCKED_NETWORKS
+from app.security.address_filter import is_ip_blocked, filter_target, BLOCKED_NETWORKS
 
 
 class TestIsIPBlocked:
@@ -30,7 +30,7 @@ class TestIsIPBlocked:
         "ff00::1",
     ])
     def test_blocked_ips(self, ip):
-        assert _is_ip_blocked(ip) is True, f"{ip} should be blocked"
+        assert is_ip_blocked(ip) is True, f"{ip} should be blocked"
 
     @pytest.mark.parametrize("ip", [
         "8.8.8.8",
@@ -41,10 +41,10 @@ class TestIsIPBlocked:
         "2606:4700:4700::1111",
     ])
     def test_allowed_ips(self, ip):
-        assert _is_ip_blocked(ip) is False, f"{ip} should be allowed"
+        assert is_ip_blocked(ip) is False, f"{ip} should be allowed"
 
     def test_invalid_ip_is_blocked(self):
-        assert _is_ip_blocked("not-an-ip") is True
+        assert is_ip_blocked("not-an-ip") is True
 
 
 @pytest.mark.asyncio

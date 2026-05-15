@@ -13,9 +13,11 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 def get_registry(request: Request) -> ToolRegistry:
     if not hasattr(request.app.state, "tool_registry"):
         from app.tools.ping import PingTool
+        from app.tools.traceroute import TracerouteTool
 
         registry = ToolRegistry()
         registry.register(PingTool())
+        registry.register(TracerouteTool())
         request.app.state.tool_registry = registry
     return request.app.state.tool_registry
 
@@ -50,6 +52,7 @@ def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
 @router.websocket("/{tool_name}/stream")
 async def tool_stream(websocket: WebSocket, tool_name: str):
     from app.websocket.handlers.ping_ws import handle_ping_stream
+    from app.websocket.handlers.traceroute_ws import handle_traceroute_stream
 
     manager = _get_ws_manager(websocket.app)
     session_id, user_id = _read_session_from_ws(websocket)
@@ -60,6 +63,8 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     try:
         if tool_name == "ping":
             await handle_ping_stream(websocket, session_id, user_id, source_ip)
+        elif tool_name == "traceroute":
+            await handle_traceroute_stream(websocket, session_id, user_id, source_ip)
         else:
             await websocket.send_json({
                 "type": "error",

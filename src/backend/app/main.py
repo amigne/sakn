@@ -32,10 +32,33 @@ async def lifespan(app: FastAPI) -> Any:
     # Tool registry
     from app.tools.registry import ToolRegistry
     from app.tools.ping import PingTool
+    from app.tools.traceroute import TracerouteTool
 
     registry = ToolRegistry()
     registry.register(PingTool())
+    registry.register(TracerouteTool())
     app.state.tool_registry = registry
+
+    # Seed tool modules in DB (idempotent)
+    from app.database import async_session_factory
+    from app.models import ToolModule
+    from sqlalchemy import select
+
+    async with async_session_factory() as db:
+        for tool in registry._tools.values():
+            definition = tool.get_definition()
+            row = await db.execute(
+                select(ToolModule).where(ToolModule.name == definition.name)
+            )
+            if row.scalar_one_or_none() is None:
+                db.add(ToolModule(
+                    name=definition.name,
+                    display_name_key=definition.display_name_key,
+                    description_key=definition.description_key,
+                    enabled=True,
+                    version=definition.version,
+                ))
+        await db.commit()
 
     # WebSocket manager
     from app.websocket.manager import ConnectionManager

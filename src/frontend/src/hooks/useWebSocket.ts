@@ -1,22 +1,32 @@
 import { useRef, useCallback, useState } from "react";
-import type { ExecutionStatus, PingResult, PingSummary } from "@/types/tool";
+import type { ExecutionStatus } from "@/types/tool";
 
 interface UseWebSocketOptions {
   toolName: string;
+  resultKey?: "seq" | "hop";
 }
 
 interface WebSocketMessage {
   type: "result" | "notice" | "complete" | "error";
   seq?: number;
+  hop?: number;
   data?: unknown;
   message_key?: string;
   message?: string;
 }
 
-export function useWebSocket({ toolName }: UseWebSocketOptions) {
+interface CompleteData<TSummary> {
+  summary: TSummary;
+  duration_ms: number;
+  terminated_by: string;
+}
+
+export function useWebSocket<TResult = unknown, TSummary = unknown>(
+  { toolName, resultKey = "seq" }: UseWebSocketOptions,
+) {
   const [status, setStatus] = useState<ExecutionStatus>("idle");
-  const [results, setResults] = useState<PingResult[]>([]);
-  const [summary, setSummary] = useState<PingSummary | null>(null);
+  const [results, setResults] = useState<TResult[]>([]);
+  const [summary, setSummary] = useState<TSummary | null>(null);
   const [terminatedBy, setTerminatedBy] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,15 +63,11 @@ export function useWebSocket({ toolName }: UseWebSocketOptions) {
               if (cancelledRef.current) return;
               setResults((prev) => [
                 ...prev,
-                { ...(msg.data as PingResult), seq: msg.seq ?? (prev.length + 1) },
+                msg.data as TResult,
               ]);
               break;
             case "complete": {
-              const completeData = msg.data as {
-                summary: PingSummary;
-                duration_ms: number;
-                terminated_by: string;
-              };
+              const completeData = msg.data as CompleteData<TSummary>;
               setSummary(completeData.summary);
               setDuration(completeData.duration_ms);
               setTerminatedBy(completeData.terminated_by);
@@ -91,7 +97,7 @@ export function useWebSocket({ toolName }: UseWebSocketOptions) {
         }
       };
     },
-    [toolName],
+    [toolName, resultKey],
   );
 
   const cancel = useCallback(() => {
