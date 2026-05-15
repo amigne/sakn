@@ -18,15 +18,10 @@ const initialModules: ModuleEntry[] = [
   { name: "ssl_viewer", display: "TLS/SSL Viewer", enabled: true, hasSettings: false },
 ];
 
-const initialPresets: DnsServerPreset[] = [
-  { id: "1", ip_address: "8.8.8.8", description: "Google DNS", sort_order: 0 },
-  { id: "2", ip_address: "1.1.1.1", description: "Cloudflare DNS", sort_order: 1 },
-  { id: "3", ip_address: "9.9.9.9", description: "Quad9 DNS", sort_order: 2 },
-];
-
 export default function AdminModulesPage() {
   const [modules, setModules] = useState<ModuleEntry[]>(initialModules);
-  const [dnsPresets, setDnsPresets] = useState<DnsServerPreset[]>(initialPresets);
+  const [dnsPresets, setDnsPresets] = useState<DnsServerPreset[]>([]);
+  const [dnsLoading, setDnsLoading] = useState(false);
   const [showDnsEditor, setShowDnsEditor] = useState(false);
   const [editingPreset, setEditingPreset] = useState<DnsServerPreset | null>(null);
   const [presetIp, setPresetIp] = useState("");
@@ -47,6 +42,7 @@ export default function AdminModulesPage() {
   const openSettings = useCallback((moduleName: string) => {
     if (moduleName === "dns_lookup") {
       setShowDnsEditor(true);
+      loadDnsPresets();
     } else if (moduleName === "traceroute") {
       setShowTracerouteSettings(true);
       loadTracerouteSettings();
@@ -94,6 +90,18 @@ export default function AdminModulesPage() {
 
   // ── DNS presets ──────────────────────────────────────────────────
 
+  const loadDnsPresets = useCallback(async () => {
+    setDnsLoading(true);
+    try {
+      const data: { presets?: DnsServerPreset[] } = await api("/admin/modules/dns_lookup/dns-servers");
+      setDnsPresets(data.presets ?? []);
+    } catch {
+      setPresetError("Failed to load DNS presets.");
+    } finally {
+      setDnsLoading(false);
+    }
+  }, []);
+
   const openEditPreset = (preset: DnsServerPreset) => {
     setEditingPreset(preset);
     setPresetIp(preset.ip_address);
@@ -109,7 +117,7 @@ export default function AdminModulesPage() {
     return m.slice(1).every((o) => parseInt(o, 10) <= 255);
   };
 
-  const savePreset = () => {
+  const savePreset = async () => {
     setPresetError("");
     if (!isValidIp(presetIp.trim())) {
       setPresetError("Invalid IPv4 address.");
@@ -119,32 +127,54 @@ export default function AdminModulesPage() {
       setPresetError("Description is required.");
       return;
     }
-    if (editingPreset) {
-      setDnsPresets((prev) => prev.map((p) => (p.id === editingPreset.id ? { ...p, ip_address: presetIp, description: presetDesc } : p)));
-      setEditingPreset(null);
-    } else {
-      const id = String(Date.now());
-      setDnsPresets((prev) => [...prev, { id, ip_address: presetIp, description: presetDesc, sort_order: prev.length }]);
+    try {
+      if (editingPreset) {
+        await api(`/admin/modules/dns_lookup/dns-servers/${editingPreset.id}`, {
+          method: "PUT",
+          body: { ip_address: presetIp.trim(), description: presetDesc.trim() },
+        });
+        setEditingPreset(null);
+      } else {
+        await api("/admin/modules/dns_lookup/dns-servers", {
+          method: "POST",
+          body: { ip_address: presetIp.trim(), description: presetDesc.trim() },
+        });
+      }
+      setPresetIp("");
+      setPresetDesc("");
+      await loadDnsPresets();
+    } catch (e) {
+      setPresetError("Failed to save preset.");
     }
-    setPresetIp("");
-    setPresetDesc("");
   };
 
-  const deletePreset = (id: string) => {
-    setDnsPresets((prev) => prev.filter((p) => p.id !== id));
+  const deletePreset = async (id: string) => {
+    try {
+      await api(`/admin/modules/dns_lookup/dns-servers/${id}`, { method: "DELETE" });
+      await loadDnsPresets();
+    } catch {
+      setPresetError("Failed to delete preset.");
+    }
   };
 
-  const movePreset = (id: string, direction: "up" | "down") => {
-    setDnsPresets((prev) => {
-      const idx = prev.findIndex((p) => p.id === id);
-      if (idx < 0 || (direction === "up" && idx === 0) || (direction === "down" && idx === prev.length - 1)) return prev;
-      const next = [...prev];
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      const temp = next[idx]!;
-      next[idx] = next[swapIdx]!;
-      next[swapIdx] = temp;
-      return next.map((p, i) => ({ ...p, sort_order: i }));
-    });
+  const movePreset = async (id: string, direction: "up" | "down") => {
+    const idx = dnsPresets.findIndex((p) => p.id === id);
+    if (idx < 0 || (direction === "up" && idx === 0) || (direction === "down" && idx === dnsPresets.length - 1)) return;
+    const next = [...dnsPresets];
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const temp = next[idx]!;
+    next[idx] = next[swapIdx]!;
+    next[swapIdx] = temp;
+    const reordered = next.map((p, i) => ({ ...p, sort_order: i }));
+    setDnsPresets(reordered);
+    try {
+      await api("/admin/modules/dns_lookup/dns-servers/reorder", {
+        method: "PUT",
+        body: { order: reordered.map((p) => p.id) },
+      });
+    } catch {
+      await loadDnsPresets();
+    }
   };
 
   return (
@@ -189,7 +219,9 @@ export default function AdminModulesPage() {
         {/* DNS Server Presets Modal */}
         <Modal open={showDnsEditor} onClose={() => setShowDnsEditor(false)} title="DNS Server Presets">
           <div className="space-y-3">
-            {dnsPresets.map((preset) => (
+            {dnsLoading ? (
+              <div className="flex justify-center py-4"><Spinner /></div>
+            ) : dnsPresets.map((preset) => (
               <div key={preset.id} className="flex items-center gap-2 text-sm">
                 <button onClick={() => movePreset(preset.id, "up")} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]" aria-label="Move up">
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>

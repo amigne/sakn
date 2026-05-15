@@ -96,3 +96,188 @@ async def update_module_settings(
 
     await session.commit()
     return {"module": module_name, "settings": updated}
+
+
+# ── DNS Server Presets ──────────────────────────────────────────────
+
+
+@router.get("/modules/{tool_name}/dns-servers")
+async def list_dns_servers(
+    tool_name: str,
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    await _require_admin(request)
+
+    from app.models.tool_module import DnsServerPreset
+
+    # Get tool module id
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.name == tool_name)
+    )
+    tool = row.scalar_one_or_none()
+    if tool is None:
+        raise HTTPException(status_code=404, detail=f"Module '{tool_name}' not found")
+
+    rows = await session.execute(
+        select(DnsServerPreset)
+        .where(DnsServerPreset.tool_module_id == tool.id)
+        .order_by(DnsServerPreset.sort_order)
+    )
+    presets = rows.scalars().all()
+    return {
+        "tool": tool_name,
+        "presets": [
+            {
+                "id": p.id,
+                "ip_address": p.ip_address,
+                "description": p.description,
+                "sort_order": p.sort_order,
+            }
+            for p in presets
+        ],
+    }
+
+
+@router.post("/modules/{tool_name}/dns-servers")
+async def create_dns_server(
+    tool_name: str,
+    body: dict[str, Any],
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    await _require_admin(request)
+
+    from app.models.tool_module import DnsServerPreset
+
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.name == tool_name)
+    )
+    tool = row.scalar_one_or_none()
+    if tool is None:
+        raise HTTPException(status_code=404, detail=f"Module '{tool_name}' not found")
+
+    ip_address = body.get("ip_address", "").strip()
+    description = body.get("description", "").strip()
+
+    if not ip_address:
+        raise HTTPException(status_code=400, detail="ip_address is required")
+    if not description:
+        raise HTTPException(status_code=400, detail="description is required")
+
+    # Determine next sort_order
+    count_row = await session.execute(
+        select(DnsServerPreset)
+        .where(DnsServerPreset.tool_module_id == tool.id)
+    )
+    sort_order = len(count_row.scalars().all())
+
+    preset = DnsServerPreset(
+        tool_module_id=tool.id,
+        ip_address=ip_address,
+        description=description,
+        sort_order=sort_order,
+    )
+    session.add(preset)
+    await session.commit()
+    await session.refresh(preset)
+
+    return {
+        "preset": {
+            "id": preset.id,
+            "ip_address": preset.ip_address,
+            "description": preset.description,
+            "sort_order": preset.sort_order,
+        }
+    }
+
+
+@router.put("/modules/{tool_name}/dns-servers/reorder")
+async def reorder_dns_servers(
+    tool_name: str,
+    body: dict[str, Any],
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    await _require_admin(request)
+
+    from app.models.tool_module import DnsServerPreset
+
+    order = body.get("order", [])
+    if not isinstance(order, list):
+        raise HTTPException(status_code=400, detail="'order' must be a list of preset ids")
+
+    for idx, preset_id in enumerate(order):
+        row = await session.execute(
+            select(DnsServerPreset).where(DnsServerPreset.id == preset_id)
+        )
+        preset = row.scalar_one_or_none()
+        if preset is not None:
+            preset.sort_order = idx
+
+    await session.commit()
+    return {"reordered": True}
+
+
+@router.put("/modules/{tool_name}/dns-servers/{preset_id}")
+async def update_dns_server(
+    tool_name: str,
+    preset_id: str,
+    body: dict[str, Any],
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    await _require_admin(request)
+
+    from app.models.tool_module import DnsServerPreset
+
+    row = await session.execute(
+        select(DnsServerPreset).where(DnsServerPreset.id == preset_id)
+    )
+    preset = row.scalar_one_or_none()
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Preset not found")
+
+    ip_address = body.get("ip_address", "").strip()
+    description = body.get("description", "").strip()
+
+    if ip_address:
+        preset.ip_address = ip_address
+    if description:
+        preset.description = description
+
+    await session.commit()
+    await session.refresh(preset)
+
+    return {
+        "preset": {
+            "id": preset.id,
+            "ip_address": preset.ip_address,
+            "description": preset.description,
+            "sort_order": preset.sort_order,
+        }
+    }
+
+
+@router.delete("/modules/{tool_name}/dns-servers/{preset_id}")
+async def delete_dns_server(
+    tool_name: str,
+    preset_id: str,
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    await _require_admin(request)
+
+    from app.models.tool_module import DnsServerPreset
+
+    row = await session.execute(
+        select(DnsServerPreset).where(DnsServerPreset.id == preset_id)
+    )
+    preset = row.scalar_one_or_none()
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Preset not found")
+
+    await session.delete(preset)
+    await session.commit()
+
+    return {"deleted": True}

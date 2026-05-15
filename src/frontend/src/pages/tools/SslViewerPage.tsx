@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { useMockToolExecution } from "@/hooks/useMockToolExecution";
+import { useToolExecution } from "@/hooks/useToolExecution";
 import { useToolStore } from "@/stores/toolStore";
 import { TextInput, Accordion, Badge, Alert } from "@/components/ui";
 import type { SslResult, SslCertInfo } from "@/types/tool";
@@ -20,8 +20,7 @@ const defaults: SslFormData = {
 export default function SslViewerPage() {
   const [form, setForm] = useState<SslFormData>({ ...defaults });
   const [errors, setErrors] = useState<Partial<Record<keyof SslFormData, string>>>({});
-  const [sslResult, setSslResult] = useState<SslResult | null>(null);
-  const { status, error, duration, execute, reset } = useMockToolExecution();
+  const { status, data, error, duration, execute, reset } = useToolExecution();
 
   useEffect(() => {
     useToolStore.getState().setActiveTool("ssl_viewer");
@@ -36,14 +35,12 @@ export default function SslViewerPage() {
 
   const handleStart = useCallback(async () => {
     if (!validate()) return;
-    const result = await execute("ssl_viewer", { ...form, target: form.url });
-    setSslResult(result.data as SslResult);
+    await execute("ssl_viewer", { ...form, target: form.url });
   }, [form, execute]);
 
   const handleReset = useCallback(() => {
     setForm({ ...defaults });
     setErrors({});
-    setSslResult(null);
     reset();
   }, [reset]);
 
@@ -53,6 +50,8 @@ export default function SslViewerPage() {
   };
 
   const isRunning = status === "running";
+
+  const sslResult = (data ?? null) as SslResult | null;
 
   const formatDate = (d: string) => {
     try { return new Date(d).toLocaleDateString(); } catch { return d; }

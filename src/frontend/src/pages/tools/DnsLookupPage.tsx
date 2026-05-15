@@ -2,9 +2,10 @@ import { useState, useCallback, useEffect } from "react";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { useMockToolExecution } from "@/hooks/useMockToolExecution";
+import { useToolExecution } from "@/hooks/useToolExecution";
 import { useToolStore } from "@/stores/toolStore";
 import { TextInput, Select, Checkbox } from "@/components/ui";
+import { api } from "@/services/api";
 import type { DnsResult, DnsRecord } from "@/types/tool";
 
 interface DnsFormData {
@@ -14,30 +15,38 @@ interface DnsFormData {
   recursive_cname: boolean;
 }
 
+interface DnsServerOption {
+  value: string;
+  label: string;
+}
+
 const defaults: DnsFormData = {
   domain: "example.com",
-  record_types: ["A", "AAAA", "MX", "NS", "TXT", "SOA"],
+  record_types: ["A", "AAAA", "CNAME"],
   resolver: "__system__",
   recursive_cname: true,
 };
 
 const RECORD_TYPES = ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "SRV", "SOA", "PTR", "CAA"];
 
-const DNS_SERVERS = [
-  { value: "__system__", label: "System Default" },
-  { value: "8.8.8.8", label: "Google (8.8.8.8)" },
-  { value: "1.1.1.1", label: "Cloudflare (1.1.1.1)" },
-  { value: "9.9.9.9", label: "Quad9 (9.9.9.9)" },
-];
-
 export default function DnsLookupPage() {
   const [form, setForm] = useState<DnsFormData>({ ...defaults });
   const [errors, setErrors] = useState<Partial<Record<keyof DnsFormData, string>>>({});
-  const [dnsResult, setDnsResult] = useState<DnsResult | null>(null);
-  const { status, error, duration, execute, reset } = useMockToolExecution();
+  const { status, data, error, duration, execute, reset } = useToolExecution();
+  const [dnsServers, setDnsServers] = useState<DnsServerOption[]>([
+    { value: "__system__", label: "System Default" },
+  ]);
 
   useEffect(() => {
     useToolStore.getState().setActiveTool("dns_lookup");
+  }, []);
+
+  useEffect(() => {
+    api<{ servers?: DnsServerOption[] }>("/tools/dns_lookup/dns-servers")
+      .then((res) => {
+        if (res.servers?.length) setDnsServers([{ value: "__system__", label: "System Default" }, ...res.servers]);
+      })
+      .catch(() => {});
   }, []);
 
   const validate = (): boolean => {
@@ -50,14 +59,12 @@ export default function DnsLookupPage() {
 
   const handleStart = useCallback(async () => {
     if (!validate()) return;
-    const result = await execute("dns_lookup", { ...form, target: form.domain });
-    setDnsResult(result.data as DnsResult);
+    await execute("dns_lookup", { ...form, target: form.domain });
   }, [form, execute]);
 
   const handleReset = useCallback(() => {
     setForm({ ...defaults });
     setErrors({});
-    setDnsResult(null);
     reset();
   }, [reset]);
 
@@ -76,18 +83,83 @@ export default function DnsLookupPage() {
 
   const isRunning = status === "running";
 
+  const dnsResult = (data ?? null) as DnsResult | null;
+
+  /** Records from the original query that belong to the queried domain. */
+  const ownRecords = (type: string): DnsRecord[] =>
+    (dnsResult?.records[type] ?? []).filter(r => !r.owner || r.owner === dnsResult?.domain);
+
+  /** Sorted record type entries: non-empty first, then empty. */
+  const sortedOwnEntries = (): [string, DnsRecord[]][] => {
+    if (!dnsResult) return [];
+    return (Object.keys(dnsResult.records) as string[])
+      .map(type => [type, ownRecords(type)] as [string, DnsRecord[]])
+      .sort(([, a], [, b]) => {
+        if (a.length === 0 && b.length > 0) return 1;
+        if (a.length > 0 && b.length === 0) return -1;
+        return 0;
+      });
+  };
+
+  /** Sorted record types for a CNAME hop section. */
+  const sortedHopEntries = (hopRecords: Record<string, DnsRecord[]>) =>
+    Object.entries(hopRecords).sort(([, a], [, b]) => {
+      if (a.length === 0 && b.length > 0) return 1;
+      if (a.length > 0 && b.length === 0) return -1;
+      return 0;
+    });
+
+  const renderRecords = (records: DnsRecord[], ownerLabel?: string) => {
+    if (records.length === 0) {
+      return <p className="text-xs text-error-600 dark:text-error-500 font-mono">No records found</p>;
+    }
+    return records.map((r: DnsRecord, i: number) => {
+      const showOwner = r.owner && r.owner !== ownerLabel;
+      return (
+        <div key={i} className="font-mono text-sm text-[var(--color-text)] flex flex-wrap gap-x-4">
+          {showOwner && <span className="text-orange-600 dark:text-orange-400">{r.owner}.</span>}
+          <span className="text-primary-600 dark:text-primary-400">{r.type}</span>
+          <span>{r.value}</span>
+          <span className="text-[var(--color-text-secondary)]">TTL: {r.ttl}</span>
+        </div>
+      );
+    });
+  };
+
   const copyResults = () => {
     if (!dnsResult) return;
     const lines: string[] = [];
-    for (const [type, records] of Object.entries(dnsResult.records)) {
-      lines.push(`;; ${type} Records`);
-      records.forEach((r: DnsRecord) => lines.push(`${r.value}  TTL: ${r.ttl}`));
-      lines.push("");
+
+    // Original domain's own records
+    lines.push(`;; ${dnsResult.domain}`);
+    for (const [type, recs] of sortedOwnEntries()) {
+      lines.push(`  ${type}:`);
+      if (recs.length === 0) lines.push("    (no records)");
+      else recs.forEach(r => {
+        const pfx = r.owner && r.owner !== dnsResult.domain ? `${r.owner}. ` : "";
+        lines.push(`    ${pfx}${r.value}  TTL: ${r.ttl}`);
+      });
     }
+
     if (dnsResult.cname_chain) {
-      lines.push(";; CNAME Chain:");
-      dnsResult.cname_chain.forEach((c) => lines.push(c));
+      lines.push("\n;; CNAME Chain:");
+      dnsResult.cname_chain.forEach(c => lines.push(c));
     }
+
+    if (dnsResult.cname_records) {
+      for (const [hop, hopRecords] of Object.entries(dnsResult.cname_records)) {
+        lines.push(`\n;; ${hop} (CNAME chain)`);
+        for (const [type, recs] of sortedHopEntries(hopRecords)) {
+          lines.push(`  ${type}:`);
+          if (recs.length === 0) lines.push("    (no records)");
+          else recs.forEach(r => {
+            const pfx = r.owner && r.owner !== hop ? `${r.owner}. ` : "";
+            lines.push(`    ${pfx}${r.value}  TTL: ${r.ttl}`);
+          });
+        }
+      }
+    }
+
     navigator.clipboard.writeText(lines.join("\n")).catch(() => {});
   };
 
@@ -113,7 +185,7 @@ export default function DnsLookupPage() {
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">DNS Server</span>
           <Select
-            options={DNS_SERVERS}
+            options={dnsServers}
             value={form.resolver}
             onChange={(v) => update("resolver", v)}
             placeholder="System Default"
@@ -155,27 +227,50 @@ export default function DnsLookupPage() {
                       {i > 0 && " -> "}{hop}
                     </span>
                   ))}
-                  <span className="text-[var(--color-text-secondary)]"> (terminal)</span>
                 </div>
               </div>
             )}
 
-            {dnsResult.records && Object.entries(dnsResult.records).map(([type, records]) => (
-              <div key={type} className="card p-3">
-                <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-2">{type} Records</h3>
-                {records.map((r: DnsRecord, i: number) => (
-                  <div key={i} className="font-mono text-sm text-[var(--color-text)] flex flex-wrap gap-x-4">
-                    <span className="text-primary-600 dark:text-primary-400">{r.type}</span>
-                    <span>{r.value}</span>
-                    <span className="text-[var(--color-text-secondary)]">TTL: {r.ttl}</span>
+            {/* Original domain section */}
+            <div className="card p-3">
+              <h3 className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase mb-3">
+                {dnsResult.domain}
+              </h3>
+              <div className="space-y-2">
+                {sortedOwnEntries().map(([type, recs]) => (
+                  <div key={type}>
+                    <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase mb-1">{type} Records</h4>
+                    {renderRecords(recs, dnsResult.domain)}
                   </div>
                 ))}
               </div>
-            ))}
+            </div>
 
-            {Object.keys(dnsResult.records).length === 0 && (
-              <p className="text-sm text-[var(--color-text-secondary)]">No records found.</p>
-            )}
+            {/* CNAME chain hop sections */}
+            {dnsResult.cname_records && Object.entries(dnsResult.cname_records).map(([hop, hopRecords]) => {
+              const allRecs = Object.values(hopRecords).flat();
+              if (allRecs.length === 0) return null;
+              return (
+              <div key={hop} className="card p-3 border-l-2 border-primary-400">
+                <h3 className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase mb-2">
+                  {hop} <span className="text-[var(--color-text-secondary)] font-normal normal-case">(CNAME chain)</span>
+                </h3>
+                <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
+                  {allRecs.map((r: DnsRecord, i: number) => {
+                    const showOwner = r.owner && r.owner !== hop;
+                    return (
+                      <div key={i} className="flex flex-wrap gap-x-4">
+                        {showOwner && <span className="text-orange-600 dark:text-orange-400">{r.owner}.</span>}
+                        <span className="text-primary-600 dark:text-primary-400">{r.type}</span>
+                        <span>{r.value}</span>
+                        <span className="text-[var(--color-text-secondary)]">TTL: {r.ttl}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              );
+            })}
           </div>
         )}
       </ToolOutput>

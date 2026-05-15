@@ -70,12 +70,14 @@ export interface DnsRecord {
   type: string;
   value: string;
   ttl: number;
+  owner?: string;
 }
 
 export interface DnsResult {
   domain: string;
   records: Record<string, DnsRecord[]>;
   cname_chain: string[] | null;
+  cname_records: Record<string, Record<string, DnsRecord[]>> | null;
 }
 
 export interface SslCertInfo {

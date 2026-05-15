@@ -33,10 +33,14 @@ async def lifespan(app: FastAPI) -> Any:
     from app.tools.registry import ToolRegistry
     from app.tools.ping import PingTool
     from app.tools.traceroute import TracerouteTool
+    from app.tools.dns_lookup import DnsLookupTool
+    from app.tools.ssl_viewer import SslViewerTool
 
     registry = ToolRegistry()
     registry.register(PingTool())
     registry.register(TracerouteTool())
+    registry.register(DnsLookupTool())
+    registry.register(SslViewerTool())
     app.state.tool_registry = registry
 
     # Seed tool modules in DB (idempotent)

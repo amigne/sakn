@@ -2,7 +2,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 
+from app.database import get_session
 from app.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,37 @@ def get_registry(request: Request) -> ToolRegistry:
 async def list_tools(registry: ToolRegistry = Depends(get_registry)):
     tools = [tool.to_api_definition() for tool in registry._tools.values()]
     return {"tools": tools}
+
+
+@router.get("/{tool_name}/dns-servers")
+async def list_tool_dns_servers(
+    tool_name: str,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    """Return DNS server presets for a tool (public endpoint)."""
+    from app.models.tool_module import DnsServerPreset
+    from app.models import ToolModule
+
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.name == tool_name)
+    )
+    tool = row.scalar_one_or_none()
+    if tool is None:
+        return {"tool": tool_name, "servers": []}
+
+    rows = await session.execute(
+        select(DnsServerPreset)
+        .where(DnsServerPreset.tool_module_id == tool.id)
+        .order_by(DnsServerPreset.sort_order)
+    )
+    presets = rows.scalars().all()
+    return {
+        "tool": tool_name,
+        "servers": [
+            {"value": p.ip_address, "label": f"{p.description} ({p.ip_address})"}
+            for p in presets
+        ],
+    }
 
 
 def _get_ws_manager(app) -> "ConnectionManager":
