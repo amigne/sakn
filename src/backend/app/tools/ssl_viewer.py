@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID, NameOID
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, rsa
 
 from app.security.address_filter import filter_target
@@ -124,10 +125,30 @@ class SslViewerTool(BaseTool):
             try:
                 cert = x509.load_der_x509_certificate(der_data)
                 certinfo = self._parse_cert(cert, hostname, is_leaf=(idx == 0))
-                # When the chain is not trusted by the system, the root cert
-                # (last in the chain) is the one not in the system CA store.
                 is_last = (idx == len(all_ders) - 1)
-                certinfo["is_untrusted"] = not chain_valid and is_last
+                is_self_signed = cert.subject == cert.issuer
+
+                # Trust status for self-signed roots
+                if is_self_signed and is_last:
+                    certinfo["is_trusted_root"] = self._check_in_trust_store(der_data)
+                    certinfo["is_untrusted"] = not certinfo["is_trusted_root"]
+                    certinfo["missing_issuer"] = False
+                    certinfo["missing_issuer_name"] = None
+                elif not is_self_signed and is_last and not chain_valid:
+                    # Chain invalid and the last cert is not self-signed →
+                    # its issuer (the root) is missing from both the chain
+                    # and the system trust store.
+                    certinfo["is_trusted_root"] = False
+                    certinfo["is_untrusted"] = False
+                    certinfo["missing_issuer"] = True
+                    icn = [a.value for a in cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)]
+                    certinfo["missing_issuer_name"] = f"CN={icn[0]}" if icn else "Unknown"
+                else:
+                    certinfo["is_trusted_root"] = False
+                    certinfo["is_untrusted"] = False
+                    certinfo["missing_issuer"] = False
+                    certinfo["missing_issuer_name"] = None
+
                 certificates.append(certinfo)
             except Exception as e:
                 logger.warning("Failed to parse certificate: %s", e)
@@ -185,7 +206,7 @@ class SslViewerTool(BaseTool):
                 cipher_info = ssock.cipher() or (None, None, None)
                 cipher_suite = cipher_info[0] or "Unknown"
 
-                # Full certificate chain (leaf + intermediates + root)
+                # Full certificate chain (leaf + intermediates)
                 try:
                     full_chain: list[bytes] = ssock.get_unverified_chain()
                 except Exception:
@@ -194,7 +215,91 @@ class SslViewerTool(BaseTool):
                 leaf_der = full_chain[0] if full_chain else ssock.getpeercert(binary_form=True)
                 intermediates = full_chain[1:] if len(full_chain) > 1 else []
 
+                # If the last cert is not self-signed, try to find its issuer
+                # (the root CA) in the system trust store and append it.
+                if intermediates:
+                    last_der = intermediates[-1]
+                else:
+                    last_der = leaf_der
+                root_der = SslViewerTool._find_root_in_store(last_der)
+                if root_der is not None:
+                    intermediates = intermediates + [root_der]
+
         return leaf_der, intermediates, tls_version, cipher_suite
+
+    @classmethod
+    def _load_system_ca_certs(cls) -> list[x509.Certificate]:
+        """Load and cache all certificates from the system CA store."""
+        cache = getattr(cls, "_system_ca_certs_cache", None)
+        if cache is not None:
+            return cache
+
+        import os
+        import hashlib
+
+        pem_files: list[str] = []
+        verify_paths = ssl.get_default_verify_paths()
+
+        for candidate in (verify_paths.cafile, verify_paths.openssl_cafile):
+            if candidate and os.path.isfile(candidate):
+                pem_files.append(candidate)
+                break
+
+        if not pem_files:
+            capath = verify_paths.capath or verify_paths.openssl_capath
+            if capath and os.path.isdir(capath):
+                for fn in sorted(os.listdir(capath)):
+                    fp = os.path.join(capath, fn)
+                    if os.path.isfile(fp) and fn.endswith(".pem"):
+                        pem_files.append(fp)
+
+        certs: list[x509.Certificate] = []
+        seen: set[str] = set()
+        for fp in pem_files:
+            try:
+                with open(fp, "rb") as f:
+                    raw = f.read()
+                for ca in x509.load_pem_x509_certificates(raw):
+                    digest = hashlib.sha256(ca.public_bytes(Encoding.DER)).hexdigest()
+                    if digest not in seen:
+                        seen.add(digest)
+                        certs.append(ca)
+            except Exception:
+                continue
+
+        cls._system_ca_certs_cache = certs
+        return certs
+
+    @classmethod
+    def _check_in_trust_store(cls, cert_der: bytes) -> bool:
+        """Return True if *cert_der* is a root certificate present in the system CA store."""
+        try:
+            cert = x509.load_der_x509_certificate(cert_der)
+        except Exception:
+            return False
+
+        for ca in cls._load_system_ca_certs():
+            if ca.subject == cert.subject:
+                return True
+        return False
+
+    @classmethod
+    def _find_root_in_store(cls, cert_der: bytes) -> bytes | None:
+        """If *cert_der* is not self-signed, look up its issuer in the system CA store."""
+        try:
+            cert = x509.load_der_x509_certificate(cert_der)
+        except Exception:
+            return None
+
+        # Already a root (self-signed) — nothing to add.
+        if cert.issuer == cert.subject:
+            return None
+
+        for ca in cls._load_system_ca_certs():
+            if ca.subject == cert.issuer:
+                return ca.public_bytes(Encoding.DER)
+
+        return None
 
     @staticmethod
     def _connect_validated(hostname: str, port: int, sni: str) -> None:
@@ -343,6 +448,9 @@ class SslViewerTool(BaseTool):
                             "name_mismatch": {"type": "boolean"},
                             "is_weak_key": {"type": "boolean"},
                             "is_untrusted": {"type": "boolean"},
+                            "is_trusted_root": {"type": "boolean"},
+                            "missing_issuer": {"type": "boolean"},
+                            "missing_issuer_name": {"type": "string"},
                         },
                     },
                 },

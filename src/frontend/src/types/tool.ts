@@ -97,6 +97,9 @@ export interface SslCertInfo {
   name_mismatch: boolean;
   is_weak_key: boolean;
   is_untrusted: boolean;
+  is_trusted_root: boolean;
+  missing_issuer: boolean;
+  missing_issuer_name: string | null;
 }
 
 export interface SslResult {

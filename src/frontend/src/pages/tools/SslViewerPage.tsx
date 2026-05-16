@@ -82,6 +82,8 @@ export default function SslViewerPage() {
     if (cert.name_mismatch) issues.push("Name mismatch");
     if (cert.is_weak_key) issues.push("Weak key");
     if (cert.is_untrusted) issues.push("Untrusted");
+    if (cert.is_trusted_root) issues.push("Trusted");
+    if (cert.missing_issuer) issues.push("Missing issuer");
     return issues;
   };
 
@@ -148,7 +150,9 @@ export default function SslViewerPage() {
                   trigger: (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs">{cert.subject}</span>
-                      {issues.map((iss) => <Badge key={iss} variant="error" className="text-[10px]">{iss}</Badge>)}
+                      {issues.map((iss) => (
+                        <Badge key={iss} variant={iss === "Trusted" ? "success" : "error"} className={iss === "Trusted" ? "" : "text-[10px]"}>{iss}</Badge>
+                      ))}
                       {issues.length === 0 && <Badge variant="success">Valid</Badge>}
                     </div>
                   ),
@@ -157,11 +161,16 @@ export default function SslViewerPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Subject</span>
-                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.name_mismatch || cert.is_untrusted ? errColor : okColor}`}>{cert.subject}</p>
+                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.name_mismatch || cert.is_untrusted ? errColor : cert.is_trusted_root ? 'text-success-600 dark:text-success-500' : okColor}`}>{cert.subject}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Issuer</span>
-                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.is_untrusted ? errColor : okColor}`}>{cert.issuer}</p>
+                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.is_untrusted || cert.missing_issuer ? errColor : okColor}`}>
+                            {cert.issuer}
+                            {cert.missing_issuer && cert.missing_issuer_name && (
+                              <span className="text-error-600 dark:text-error-500"> — root not found: {cert.missing_issuer_name}</span>
+                            )}
+                          </p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Valid From</span>
