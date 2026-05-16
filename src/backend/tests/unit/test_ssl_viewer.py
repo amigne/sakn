@@ -170,7 +170,7 @@ class TestSslViewerExecute:
         assert cert0["subject"] == "CN=example.com"
         assert not cert0["is_expired"]
         assert not cert0["is_self_signed"]
-        assert "revocation status was not checked" in result.data["warnings"][-1]
+        assert "revocation status was not checked" in result.data["warnings"][-1]["message"]
 
     @pytest.mark.asyncio
     async def test_chain_invalid_on_verification_error(self, tool, ctx):
@@ -188,7 +188,7 @@ class TestSslViewerExecute:
 
         assert result.success is True
         assert result.data["chain_valid"] is False
-        assert any("not trusted" in w for w in result.data["warnings"])
+        assert any("not trusted" in w["message"] for w in result.data["warnings"])
 
     @pytest.mark.asyncio
     async def test_tls_warning_for_old_version(self, tool, ctx):
@@ -203,7 +203,7 @@ class TestSslViewerExecute:
                 result = await tool.execute({"url": "example.com"}, ctx)
 
         assert result.success is True
-        assert any("outdated" in w for w in result.data["warnings"])
+        assert any("outdated" in w["message"] for w in result.data["warnings"])
 
     @pytest.mark.asyncio
     async def test_ssl_error_handling(self, tool, ctx):

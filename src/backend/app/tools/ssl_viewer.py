@@ -1,4 +1,5 @@
 import asyncio
+import http.client
 import logging
 import re
 import socket
@@ -9,10 +10,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 from cryptography import x509
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509 import ocsp
+from cryptography.x509.oid import AuthorityInformationAccessOID, ExtensionOID, NameOID
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import dsa, ec, rsa
+
+# CRL cache directory — one file per URL hash, refreshed daily.
+_CRL_CACHE_DIR = "/tmp/sakn-crl-cache"
 
 from app.security.address_filter import filter_target
 from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolParameter, ToolResult
@@ -148,18 +153,49 @@ class SslViewerTool(BaseTool):
                     certinfo["is_untrusted"] = False
                     certinfo["missing_issuer"] = False
                     certinfo["missing_issuer_name"] = None
+                certinfo["revocation_status"] = ""
+                certinfo["revocation_detail"] = ""
 
                 certificates.append(certinfo)
             except Exception as e:
                 logger.warning("Failed to parse certificate: %s", e)
 
-        # Step 4: Build warnings
-        if tls_version and self._is_tls_weak(tls_version):
-            warnings.append("Connection is not secure: TLS version is outdated (less than TLS 1.2).")
-        if not chain_valid:
-            warnings.append("Certificate chain is not trusted by the system CA store.")
+        # Step 4: Revocation check for every cert in the chain (OCSP → CRL fallback)
+        leaf_revoked = False
+        for idx in range(len(all_ders)):
+            if idx + 1 >= len(all_ders):
+                # Last cert (root) — can't check revocation against itself
+                if idx < len(certificates):
+                    certificates[idx]["revocation_status"] = ""
+                    certificates[idx]["revocation_detail"] = ""
+                continue
 
-        warnings.append("Certificate revocation status was not checked.")
+            status, detail = self._check_revocation(all_ders[idx], all_ders[idx + 1])
+            if status == "unknown":
+                status, detail = self._check_crl(all_ders[idx])
+
+            if idx < len(certificates):
+                certificates[idx]["revocation_status"] = status
+                certificates[idx]["revocation_detail"] = detail
+
+            if status == "revoked" and idx == 0:
+                leaf_revoked = True
+
+        # A revoked leaf certificate invalidates the entire chain.
+        if leaf_revoked:
+            chain_valid = False
+
+        # Step 5: Build warnings (each is {message, variant: "error"|"warning"})
+        if tls_version and self._is_tls_weak(tls_version):
+            warnings.append({"message": "Connection is not secure: TLS version is outdated (less than TLS 1.2).", "variant": "warning"})
+        if leaf_revoked:
+            c0 = certificates[0] if certificates else {}
+            warnings.append({"message": f"Certificate is revoked: {c0.get('revocation_detail', '')}", "variant": "error"})
+            # When revoked, the chain-trusted message is redundant — skip it.
+        elif not chain_valid:
+            warnings.append({"message": "Certificate chain is not trusted by the system CA store.", "variant": "error"})
+        if not leaf_revoked and certificates and not certificates[0].get("revocation_status"):
+            warnings.append({"message": "Certificate revocation status was not checked.", "variant": "warning"})
 
         duration_ms = (time.monotonic() - start) * 1000
 
@@ -175,6 +211,194 @@ class SslViewerTool(BaseTool):
             },
             duration_ms=duration_ms,
         )
+
+    # ── OCSP Revocation Checking ────────────────────────────────────
+
+    @staticmethod
+    def _get_ocsp_url(cert: x509.Certificate) -> str | None:
+        """Extract the OCSP responder URL from a certificate's AIA extension."""
+        try:
+            aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+            for desc in aia.value:
+                if desc.access_method == AuthorityInformationAccessOID.OCSP:
+                    return desc.access_location.value
+        except x509.ExtensionNotFound:
+            pass
+        return None
+
+    @staticmethod
+    def _check_revocation(leaf_der: bytes, issuer_der: bytes) -> tuple[str, str]:
+        """Check certificate revocation via OCSP.
+
+        Returns (status, detail) where status is 'good', 'revoked', or 'unknown'.
+        """
+        try:
+            leaf = x509.load_der_x509_certificate(leaf_der)
+            issuer = x509.load_der_x509_certificate(issuer_der)
+        except Exception:
+            return "unknown", "Failed to parse certificate data"
+
+        # Find OCSP URL: leaf AIA → issuer AIA → derived from caIssuers
+        ocsp_url = (
+            SslViewerTool._get_ocsp_url(leaf)
+            or SslViewerTool._get_ocsp_url(issuer)
+            or SslViewerTool._derive_ocsp_url(leaf, issuer)
+        )
+        if not ocsp_url:
+            return "unknown", "No OCSP responder URL found"
+
+        try:
+            # Build OCSP request
+            builder = ocsp.OCSPRequestBuilder()
+            builder = builder.add_certificate(leaf, issuer, hashes.SHA256())
+            ocsp_req = builder.build()
+
+            # Send to OCSP responder
+            parsed = urlparse(ocsp_url)
+            conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=5)
+            conn.request(
+                "POST",
+                parsed.path or "/",
+                body=ocsp_req.public_bytes(Encoding.DER),
+                headers={
+                    "Content-Type": "application/ocsp-request",
+                    "Accept": "application/ocsp-response",
+                    "Host": parsed.hostname or "",
+                },
+            )
+            resp = conn.getresponse()
+            resp_data = resp.read()
+            conn.close()
+
+            ocsp_resp = ocsp.load_der_ocsp_response(resp_data)
+            if ocsp_resp.response_status != ocsp.OCSPResponseStatus.SUCCESSFUL:
+                return "unknown", f"OCSP responder error: {ocsp_resp.response_status.name}"
+
+            if ocsp_resp.certificate_status == ocsp.OCSPCertStatus.GOOD:
+                return "good", "Certificate is not revoked"
+            elif ocsp_resp.certificate_status == ocsp.OCSPCertStatus.REVOKED:
+                when = ""
+                try:
+                    when = f" at {ocsp_resp.revocation_time.isoformat()}"
+                except Exception:
+                    pass
+                return "revoked", f"Certificate revoked{when}"
+            else:
+                return "unknown", "OCSP status: unknown"
+        except OSError:
+            return "unknown", "OCSP responder unreachable"
+        except Exception:
+            return "unknown", "OCSP check failed"
+
+    @classmethod
+    def _check_crl(cls, leaf_der: bytes) -> tuple[str, str]:
+        """Check certificate revocation via CRL distribution points (cached)."""
+        try:
+            leaf = x509.load_der_x509_certificate(leaf_der)
+        except Exception:
+            return "unknown", "Failed to parse certificate"
+
+        crl_urls: list[str] = []
+        try:
+            crl_dp = leaf.extensions.get_extension_for_oid(ExtensionOID.CRL_DISTRIBUTION_POINTS)
+            for dp in crl_dp.value:
+                if dp.full_name:
+                    for name in dp.full_name:
+                        crl_urls.append(name.value)
+        except x509.ExtensionNotFound:
+            pass
+
+        if not crl_urls:
+            return "unknown", "No CRL distribution points in certificate"
+
+        for crl_url in crl_urls:
+            crl_der = cls._fetch_crl_cached(crl_url)
+            if crl_der is None:
+                continue
+            try:
+                crl = x509.load_der_x509_crl(crl_der)
+                for revoked in crl:
+                    if revoked.serial_number == leaf.serial_number:
+                        when = ""
+                        try:
+                            when = f" at {revoked.revocation_date_utc.isoformat()}"
+                        except Exception:
+                            pass
+                        return "revoked", f"Certificate revoked{when}"
+                return "good", "Certificate is not revoked (CRL)"
+            except Exception:
+                continue
+
+        return "unknown", "CRL check failed"
+
+    @classmethod
+    def _fetch_crl_cached(cls, crl_url: str) -> bytes | None:
+        """Fetch a CRL, caching the result on disk for 24 hours."""
+        import hashlib
+        import os
+
+        os.makedirs(_CRL_CACHE_DIR, exist_ok=True)
+        cache_key = hashlib.sha256(crl_url.encode()).hexdigest()[:32]
+        cache_path = os.path.join(_CRL_CACHE_DIR, cache_key)
+
+        # Return cached data if fresh enough (< 24h)
+        if os.path.isfile(cache_path):
+            age = time.time() - os.path.getmtime(cache_path)
+            if age < 86400:  # 24 hours
+                try:
+                    with open(cache_path, "rb") as f:
+                        return f.read()
+                except Exception:
+                    pass
+
+        # Download and cache
+        try:
+            parsed = urlparse(crl_url)
+            conn = http.client.HTTPConnection(
+                parsed.hostname, parsed.port or 80, timeout=10
+            )
+            conn.request("GET", parsed.path or "/")
+            resp = conn.getresponse()
+            if resp.status != 200:
+                conn.close()
+                return None
+            data = resp.read()
+            conn.close()
+
+            # Validate it's a CRL before caching
+            x509.load_der_x509_crl(data)
+
+            with open(cache_path, "wb") as f:
+                f.write(data)
+            return data
+        except Exception:
+            return None
+
+    @staticmethod
+    def _derive_ocsp_url(leaf: x509.Certificate, issuer: x509.Certificate) -> str | None:
+        """Try to derive the OCSP URL from the caIssuers URL (Let's Encrypt convention)."""
+        try:
+            aia = leaf.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+        except x509.ExtensionNotFound:
+            try:
+                aia = issuer.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+            except x509.ExtensionNotFound:
+                return None
+
+        ca_issuers_url = None
+        for desc in aia.value:
+            if desc.access_method == AuthorityInformationAccessOID.CA_ISSUERS:
+                ca_issuers_url = desc.access_location.value
+                break
+
+        if not ca_issuers_url:
+            return None
+
+        # Let's Encrypt pattern: {name}.i.lencr.org → {name}.o.lencr.org
+        if ".i.lencr.org" in ca_issuers_url:
+            return ca_issuers_url.replace(".i.lencr.org", ".o.lencr.org")
+
+        return None
 
     @staticmethod
     def _parse_url(url: str) -> tuple[str, int]:
@@ -335,8 +559,15 @@ class SslViewerTool(BaseTool):
     def _parse_cert(cert: x509.Certificate, hostname: str, *, is_leaf: bool = False) -> dict[str, Any]:
         """Extract structured info from a certificate."""
         # Subject / Issuer
-        subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-        subject_cn = subject[0].value if subject else "Unknown"
+        subject_cn_attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        subject_cn = subject_cn_attrs[0].value if subject_cn_attrs else "Unknown"
+
+        # The Subject is completely empty (no RDNs at all).
+        empty_subject = len(cert.subject) == 0
+
+        # Subject has attributes but no Common Name.  Valid per RFC 6125
+        # when SANs are present, but unusual — flag as a warning.
+        no_common_name = not empty_subject and len(subject_cn_attrs) == 0
 
         issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
         issuer_cn = issuer[0].value if issuer else "Unknown"
@@ -367,6 +598,91 @@ class SslViewerTool(BaseTool):
             eku_ext = cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
             for eku in eku_ext.value:
                 ekus.append(eku.dotted_string if hasattr(eku, "dotted_string") else str(eku))
+        except x509.ExtensionNotFound:
+            pass
+
+        # Serial number (hex string)
+        serial_number = f"{cert.serial_number:X}"
+
+        # Key Usage
+        key_usage: list[str] = []
+        try:
+            ku = cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE).value
+            for attr in (
+                "digital_signature", "content_commitment", "key_encipherment",
+                "data_encipherment", "key_agreement", "key_cert_sign", "crl_sign",
+            ):
+                try:
+                    if getattr(ku, attr, False):
+                        key_usage.append(attr)
+                except Exception:
+                    pass
+            # encipher_only / decipher_only only meaningful when key_agreement is set
+            try:
+                if ku.key_agreement:
+                    if ku.encipher_only:
+                        key_usage.append("encipher_only")
+                    if ku.decipher_only:
+                        key_usage.append("decipher_only")
+            except Exception:
+                pass
+        except x509.ExtensionNotFound:
+            pass
+
+        # Basic Constraints detail
+        bc_path_length: int | None = None
+        try:
+            bc = cert.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+            bc_path_length = bc.value.path_length
+        except x509.ExtensionNotFound:
+            pass
+
+        # Authority Information Access
+        aia_entries: list[dict[str, str]] = []
+        try:
+            aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+            for desc in aia.value:
+                aia_entries.append({
+                    "method": "OCSP" if desc.access_method == AuthorityInformationAccessOID.OCSP
+                              else "caIssuers" if desc.access_method == AuthorityInformationAccessOID.CA_ISSUERS
+                              else desc.access_method.dotted_string,
+                    "url": desc.access_location.value,
+                })
+        except x509.ExtensionNotFound:
+            pass
+
+        # CRL Distribution Points
+        crl_urls: list[str] = []
+        try:
+            crl_dp = cert.extensions.get_extension_for_oid(ExtensionOID.CRL_DISTRIBUTION_POINTS)
+            for dp in crl_dp.value:
+                if dp.full_name:
+                    for name in dp.full_name:
+                        crl_urls.append(name.value)
+        except x509.ExtensionNotFound:
+            pass
+
+        # Subject / Authority Key Identifiers
+        ski_hex = ""
+        try:
+            ski = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_KEY_IDENTIFIER)
+            ski_hex = ski.value.digest.hex(":")
+        except x509.ExtensionNotFound:
+            pass
+
+        aki_hex = ""
+        try:
+            aki = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_KEY_IDENTIFIER)
+            aki_hex = aki.value.key_identifier.hex(":") if aki.value.key_identifier else ""
+        except x509.ExtensionNotFound:
+            pass
+
+        # Certificate Policies
+        policy_oids: list[str] = []
+        try:
+            cp = cert.extensions.get_extension_for_oid(ExtensionOID.CERTIFICATE_POLICIES)
+            for pi in cp.value:
+                policy_oids.append(pi.policy_identifier.dotted_string)
         except x509.ExtensionNotFound:
             pass
 
@@ -402,8 +718,15 @@ class SslViewerTool(BaseTool):
                 is_weak_key = True
                 break
 
+        if empty_subject:
+            subject_label = "Empty Subject"
+        elif no_common_name:
+            subject_label = cert.subject.rfc4514_string()
+        else:
+            subject_label = f"CN={subject_cn}"
+
         return {
-            "subject": f"CN={subject_cn}",
+            "subject": subject_label,
             "issuer": f"CN={issuer_cn}",
             "valid_from": cert.not_valid_before_utc.isoformat(),
             "valid_until": cert.not_valid_after_utc.isoformat(),
@@ -418,6 +741,17 @@ class SslViewerTool(BaseTool):
             "is_self_signed": is_self_signed,
             "name_mismatch": name_mismatch,
             "is_weak_key": is_weak_key,
+            "no_common_name": no_common_name,
+            "empty_subject": empty_subject,
+            "serial_number": serial_number,
+            "key_usage": key_usage,
+            "is_ca": is_ca,
+            "bc_path_length": bc_path_length,
+            "aia_entries": aia_entries,
+            "crl_urls": crl_urls,
+            "ski": ski_hex,
+            "aki": aki_hex,
+            "policy_oids": policy_oids,
         }
 
     def get_result_schema(self) -> dict[str, Any]:
@@ -451,11 +785,42 @@ class SslViewerTool(BaseTool):
                             "is_trusted_root": {"type": "boolean"},
                             "missing_issuer": {"type": "boolean"},
                             "missing_issuer_name": {"type": "string"},
+                            "no_common_name": {"type": "boolean"},
+                            "empty_subject": {"type": "boolean"},
+                            "revocation_status": {"type": "string"},
+                            "revocation_detail": {"type": "string"},
+                            "serial_number": {"type": "string"},
+                            "key_usage": {"type": "array", "items": {"type": "string"}},
+                            "is_ca": {"type": "boolean"},
+                            "bc_path_length": {"type": "integer"},
+                            "aia_entries": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "method": {"type": "string"},
+                                        "url": {"type": "string"},
+                                    },
+                                },
+                            },
+                            "crl_urls": {"type": "array", "items": {"type": "string"}},
+                            "ski": {"type": "string"},
+                            "aki": {"type": "string"},
+                            "policy_oids": {"type": "array", "items": {"type": "string"}},
                         },
                     },
                 },
                 "chain_valid": {"type": "boolean"},
-                "warnings": {"type": "array", "items": {"type": "string"}},
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "message": {"type": "string"},
+                            "variant": {"type": "string", "enum": ["error", "warning"]},
+                        },
+                    },
+                },
             },
         }
 

@@ -84,8 +84,14 @@ export default function SslViewerPage() {
     if (cert.is_untrusted) issues.push("Untrusted");
     if (cert.is_trusted_root) issues.push("Trusted");
     if (cert.missing_issuer) issues.push("Missing issuer");
+    if (cert.no_common_name) issues.push("No CN");
+    if (cert.empty_subject) issues.push("Empty subject");
+    if (cert.revocation_status === "revoked") issues.push("Revoked");
+    if (cert.revocation_status === "unknown") issues.push("OCSP unknown");
     return issues;
   };
+
+  const isWarning = (issue: string) => issue === "No CN" || issue === "Empty subject" || issue === "OCSP unknown";
 
   /** Red-text class for fields flagged by a certificate issue. */
   const errColor = "text-error-600 dark:text-error-500";
@@ -139,7 +145,7 @@ export default function SslViewerPage() {
 
             {sslResult.warnings.length > 0 && (
               <div className="space-y-2">
-                {sslResult.warnings.map((w, i) => <Alert key={i} variant="warning">{w}</Alert>)}
+                {sslResult.warnings.map((w, i) => <Alert key={i} variant={w.variant}>{w.message}</Alert>)}
               </div>
             )}
             <Accordion
@@ -150,10 +156,11 @@ export default function SslViewerPage() {
                   trigger: (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs">{cert.subject}</span>
-                      {issues.map((iss) => (
-                        <Badge key={iss} variant={iss === "Trusted" ? "success" : "error"} className={iss === "Trusted" ? "" : "text-[10px]"}>{iss}</Badge>
-                      ))}
-                      {issues.length === 0 && <Badge variant="success">Valid</Badge>}
+                      {issues.map((iss) => {
+                        const variant = iss === "Trusted" ? "success" : isWarning(iss) ? "warning" : "error";
+                        return <Badge key={iss} variant={variant} className="text-[10px]">{iss}</Badge>;
+                      })}
+                      {issues.length === 0 && <Badge variant="success" className="text-[10px]">Valid</Badge>}
                     </div>
                   ),
                   content: (
@@ -161,7 +168,7 @@ export default function SslViewerPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Subject</span>
-                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.name_mismatch || cert.is_untrusted ? errColor : cert.is_trusted_root ? 'text-success-600 dark:text-success-500' : okColor}`}>{cert.subject}</p>
+                          <p className={`font-mono text-xs ${cert.is_self_signed || cert.name_mismatch || cert.is_untrusted ? errColor : cert.is_trusted_root ? 'text-success-600 dark:text-success-500' : cert.no_common_name || cert.empty_subject ? 'text-warning-600 dark:text-warning-500' : okColor}`}>{cert.subject}</p>
                         </div>
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Issuer</span>
@@ -180,6 +187,16 @@ export default function SslViewerPage() {
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Valid Until</span>
                           <p className={`font-mono text-xs ${cert.is_expired ? errColor : okColor}`}>{formatDate(cert.valid_until)}</p>
                         </div>
+                        {cert.revocation_status && (
+                        <div>
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Revocation</span>
+                          <p className={`font-mono text-xs ${cert.revocation_status === "revoked" ? errColor : cert.revocation_status === "good" ? "text-success-600 dark:text-success-500" : "text-warning-600 dark:text-warning-500"}`}>
+                            {cert.revocation_status === "good" && "Not revoked"}
+                            {cert.revocation_status === "revoked" && cert.revocation_detail}
+                            {cert.revocation_status === "unknown" && "Could not verify revocation status"}
+                          </p>
+                        </div>
+                        )}
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Key Algorithm</span>
                           <p className={`font-mono text-xs ${cert.is_weak_key ? errColor : okColor}`}>{cert.key_algorithm} {cert.key_size} bits</p>
@@ -205,6 +222,67 @@ export default function SslViewerPage() {
                           </div>
                         </div>
                       )}
+                      {/* ── Certificate Extensions ── */}
+                      <div className="border-t border-[var(--color-border)] pt-2 mt-2">
+                        <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-2">Extensions</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Serial Number</span>
+                            <p className="font-mono text-xs text-[var(--color-text)]">{cert.serial_number}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Basic Constraints</span>
+                            <p className="font-mono text-xs text-[var(--color-text)]">
+                              CA: {cert.is_ca ? "Yes" : "No"}{cert.bc_path_length != null ? `, pathlen:${cert.bc_path_length}` : ""}
+                            </p>
+                          </div>
+                          {cert.ski && (
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Subject Key Identifier</span>
+                            <p className="font-mono text-[10px] text-[var(--color-text)] break-all">{cert.ski}</p>
+                          </div>
+                          )}
+                          {cert.aki && (
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Authority Key Identifier</span>
+                            <p className="font-mono text-[10px] text-[var(--color-text)] break-all">{cert.aki}</p>
+                          </div>
+                          )}
+                          {cert.key_usage.length > 0 && (
+                          <div className="sm:col-span-2">
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Key Usage</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {cert.key_usage.map((ku) => <Badge key={ku} variant="neutral" className="text-[10px]">{ku}</Badge>)}
+                            </div>
+                          </div>
+                          )}
+                          {cert.aia_entries.length > 0 && (
+                          <div className="sm:col-span-2">
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Authority Info Access</span>
+                            {cert.aia_entries.map((a, i) => (
+                              <p key={i} className="font-mono text-[10px] text-[var(--color-text)] break-all">{a.method}: {a.url}</p>
+                            ))}
+                          </div>
+                          )}
+                          {cert.crl_urls.length > 0 && (
+                          <div className="sm:col-span-2">
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">CRL Distribution Points</span>
+                            {cert.crl_urls.map((u, i) => (
+                              <p key={i} className="font-mono text-[10px] text-[var(--color-text)] break-all">{u}</p>
+                            ))}
+                          </div>
+                          )}
+                          {cert.policy_oids.length > 0 && (
+                          <div className="sm:col-span-2">
+                            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Certificate Policies</span>
+                            {cert.policy_oids.map((oid, i) => (
+                              <p key={i} className="font-mono text-[10px] text-[var(--color-text)]">{oid}</p>
+                            ))}
+                          </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">SHA-256 Fingerprint</span>

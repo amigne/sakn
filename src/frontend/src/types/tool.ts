@@ -100,6 +100,19 @@ export interface SslCertInfo {
   is_trusted_root: boolean;
   missing_issuer: boolean;
   missing_issuer_name: string | null;
+  no_common_name: boolean;
+  empty_subject: boolean;
+  revocation_status: string;
+  revocation_detail: string;
+  serial_number: string;
+  key_usage: string[];
+  is_ca: boolean;
+  bc_path_length: number | null;
+  aia_entries: { method: string; url: string }[];
+  crl_urls: string[];
+  ski: string;
+  aki: string;
+  policy_oids: string[];
 }
 
 export interface SslResult {
@@ -108,7 +121,7 @@ export interface SslResult {
   cipher_suite: string;
   certificates: SslCertInfo[];
   chain_valid: boolean;
-  warnings: string[];
+  warnings: { message: string; variant: "error" | "warning" }[];
 }
 
 export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer";
