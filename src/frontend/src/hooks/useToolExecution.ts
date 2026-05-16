@@ -32,7 +32,7 @@ export function useToolExecution() {
       }
       return result;
     } catch (err) {
-      const message = err instanceof ApiError ? String(err.data) : "Network error";
+      const message = err instanceof ApiError ? err.message : "Network error";
       setError(message);
       setStatus("error");
       throw err;

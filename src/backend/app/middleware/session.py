@@ -15,9 +15,12 @@ async def _resolve_role(user_id: str | None) -> str:
     if not user_id:
         return "visitor"
     try:
-        from app.database import async_session_factory
+        from app.database import async_session_factory, is_db_available
         from sqlalchemy import select
         from app.models import User
+
+        if not is_db_available():
+            return "authenticated"  # fallback for known user_id when DB is down
 
         async with async_session_factory() as db:
             result = await db.execute(select(User.role).where(User.id == user_id))
@@ -68,23 +71,37 @@ class SessionMiddleware(BaseHTTPMiddleware):
                     pass
             else:
                 # Try DB fallback
-                from app.database import async_session_factory
+                from app.database import async_session_factory, is_db_available
                 from sqlalchemy import select
                 from app.models import Session
 
-                async with async_session_factory() as db:
-                    result = await db.execute(
-                        select(Session).where(Session.token_hash == token_hash)
-                    )
-                    session = result.scalar_one_or_none()
-                    if session:
-                        request.state.session_id = session.id
-                        request.state.user_id = session.user_id
-                        request.state.role = await _resolve_role(session.user_id)
-                    else:
+                if is_db_available():
+                    try:
+                        async with async_session_factory() as db:
+                            result = await db.execute(
+                                select(Session).where(Session.token_hash == token_hash)
+                            )
+                            session = result.scalar_one_or_none()
+                            if session:
+                                request.state.session_id = session.id
+                                request.state.user_id = session.user_id
+                                request.state.role = await _resolve_role(session.user_id)
+                            else:
+                                request.state.session_id = f"anon_{new_uuid7()}"
+                                request.state.user_id = None
+                                request.state.role = "visitor"
+                                request.state.session_id = f"anon_{new_uuid7()}"
+                                request.state.user_id = None
+                                request.state.role = "visitor"
+                    except Exception:
+                        logger.exception("DB session lookup failed, falling back to anonymous")
                         request.state.session_id = f"anon_{new_uuid7()}"
                         request.state.user_id = None
                         request.state.role = "visitor"
+                else:
+                    request.state.session_id = f"anon_{new_uuid7()}"
+                    request.state.user_id = None
+                    request.state.role = "visitor"
         else:
             # Anonymous
             anon_id = new_uuid7()

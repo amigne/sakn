@@ -1,9 +1,12 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 // Tools
 import PingPage from "@/pages/tools/PingPage";
 import TraceroutePage from "@/pages/tools/TraceroutePage";
 import DnsLookupPage from "@/pages/tools/DnsLookupPage";
 import SslViewerPage from "@/pages/tools/SslViewerPage";
+import NoToolsPage from "@/pages/tools/NoToolsPage";
+import ToolGuard from "@/components/tool/ToolGuard";
+import DefaultRedirect from "@/components/tool/DefaultRedirect";
 // Auth
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -23,16 +26,18 @@ import AdminRateLimitsPage from "@/pages/admin/AdminRateLimitsPage";
 import AdminModulesPage from "@/pages/admin/AdminModulesPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 import AdminLogsPage from "@/pages/admin/AdminLogsPage";
+import AdminGuard from "@/components/admin/AdminGuard";
 
 export default function Router() {
   return (
     <Routes>
-      {/* Tool routes */}
-      <Route path="/" element={<Navigate to="/ping" replace />} />
-      <Route path="/ping" element={<PingPage />} />
-      <Route path="/traceroute" element={<TraceroutePage />} />
-      <Route path="/dns" element={<DnsLookupPage />} />
-      <Route path="/ssl" element={<SslViewerPage />} />
+      {/* Tool routes — guarded by role permissions */}
+      <Route path="/" element={<DefaultRedirect />} />
+      <Route path="/ping" element={<ToolGuard toolName="ping"><PingPage /></ToolGuard>} />
+      <Route path="/traceroute" element={<ToolGuard toolName="traceroute"><TraceroutePage /></ToolGuard>} />
+      <Route path="/dns" element={<ToolGuard toolName="dns_lookup"><DnsLookupPage /></ToolGuard>} />
+      <Route path="/ssl" element={<ToolGuard toolName="ssl_viewer"><SslViewerPage /></ToolGuard>} />
+      <Route path="/no-tools" element={<NoToolsPage />} />
 
       {/* Auth routes */}
       <Route path="/login" element={<LoginPage />} />
@@ -50,13 +55,13 @@ export default function Router() {
       <Route path="/privacy" element={<PrivacyPage />} />
 
       {/* Admin routes */}
-      <Route path="/admin/users" element={<AdminUsersPage />} />
-      <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
-      <Route path="/admin/access" element={<AdminAccessPage />} />
-      <Route path="/admin/rate-limits" element={<AdminRateLimitsPage />} />
-      <Route path="/admin/modules" element={<AdminModulesPage />} />
-      <Route path="/admin/settings" element={<AdminSettingsPage />} />
-      <Route path="/admin/logs" element={<AdminLogsPage />} />
+      <Route path="/admin/users" element={<AdminGuard><AdminUsersPage /></AdminGuard>} />
+      <Route path="/admin/users/:id" element={<AdminGuard><AdminUserDetailPage /></AdminGuard>} />
+      <Route path="/admin/access" element={<AdminGuard><AdminAccessPage /></AdminGuard>} />
+      <Route path="/admin/rate-limits" element={<AdminGuard><AdminRateLimitsPage /></AdminGuard>} />
+      <Route path="/admin/modules" element={<AdminGuard><AdminModulesPage /></AdminGuard>} />
+      <Route path="/admin/settings" element={<AdminGuard><AdminSettingsPage /></AdminGuard>} />
+      <Route path="/admin/logs" element={<AdminGuard><AdminLogsPage /></AdminGuard>} />
 
       {/* 404 */}
       <Route path="*" element={

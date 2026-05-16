@@ -1,17 +1,19 @@
 import { NavLink } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import { useAvailableTools } from "@/hooks/useAvailableTools";
 
 interface SidebarItem {
   label: string;
   to: string;
   icon: string;
+  name: string;
 }
 
-const toolItems: SidebarItem[] = [
-  { label: "Ping", to: "/ping", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
-  { label: "Traceroute", to: "/traceroute", icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" },
-  { label: "DNS", to: "/dns", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" },
-  { label: "TLS", to: "/ssl", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
+const ALL_TOOLS: SidebarItem[] = [
+  { label: "Ping", to: "/ping", name: "ping", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
+  { label: "Traceroute", to: "/traceroute", name: "traceroute", icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" },
+  { label: "DNS", to: "/dns", name: "dns_lookup", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" },
+  { label: "TLS", to: "/ssl", name: "ssl_viewer", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
 ];
 
 interface SidebarProps {
@@ -24,6 +26,9 @@ interface SidebarProps {
 export default function Sidebar({ collapsed = false, onNavigate, onToggle, showToggle = false }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const role = user?.role ?? "visitor";
+  const { tools: toolNames, checked } = useAvailableTools();
+  const availableNames = checked ? new Set(toolNames) : null;
+  const visibleTools = availableNames === null ? [] : ALL_TOOLS.filter(t => availableNames.has(t.name));
 
   return (
     <nav
@@ -46,7 +51,7 @@ export default function Sidebar({ collapsed = false, onNavigate, onToggle, showT
           Tools
         </div>
       )}
-      {toolItems.map((item) => (
+      {visibleTools.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

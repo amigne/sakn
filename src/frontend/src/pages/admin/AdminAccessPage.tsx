@@ -1,37 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import { ToggleSwitch, Spinner } from "@/components/ui";
+import { listRolePermissions, updateRolePermissions } from "@/services/admin";
 import type { AccessPermission } from "@/types/admin";
+import { toolDisplayName } from "@/types/admin";
 
-const tools = ["ping", "traceroute", "dns_lookup", "ssl_viewer"];
-const roles = ["administrator", "authenticated", "visitor"];
-
-function makeMock(): AccessPermission[] {
-  return [
-    { tool_name: "ping", role: "administrator", allowed: true },
-    { tool_name: "ping", role: "authenticated", allowed: true },
-    { tool_name: "ping", role: "visitor", allowed: true },
-    { tool_name: "traceroute", role: "administrator", allowed: true },
-    { tool_name: "traceroute", role: "authenticated", allowed: true },
-    { tool_name: "traceroute", role: "visitor", allowed: false },
-    { tool_name: "dns_lookup", role: "administrator", allowed: true },
-    { tool_name: "dns_lookup", role: "authenticated", allowed: true },
-    { tool_name: "dns_lookup", role: "visitor", allowed: true },
-    { tool_name: "ssl_viewer", role: "administrator", allowed: true },
-    { tool_name: "ssl_viewer", role: "authenticated", allowed: true },
-    { tool_name: "ssl_viewer", role: "visitor", allowed: true },
-  ];
-}
+const ROLES = ["administrator", "authenticated", "visitor"];
 
 export default function AdminAccessPage() {
-  const [permissions, setPermissions] = useState<AccessPermission[]>(makeMock());
+  const [permissions, setPermissions] = useState<AccessPermission[]>([]);
+  const [tools, setTools] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const toggle = (tool: string, role: string) => {
-    setPermissions((prev) =>
-      prev.map((p) =>
-        p.tool_name === tool && p.role === role ? { ...p, allowed: !p.allowed } : p
-      )
+  const fetchPermissions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listRolePermissions();
+      setPermissions(data.permissions);
+      const uniqueTools = [...new Set(data.permissions.map((p) => p.tool_name))].sort();
+      setTools(uniqueTools);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load permissions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
+
+  const toggle = async (tool: string, role: string) => {
+    const perm = permissions.find((p) => p.tool_name === tool && p.role === role);
+    if (!perm) return;
+
+    // Optimistic update
+    const updated = permissions.map((p) =>
+      p.tool_name === tool && p.role === role ? { ...p, allowed: !p.allowed } : p
     );
+    setPermissions(updated);
+
+    setSaving(true);
+    try {
+      await updateRolePermissions([{ id: (perm as { id?: string }).id || "", allowed: !perm.allowed }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update permission");
+      // Revert on failure
+      setPermissions(permissions);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -41,36 +62,45 @@ export default function AdminAccessPage() {
           Toggle tool access per role. Changes are saved immediately.
         </p>
 
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border)]">
-              <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Tool</th>
-              {roles.map((r) => (
-                <th key={r} scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize">{r}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tools.map((tool) => (
-              <tr key={tool} className="border-b border-[var(--color-border)]">
-                <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">{tool.replace("_", " ")}</td>
-                {roles.map((role) => {
-                  const perm = permissions.find((p) => p.tool_name === tool && p.role === role);
-                  return (
-                    <td key={role} className="px-3 py-2">
-                      <div className="flex justify-center">
-                        <ToggleSwitch
-                          checked={perm?.allowed ?? false}
-                          onChange={() => toggle(tool, role)}
-                        />
-                      </div>
-                    </td>
-                  );
-                })}
+        {error && (
+          <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Spinner /></div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-border)]">
+                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Tool</th>
+                {ROLES.map((r) => (
+                  <th key={r} scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize">{r}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {tools.map((tool) => (
+                <tr key={tool} className="border-b border-[var(--color-border)]">
+                  <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">{toolDisplayName(tool)}</td>
+                  {ROLES.map((role) => {
+                    const perm = permissions.find((p) => p.tool_name === tool && p.role === role);
+                    return (
+                      <td key={role} className="px-3 py-2">
+                        <div className="flex justify-center">
+                          <ToggleSwitch
+                            checked={perm?.allowed ?? false}
+                            onChange={() => toggle(tool, role)}
+                            disabled={saving}
+                          />
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </AdminLayout>
   );

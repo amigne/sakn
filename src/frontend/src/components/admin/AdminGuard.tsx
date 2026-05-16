@@ -1,0 +1,23 @@
+import { Navigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
+import { Spinner } from "@/components/ui";
+
+export default function AdminGuard({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
+
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!user || user.role !== "administrator") {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}

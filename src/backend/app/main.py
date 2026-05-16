@@ -9,6 +9,11 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import engine
 
+# Setup structured logging early
+from app.logs.logger import setup_logging
+
+setup_logging(settings.LOG_LEVEL)
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,10 +31,45 @@ async def lifespan(app: FastAPI) -> Any:
     # Ensure tables exist (idempotent — safe to call even after alembic migrations)
     from app.models import Base
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    from app.database import set_db_available
+    from app.config import settings as cfg
 
-    # Tool registry
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        set_db_available(True)
+        db_available = True
+    except Exception:
+        logger.warning(
+            "Primary database unavailable at %s, trying SQLite fallback",
+            cfg.DATABASE_URL,
+        )
+        # Fall back to local SQLite if the primary DB is unreachable
+        try:
+            from sqlalchemy.ext.asyncio import create_async_engine as cae, AsyncSession, async_sessionmaker
+
+            fallback_url = "sqlite+aiosqlite:///./sakn.db"
+            fallback_engine = cae(fallback_url, echo=False, future=True)
+            async with fallback_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            # Swap engines: replace the inaccessible one with the working one
+            import app.database as db_mod
+
+            db_mod.engine = fallback_engine
+            db_mod.async_session_factory = async_sessionmaker(
+                fallback_engine, class_=AsyncSession, expire_on_commit=False
+            )
+            logger.info("Falling back to SQLite at %s", fallback_url)
+            set_db_available(True)
+            db_available = True
+        except Exception as fallback_err:
+            logger.warning("SQLite fallback also failed: %s", fallback_err)
+            logger.warning("Database unavailable, continuing with limited functionality")
+            set_db_available(False)
+            db_available = False
+
+    # Tool registry (always available, even without DB)
     from app.tools.registry import ToolRegistry
     from app.tools.ping import PingTool
     from app.tools.traceroute import TracerouteTool
@@ -43,35 +83,158 @@ async def lifespan(app: FastAPI) -> Any:
     registry.register(SslViewerTool())
     app.state.tool_registry = registry
 
-    # Seed tool modules in DB (idempotent)
-    from app.database import async_session_factory
-    from app.models import ToolModule
-    from sqlalchemy import select
+    # Seed tool modules + default config rows (idempotent)
+    if db_available:
+        try:
+            from app.database import async_session_factory
+            from app.models import ToolModule
+            from app.models.tool_module import RoleToolPermission, RateLimitConfig, DnsServerPreset
+            from app.models.preferences import GlobalSetting
+            from sqlalchemy import select
 
-    async with async_session_factory() as db:
-        for tool in registry._tools.values():
-            definition = tool.get_definition()
-            row = await db.execute(
-                select(ToolModule).where(ToolModule.name == definition.name)
-            )
-            if row.scalar_one_or_none() is None:
-                db.add(ToolModule(
-                    name=definition.name,
-                    display_name_key=definition.display_name_key,
-                    description_key=definition.description_key,
-                    enabled=True,
-                    version=definition.version,
-                ))
-        await db.commit()
+            async with async_session_factory() as db:
+                # Upsert tool modules
+                tool_ids: dict[str, str] = {}
+                for tool in registry._tools.values():
+                    definition = tool.get_definition()
+                    row = await db.execute(
+                        select(ToolModule).where(ToolModule.name == definition.name)
+                    )
+                    existing = row.scalar_one_or_none()
+                    if existing is None:
+                        existing = ToolModule(
+                            name=definition.name,
+                            display_name_key=definition.display_name_key,
+                            description_key=definition.description_key,
+                            enabled=True,
+                            version=definition.version,
+                        )
+                        db.add(existing)
+                        await db.flush()
+                    tool_ids[definition.name] = existing.id
+
+                # Seed default RoleToolPermission rows (all roles → all tools allowed)
+                all_roles = ["visitor", "authenticated", "administrator"]
+                for role in all_roles:
+                    for tool_name, tool_id in tool_ids.items():
+                        row = await db.execute(
+                            select(RoleToolPermission).where(
+                                RoleToolPermission.role == role,
+                                RoleToolPermission.tool_id == tool_id,
+                            )
+                        )
+                        if row.scalar_one_or_none() is None:
+                            db.add(RoleToolPermission(role=role, tool_id=tool_id, allowed=True))
+
+                # Seed default RateLimitConfig rows
+                default_limits = {
+                    "visitor": (1, 200, 3600),
+                    "authenticated": (1, 500, 3600),
+                    "administrator": (0, 3600, 3600),
+                }
+                for role, (soft, hard, window) in default_limits.items():
+                    row = await db.execute(
+                        select(RateLimitConfig).where(
+                            RateLimitConfig.role == role,
+                            RateLimitConfig.tool_id.is_(None),
+                        )
+                    )
+                    if row.scalar_one_or_none() is None:
+                        db.add(RateLimitConfig(
+                            role=role,
+                            tool_id=None,
+                            soft_limit=soft,
+                            hard_limit=hard,
+                            window_seconds=window,
+                        ))
+
+                # Seed default DnsServerPreset rows for dns_lookup tool
+                dns_tool_id = tool_ids.get("dns_lookup")
+                if dns_tool_id:
+                    from sqlalchemy import func as sa_func
+
+                    row = await db.execute(
+                        select(sa_func.count(DnsServerPreset.id)).where(
+                            DnsServerPreset.tool_module_id == dns_tool_id
+                        )
+                    )
+                    existing_count = row.scalar() or 0
+                    if existing_count == 0:
+                        default_dns_servers = [
+                            ("8.8.8.8", "Google DNS"),
+                            ("1.1.1.1", "Cloudflare DNS"),
+                            ("9.9.9.9", "Quad9 DNS"),
+                            ("208.67.222.222", "OpenDNS"),
+                        ]
+                        for idx, (ip, desc) in enumerate(default_dns_servers):
+                            db.add(DnsServerPreset(
+                                tool_module_id=dns_tool_id,
+                                ip_address=ip,
+                                description=desc,
+                                sort_order=idx,
+                            ))
+
+                # Seed default GlobalSetting rows
+                default_settings = {
+                    "log_retention_days": "90",
+                    "session_duration_hours": "24",
+                    "max_concurrent_sessions": "10",
+                }
+                for key, value in default_settings.items():
+                    row = await db.execute(
+                        select(GlobalSetting).where(GlobalSetting.key == key)
+                    )
+                    if row.scalar_one_or_none() is None:
+                        db.add(GlobalSetting(key=key, value=value))
+
+                await db.commit()
+        except Exception:
+            logger.exception("Seed data creation failed, continuing")
 
     # WebSocket manager
     from app.websocket.manager import ConnectionManager
 
     app.state.ws_manager = ConnectionManager()
 
+    # Log cleanup scheduler (apscheduler, daily)
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        scheduler = AsyncIOScheduler()
+        app.state.scheduler = scheduler
+
+        @scheduler.scheduled_job("cron", hour=3, minute=0)
+        async def cleanup_logs():
+            import app.services.log_service as log_svc
+
+            try:
+                async with async_session_factory() as db:
+                    from sqlalchemy import select as sel
+                    from app.models.preferences import GlobalSetting as GS
+
+                    row = await db.execute(
+                        sel(GS).where(GS.key == "log_retention_days")
+                    )
+                    setting = row.scalar_one_or_none()
+                    retention = int(setting.value) if setting else 90
+                    deleted = await log_svc.cleanup_old_logs(db, retention)
+                    await db.commit()
+                    logger.info("Log cleanup completed", extra={"deleted": deleted})
+            except Exception:
+                logger.exception("Log cleanup failed")
+
+        scheduler.start()
+    except Exception:
+        logger.exception("Scheduler initialization failed")
+
     yield
 
     # Cleanup
+    if hasattr(app.state, "scheduler"):
+        try:
+            app.state.scheduler.shutdown(wait=False)
+        except Exception:
+            pass
     try:
         from app.redis.connection import close_redis
 
@@ -90,6 +253,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Request ID middleware (outermost — must be first so all other middleware see the ID)
+from app.middleware.request_id import RequestIDMiddleware
+
+app.add_middleware(RequestIDMiddleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -103,6 +271,11 @@ app.add_middleware(
 from app.middleware.session import SessionMiddleware
 
 app.add_middleware(SessionMiddleware)
+
+# Rate limit middleware (before security headers so headers apply to 429 responses too)
+from app.middleware.rate_limit import RateLimitMiddleware
+
+app.add_middleware(RateLimitMiddleware)
 
 # Security headers
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -124,9 +297,11 @@ register_error_handlers(app)
 async def health():
     checks = {}
 
-    # Database check
+    # Database check (uses live engine, which may have been swapped by fallback)
     try:
-        async with engine.connect() as conn:
+        from app.database import engine as live_engine
+
+        async with live_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception:

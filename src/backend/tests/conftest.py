@@ -70,3 +70,5 @@ async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
     # Restore
     app.dependency_overrides.clear()
     db_module.async_session_factory = original_factory
+    if hasattr(mw_module, "async_session_factory"):
+        del mw_module.async_session_factory

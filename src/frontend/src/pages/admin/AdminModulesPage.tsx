@@ -1,25 +1,15 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { ToggleSwitch, Button, TextInput, Modal, Spinner } from "@/components/ui";
 import { api } from "@/services/api";
-import type { DnsServerPreset } from "@/types/admin";
-
-interface ModuleEntry {
-  name: string;
-  display: string;
-  enabled: boolean;
-  hasSettings: boolean;
-}
-
-const initialModules: ModuleEntry[] = [
-  { name: "ping", display: "Ping", enabled: true, hasSettings: false },
-  { name: "traceroute", display: "Traceroute", enabled: true, hasSettings: true },
-  { name: "dns_lookup", display: "DNS Lookup", enabled: true, hasSettings: true },
-  { name: "ssl_viewer", display: "TLS Viewer", enabled: true, hasSettings: false },
-];
+import { listModules, updateModule, listDnsServers, createDnsServer, updateDnsServer, deleteDnsServer, reorderDnsServers } from "@/services/admin";
+import type { DnsServerPreset, ToolModule } from "@/types/admin";
+import { toolDisplayName } from "@/types/admin";
 
 export default function AdminModulesPage() {
-  const [modules, setModules] = useState<ModuleEntry[]>(initialModules);
+  const [modules, setModules] = useState<ToolModule[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(true);
+  const [modulesError, setModulesError] = useState<string | null>(null);
   const [dnsPresets, setDnsPresets] = useState<DnsServerPreset[]>([]);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [showDnsEditor, setShowDnsEditor] = useState(false);
@@ -35,9 +25,40 @@ export default function AdminModulesPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const toggleModule = (name: string) => {
-    setModules((prev) => prev.map((m) => (m.name === name ? { ...m, enabled: !m.enabled } : m)));
+  const fetchModules = useCallback(async () => {
+    setModulesLoading(true);
+    setModulesError(null);
+    try {
+      const data = await listModules();
+      setModules(data.modules);
+    } catch (e) {
+      setModulesError(e instanceof Error ? e.message : "Failed to load modules");
+    } finally {
+      setModulesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchModules();
+  }, [fetchModules]);
+
+  const toggleModule = async (name: string, currentEnabled: boolean) => {
+    // Optimistic update
+    setModules((prev) =>
+      prev.map((m) => (m.name === name ? { ...m, enabled: !currentEnabled } : m))
+    );
+    try {
+      await updateModule(name, { enabled: !currentEnabled });
+    } catch (e) {
+      setModulesError(e instanceof Error ? e.message : "Failed to update module");
+      // Revert
+      setModules((prev) =>
+        prev.map((m) => (m.name === name ? { ...m, enabled: currentEnabled } : m))
+      );
+    }
   };
+
+  const hasSettings = (name: string) => name === "dns_lookup" || name === "traceroute";
 
   const openSettings = useCallback((moduleName: string) => {
     if (moduleName === "dns_lookup") {
@@ -55,7 +76,7 @@ export default function AdminModulesPage() {
     setSettingsLoading(true);
     setSettingsError(null);
     try {
-      const data: { settings?: { show_private_hops?: string } } = await api(`/admin/modules/traceroute/settings`);
+      const data: { settings?: { show_private_hops?: string } } = await api("/admin/modules/traceroute/settings");
       const val = data?.settings?.show_private_hops;
       if (val !== undefined) {
         setShowPrivateHops(val === "true");
@@ -71,7 +92,7 @@ export default function AdminModulesPage() {
     setSettingsSaving(true);
     setSettingsError(null);
     try {
-      await api(`/admin/modules/traceroute/settings`, {
+      await api("/admin/modules/traceroute/settings", {
         method: "PUT",
         body: { settings: { show_private_hops: value } },
       });
@@ -93,7 +114,7 @@ export default function AdminModulesPage() {
   const loadDnsPresets = useCallback(async () => {
     setDnsLoading(true);
     try {
-      const data: { presets?: DnsServerPreset[] } = await api("/admin/modules/dns_lookup/dns-servers");
+      const data = await listDnsServers("dns_lookup");
       setDnsPresets(data.presets ?? []);
     } catch {
       setPresetError("Failed to load DNS presets.");
@@ -129,28 +150,28 @@ export default function AdminModulesPage() {
     }
     try {
       if (editingPreset) {
-        await api(`/admin/modules/dns_lookup/dns-servers/${editingPreset.id}`, {
-          method: "PUT",
-          body: { ip_address: presetIp.trim(), description: presetDesc.trim() },
+        await updateDnsServer("dns_lookup", editingPreset.id, {
+          ip_address: presetIp.trim(),
+          description: presetDesc.trim(),
         });
         setEditingPreset(null);
       } else {
-        await api("/admin/modules/dns_lookup/dns-servers", {
-          method: "POST",
-          body: { ip_address: presetIp.trim(), description: presetDesc.trim() },
+        await createDnsServer("dns_lookup", {
+          ip_address: presetIp.trim(),
+          description: presetDesc.trim(),
         });
       }
       setPresetIp("");
       setPresetDesc("");
       await loadDnsPresets();
-    } catch (e) {
+    } catch {
       setPresetError("Failed to save preset.");
     }
   };
 
   const deletePreset = async (id: string) => {
     try {
-      await api(`/admin/modules/dns_lookup/dns-servers/${id}`, { method: "DELETE" });
+      await deleteDnsServer("dns_lookup", id);
       await loadDnsPresets();
     } catch {
       setPresetError("Failed to delete preset.");
@@ -160,26 +181,32 @@ export default function AdminModulesPage() {
   const movePreset = async (id: string, direction: "up" | "down") => {
     const idx = dnsPresets.findIndex((p) => p.id === id);
     if (idx < 0 || (direction === "up" && idx === 0) || (direction === "down" && idx === dnsPresets.length - 1)) return;
-    const next = [...dnsPresets];
+    const reordered = [...dnsPresets];
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    const temp = next[idx]!;
-    next[idx] = next[swapIdx]!;
-    next[swapIdx] = temp;
-    const reordered = next.map((p, i) => ({ ...p, sort_order: i }));
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!];
     setDnsPresets(reordered);
     try {
-      await api("/admin/modules/dns_lookup/dns-servers/reorder", {
-        method: "PUT",
-        body: { order: reordered.map((p) => p.id) },
-      });
+      await reorderDnsServers("dns_lookup", reordered.map((p) => p.id));
     } catch {
       await loadDnsPresets();
     }
   };
 
+  if (modulesLoading) {
+    return (
+      <AdminLayout title="Module Activation">
+        <div className="flex justify-center py-12"><Spinner /></div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="Module Activation">
       <div className="space-y-4 max-w-lg">
+        {modulesError && (
+          <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{modulesError}</div>
+        )}
+
         <div className="card p-4">
           <table className="w-full text-sm">
             <thead>
@@ -192,15 +219,15 @@ export default function AdminModulesPage() {
             <tbody>
               {modules.map((mod) => (
                 <tr key={mod.name} className="border-b border-[var(--color-border)]">
-                  <td className="px-3 py-2 font-medium text-[var(--color-text)]">{mod.display}</td>
+                  <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">{toolDisplayName(mod.name)}</td>
                   <td className="px-3 py-2">
                     <div className="flex justify-center">
-                      <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name)} />
+                      <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name, mod.enabled)} />
                     </div>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-center">
-                      {mod.hasSettings && (
+                      {hasSettings(mod.name) && (
                         <button onClick={() => openSettings(mod.name)} className="text-primary-600 hover:text-primary-700">
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -238,9 +265,7 @@ export default function AdminModulesPage() {
 
             <hr className="border-[var(--color-border)]" />
 
-            {presetError && (
-              <p className="text-xs text-error-600 dark:text-error-500">{presetError}</p>
-            )}
+            {presetError && <p className="text-xs text-error-600 dark:text-error-500">{presetError}</p>}
 
             <div className="flex gap-2">
               <TextInput placeholder="IP Address" value={presetIp} onChange={(e) => { setPresetIp(e.target.value); setPresetError(""); }} />
@@ -248,9 +273,7 @@ export default function AdminModulesPage() {
               <Button size="sm" onClick={savePreset}>{editingPreset ? "Update" : "Add"}</Button>
             </div>
 
-            {editingPreset && (
-              <p className="text-xs text-[var(--color-text-secondary)]">Editing: {editingPreset.ip_address}</p>
-            )}
+            {editingPreset && <p className="text-xs text-[var(--color-text-secondary)]">Editing: {editingPreset.ip_address}</p>}
           </div>
         </Modal>
 
@@ -260,14 +283,11 @@ export default function AdminModulesPage() {
             <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
             <div className="space-y-4">
-              {settingsError && (
-                <p className="text-xs text-error-600 dark:text-error-500">{settingsError}</p>
-              )}
-
+              {settingsError && <p className="text-xs text-error-600 dark:text-error-500">{settingsError}</p>}
               <label className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text)]">Show Private Hops</p>
-                  <p className="text-xs text-[var(--color-text-secondary)]">Display private IP addresses (e.g. 192.168.x.x, 10.x.x.x) in traceroute results. Disable to hide infrastructure details.</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Display private IP addresses in traceroute results.</p>
                 </div>
                 <span className="flex items-center gap-2">
                   {settingsSaving && <Spinner size="sm" />}

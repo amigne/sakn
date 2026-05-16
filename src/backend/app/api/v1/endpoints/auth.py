@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.errors import AppError
 from app.database import get_session
 from app.services import auth_service
-from app.services.rate_limit_service import check as rl_check, record as rl_record
+from app.services.rate_limit_service import auth_check as rl_check, auth_record as rl_record
 from app.security.csrf import (
     generate_csrf_token,
     set_csrf_cookie,

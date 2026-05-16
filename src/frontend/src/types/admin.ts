@@ -3,6 +3,8 @@ import type { UserRole, UserStatus } from "./user";
 export interface AdminUser {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   role: UserRole;
   status: UserStatus;
   email_verified: boolean;
@@ -23,14 +25,28 @@ export interface AdminUserDetail extends AdminUser {
   }[];
 }
 
+export function toolDisplayName(name: string): string {
+  const map: Record<string, string> = {
+    ping: "Ping",
+    traceroute: "Traceroute",
+    dns_lookup: "DNS Lookup",
+    ssl_viewer: "TLS Certificate Viewer",
+  };
+  return map[name] ?? name.replace(/_/g, " ");
+}
+
 export interface AccessPermission {
+  id?: string;
+  tool_id?: string;
   tool_name: string;
   role: UserRole;
   allowed: boolean;
 }
 
 export interface RateLimit {
+  id?: string;
   role: UserRole;
+  tool_id: string | null;
   tool_name: string | null;
   soft_limit: number;
   hard_limit: number;
@@ -53,37 +69,40 @@ export interface GlobalSettings {
   log_retention_days: string;
   session_duration_hours: string;
   max_concurrent_sessions: string;
+  email_verification_required?: string;
 }
 
 export interface ToolExecutionLog {
   id: string;
-  user_id: string;
-  user_email: string;
+  user_id: string | null;
+  session_id: string | null;
+  source_ip: string;
   tool_name: string;
-  target: string;
-  status: string;
+  parameters: unknown;
+  result: string;
   duration_ms: number;
+  error_message: string | null;
   created_at: string;
 }
 
 export interface SecurityEventLog {
   id: string;
   event_type: string;
+  source_ip: string;
+  ip_address?: string;  // legacy alias
   user_id: string | null;
-  user_email: string | null;
-  ip_address: string;
-  details: string;
+  details: unknown;
   created_at: string;
 }
 
 export interface AuditLog {
   id: string;
   admin_id: string;
-  admin_email: string;
   action: string;
   entity_type: string;
   entity_id: string;
-  details: string;
+  old_value: unknown;
+  new_value: unknown;
   created_at: string;
 }
 

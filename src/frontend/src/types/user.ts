@@ -1,5 +1,5 @@
 export type UserRole = "visitor" | "authenticated" | "administrator";
-export type UserStatus = "pending" | "active" | "blocked";
+export type UserStatus = "pending" | "active" | "blocked" | "locked";
 export type ThemeMode = "light" | "dark" | "system";
 
 export interface User {

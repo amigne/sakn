@@ -1,14 +1,4 @@
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import app
-
-
-@pytest.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
 
 
 @pytest.mark.asyncio
@@ -23,17 +13,39 @@ async def test_health_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_list_tools(client):
-    response = await client.get("/api/v1/tools")
-    assert response.status_code == 200
-    data = response.json()
-    assert "tools" in data
-    tools = data["tools"]
-    assert isinstance(tools, list)
-    ping_tools = [t for t in tools if t["name"] == "ping"]
-    assert len(ping_tools) == 1
-    ping = ping_tools[0]
-    assert ping["category"] == "network"
-    assert len(ping["parameters"]) > 0
+    from app.database import async_session_factory
+    from app.models.tool_module import ToolModule, RoleToolPermission
+    from sqlalchemy import select
+
+    # Use the monkey-patched factory so middleware sees the data
+    # Use unique names to avoid conflicts with model tests
+    async with async_session_factory() as db:
+        tool = ToolModule(name="ping", display_name_key="t.ping", description_key="d.ping",
+                          enabled=True, version="1.0")
+        db.add(tool)
+        await db.flush()
+        db.add(RoleToolPermission(role="visitor", tool_id=tool.id, allowed=True))
+        await db.commit()
+
+    try:
+        response = await client.get("/api/v1/tools")
+        assert response.status_code == 200
+        data = response.json()
+        assert "tools" in data
+        tools = data["tools"]
+        assert isinstance(tools, list)
+        ping_tools = [t for t in tools if t["name"] == "ping"]
+        assert len(ping_tools) == 1
+        ping = ping_tools[0]
+        assert ping["category"] == "network"
+        assert len(ping["parameters"]) > 0
+    finally:
+        # Clean up to avoid polluting other tests
+        async with async_session_factory() as db:
+            from sqlalchemy import delete
+            await db.execute(delete(RoleToolPermission).where(RoleToolPermission.tool_id == tool.id))
+            await db.execute(delete(ToolModule).where(ToolModule.id == tool.id))
+            await db.commit()
 
 
 @pytest.mark.asyncio

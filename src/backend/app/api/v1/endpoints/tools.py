@@ -1,10 +1,12 @@
+import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
-from app.database import get_session
+from app.database import get_session, async_session_factory
 from app.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -24,9 +26,63 @@ def get_registry(request: Request) -> ToolRegistry:
     return request.app.state.tool_registry
 
 
+@router.get("/available-for/{role}")
+async def list_tools_for_role(
+    role: str,
+    session=Depends(get_session),
+):
+    """Public: list tools available to a given role (for the no-tools page)."""
+    from app.models import ToolModule
+    from app.models.tool_module import RoleToolPermission
+
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.enabled == True)
+    )
+    enabled_tools = {t.name for t in row.scalars().all()}
+
+    perm_row = await session.execute(
+        select(RoleToolPermission, ToolModule.name)
+        .join(ToolModule, RoleToolPermission.tool_id == ToolModule.id)
+        .where(RoleToolPermission.role == role, RoleToolPermission.allowed == True)
+    )
+    allowed_tools = {tool_name for _, tool_name in perm_row.all()}
+
+    available = sorted(enabled_tools & allowed_tools)
+    return {"role": role, "tools": available}
+
+
 @router.get("")
-async def list_tools(registry: ToolRegistry = Depends(get_registry)):
-    tools = [tool.to_api_definition() for tool in registry._tools.values()]
+async def list_tools(
+    request: Request,
+    registry: ToolRegistry = Depends(get_registry),
+    session=Depends(get_session),
+):
+    """List tools filtered by enabled status and role permissions."""
+    from app.models import ToolModule
+    from app.models.tool_module import RoleToolPermission
+
+    role = getattr(request.state, "role", "visitor")
+
+    # Load enabled tool names from DB
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.enabled == True)
+    )
+    enabled_tools = {t.name for t in row.scalars().all()}
+
+    # Load role permissions (which tools this role is allowed to use)
+    perm_row = await session.execute(
+        select(RoleToolPermission, ToolModule.name)
+        .join(ToolModule, RoleToolPermission.tool_id == ToolModule.id)
+        .where(RoleToolPermission.role == role, RoleToolPermission.allowed == True)
+    )
+    allowed_tools = {tool_name for _, tool_name in perm_row.all()}
+
+    tools = []
+    for tool in registry._tools.values():
+        definition = tool.get_definition()
+        if definition.name in enabled_tools and definition.name in allowed_tools:
+            tools.append(tool.to_api_definition())
+
     return {"tools": tools}
 
 
@@ -87,29 +143,138 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     from app.websocket.handlers.ping_ws import handle_ping_stream
     from app.websocket.handlers.traceroute_ws import handle_traceroute_stream
 
+    if tool_name not in ("ping", "traceroute"):
+        await websocket.close(code=4004)
+        return
+
+    # Resolve session and check access BEFORE accepting
+    session_token, _ = _read_session_from_ws(websocket)
+    user_id = None
+    role = "visitor"
+
+    try:
+        from app.database import async_session_factory, is_db_available
+        from app.models.tool_module import RoleToolPermission
+        from app.models import ToolModule, User
+        from app.security.tokens import hash_token
+
+        if is_db_available():
+            async with async_session_factory() as db:
+                # Check tool enabled
+                row = await db.execute(
+                    select(ToolModule).where(ToolModule.name == tool_name)
+                )
+                tool_mod = row.scalar_one_or_none()
+                if tool_mod is None or not tool_mod.enabled:
+                    await websocket.close(code=4003)
+                    return
+
+                # Resolve user from session
+                if session_token and not session_token.startswith("anon_"):
+                    token_hash = hash_token(session_token)
+                    try:
+                        from app.redis.session_store import get_session as redis_get
+                        redis_data = await redis_get(token_hash)
+                    except Exception:
+                        redis_data = None
+
+                    if redis_data:
+                        user_id = redis_data.get("user_id")
+                    else:
+                        # DB fallback for session
+                        from app.models import Session
+                        srow = await db.execute(
+                            select(Session).where(Session.token_hash == token_hash)
+                        )
+                        sess = srow.scalar_one_or_none()
+                        if sess:
+                            user_id = sess.user_id
+
+                    if user_id:
+                        urow = await db.execute(select(User.role).where(User.id == user_id))
+                        r = urow.scalar_one_or_none()
+                        if r:
+                            role = r
+
+                # Check role permission
+                perm_row = await db.execute(
+                    select(RoleToolPermission).where(
+                        RoleToolPermission.role == role,
+                        RoleToolPermission.tool_id == tool_mod.id,
+                    )
+                )
+                perm = perm_row.scalar_one_or_none()
+                if perm is None or not perm.allowed:
+                    await websocket.close(code=4003)
+                    return
+    except Exception:
+        pass  # Allow execution if DB check fails
+
     manager = _get_ws_manager(websocket.app)
-    session_id, user_id = _read_session_from_ws(websocket)
     source_ip = websocket.client.host if websocket.client else "unknown"
 
-    await manager.connect(websocket, session_id, user_id)
+    # manager.connect() does websocket.accept() internally
+    await manager.connect(websocket, session_token, user_id)
 
     try:
         if tool_name == "ping":
-            await handle_ping_stream(websocket, session_id, user_id, source_ip)
+            await handle_ping_stream(websocket, session_token, user_id, source_ip)
         elif tool_name == "traceroute":
-            await handle_traceroute_stream(websocket, session_id, user_id, source_ip)
-        else:
-            await websocket.send_json({
-                "type": "error",
-                "message_key": "errors.not_found",
-                "message": f"Tool '{tool_name}' not available",
-            })
+            await handle_traceroute_stream(websocket, session_token, user_id, source_ip)
     except WebSocketDisconnect:
         pass
     except Exception as e:
         logger.exception("tool_stream error")
     finally:
-        await manager.disconnect(session_id)
+        await manager.disconnect(session_token)
+
+
+async def _check_tool_access(
+    tool_name: str, request: Request, session
+) -> None:
+    """Raise HTTPException if tool is disabled or role not allowed."""
+    from fastapi import HTTPException
+    from app.models import ToolModule
+    from app.models.tool_module import RoleToolPermission
+
+    role = getattr(request.state, "role", "visitor")
+
+    # Check enabled
+    row = await session.execute(
+        select(ToolModule).where(ToolModule.name == tool_name)
+    )
+    tool_mod = row.scalar_one_or_none()
+    if tool_mod is None or not tool_mod.enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "TOOL_DISABLED",
+                    "message_key": "errors.tool_disabled",
+                    "message": f"Tool '{tool_name}' is not available.",
+                }
+            },
+        )
+
+    # Check role permission
+    perm_row = await session.execute(
+        select(RoleToolPermission).where(
+            RoleToolPermission.role == role,
+            RoleToolPermission.tool_id == tool_mod.id,
+        )
+    )
+    perm = perm_row.scalar_one_or_none()
+    if perm is None or not perm.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "ROLE_NOT_ALLOWED",
+                    "message_key": "errors.role_not_allowed",
+                    "message": f"Your role does not have access to '{tool_name}'.",
+                }
+            },
+        )
 
 
 @router.post("/{tool_name}/execute")
@@ -118,8 +283,9 @@ async def execute_tool(
     params: dict[str, Any],
     request: Request,
     registry: ToolRegistry = Depends(get_registry),
+    session=Depends(get_session),
 ):
-    """Execute an instant tool (skeleton for future tools)."""
+    """Execute an instant tool."""
     tool = registry.get(tool_name)
     if tool is None:
         return {
@@ -129,6 +295,8 @@ async def execute_tool(
                 "message": f"Tool '{tool_name}' not found",
             }
         }
+
+    await _check_tool_access(tool_name, request, session)
 
     session_id = getattr(request.state, "session_id", "unknown")
     user_id = getattr(request.state, "user_id", None)
@@ -144,12 +312,38 @@ async def execute_tool(
         request_id=getattr(request.state, "request_id", ""),
     )
 
+    start_time = time.monotonic()
     result = await tool.execute(params, context)
+    elapsed_ms = int((time.monotonic() - start_time) * 1000)
+
+    # Log tool execution (best-effort, non-blocking)
+    try:
+        from app.database import is_db_available as db_ok
+
+        if db_ok():
+            import app.services.log_service as log_svc
+
+            async with async_session_factory() as log_db:
+                await log_svc.create_tool_execution_log(
+                    log_db,
+                    user_id=user_id,
+                    session_id=session_id,
+                    source_ip=source_ip,
+                    tool_name=tool_name,
+                    parameters=params,
+                    result="success" if result.success else ("failure" if result.error else "partial"),
+                    duration_ms=elapsed_ms,
+                    error_message=result.error,
+                )
+                await log_db.commit()
+    except Exception:
+        logger.exception("Failed to log tool execution")
+
     return {
         "result": {
             "success": result.success,
             "data": result.data,
             "error": result.error,
-            "duration_ms": result.duration_ms,
+            "duration_ms": result.duration_ms or elapsed_ms,
         }
     }
