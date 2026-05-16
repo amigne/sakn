@@ -216,7 +216,7 @@ class TestSslViewerExecute:
                 result = await tool.execute({"url": "example.com"}, ctx)
 
         assert result.success is False
-        assert "SSL error" in result.error
+        assert "handshake" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_timeout_handling(self, tool, ctx):

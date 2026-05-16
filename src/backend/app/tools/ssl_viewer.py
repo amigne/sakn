@@ -104,7 +104,10 @@ class SslViewerTool(BaseTool):
             )
         except ssl.SSLError as e:
             duration_ms = (time.monotonic() - start) * 1000
-            return ToolResult(success=False, error=f"SSL error: {e}", duration_ms=duration_ms)
+            msg = str(e)
+            if "handshake failure" in msg.lower() or "protocol version" in msg.lower():
+                msg = "SSL handshake failed — the server may require a TLS version or cipher not supported by this system"
+            return ToolResult(success=False, error=msg, duration_ms=duration_ms)
         except socket.timeout:
             duration_ms = (time.monotonic() - start) * 1000
             return ToolResult(success=False, error="errors.timeout", duration_ms=duration_ms)

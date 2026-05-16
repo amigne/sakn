@@ -100,7 +100,7 @@ export default function SslViewerPage() {
   return (
     <PageLayout>
       <ToolForm
-        title="TLS/SSL Certificate Viewer"
+        title="TLS Certificate Viewer"
         advancedOpen={false}
         isRunning={isRunning}
         onStart={handleStart}

@@ -15,7 +15,7 @@ const initialModules: ModuleEntry[] = [
   { name: "ping", display: "Ping", enabled: true, hasSettings: false },
   { name: "traceroute", display: "Traceroute", enabled: true, hasSettings: true },
   { name: "dns_lookup", display: "DNS Lookup", enabled: true, hasSettings: true },
-  { name: "ssl_viewer", display: "TLS/SSL Viewer", enabled: true, hasSettings: false },
+  { name: "ssl_viewer", display: "TLS Viewer", enabled: true, hasSettings: false },
 ];
 
 export default function AdminModulesPage() {
