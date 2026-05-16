@@ -40,5 +40,8 @@ test-results/
 # Claude Code
 .claude/settings.local.json
 
+# Database
+src/backend/sakn.db
+
 # Misc
 *.log
