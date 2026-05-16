@@ -21,7 +21,7 @@ interface DnsServerOption {
 }
 
 const defaults: DnsFormData = {
-  domain: "example.com",
+  domain: "",
   record_types: ["A", "AAAA", "CNAME"],
   resolver: "__system__",
   recursive_cname: true,
@@ -180,7 +180,7 @@ export default function DnsLookupPage() {
       >
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">Domain</span>
-          <TextInput type="text" placeholder="example.com" value={form.domain} onChange={(e) => update("domain", e.target.value)} error={errors.domain} />
+          <TextInput type="text" placeholder="example.com" value={form.domain} onChange={(e) => update("domain", e.target.value)} error={errors.domain} onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">DNS Server</span>

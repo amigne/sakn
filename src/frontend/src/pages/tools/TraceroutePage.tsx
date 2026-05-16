@@ -24,7 +24,7 @@ interface TracerouteSummary {
 }
 
 const defaults: TracerouteFormData = {
-  target: "8.8.8.8",
+  target: "",
   protocol: "udp",
   port: 33434,
   probes_per_hop: 3,
@@ -166,7 +166,7 @@ export default function TraceroutePage() {
       >
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">Target</span>
-          <TextInput type="text" placeholder="8.8.8.8" value={form.target} onChange={(e) => update("target", e.target.value)} error={errors.target} />
+          <TextInput type="text" placeholder="8.8.8.8" value={form.target} onChange={(e) => update("target", e.target.value)} error={errors.target} onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">Protocol</span>

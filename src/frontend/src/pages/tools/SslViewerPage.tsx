@@ -13,7 +13,7 @@ interface SslFormData {
 }
 
 const defaults: SslFormData = {
-  url: "example.com",
+  url: "",
   sni: "",
 };
 
@@ -114,7 +114,7 @@ export default function SslViewerPage() {
       >
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">URL</span>
-          <TextInput type="text" placeholder="example.com" value={form.url} onChange={(e) => update("url", e.target.value)} error={errors.url} />
+          <TextInput type="text" placeholder="example.com" value={form.url} onChange={(e) => update("url", e.target.value)} error={errors.url} onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">SNI (optional)</span>
