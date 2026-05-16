@@ -2,6 +2,7 @@ import logging
 import time
 from typing import Any
 
+import dns.flags
 import dns.rdatatype
 import dns.resolver
 
@@ -14,6 +15,33 @@ logger = logging.getLogger(__name__)
 MAX_CNAME_DEPTH = 10
 
 VALID_RECORD_TYPES = {"A", "AAAA", "CNAME", "MX", "NS", "TXT", "SRV", "SOA", "PTR", "CAA"}
+
+
+def _rrset_type_name(rrset: Any) -> str:
+    """Return the DNS type name for an RRset's rdtype."""
+    try:
+        return dns.rdatatype.to_text(rrset.rdtype)
+    except Exception:
+        return "?"
+
+
+def _merge_rrsets(
+    into: dict[str, list[dict[str, Any]]],
+    rrsets: list[Any],
+) -> dict[str, list[dict[str, Any]]]:
+    """Merge RRset items into the *into* dict, keyed by type name."""
+    for rrset in rrsets:
+        rt = _rrset_type_name(rrset)
+        if rt not in into:
+            into[rt] = []
+        for item in rrset:
+            into[rt].append({
+                "type": rt,
+                "value": str(item),
+                "ttl": rrset.ttl,
+                "owner": str(rrset.name).rstrip("."),
+            })
+    return into
 
 
 class DnsLookupTool(BaseTool):
@@ -64,6 +92,12 @@ class DnsLookupTool(BaseTool):
         if len(target) > 255:
             raise ValueError("Domain exceeds 255 characters")
 
+        # Normalize IDN to Punycode so the domain key matches DNS record owners.
+        try:
+            target = target.encode("idna").decode()
+        except (UnicodeError, ValueError):
+            raise ValueError("Invalid domain name")
+
         record_types = params.get("record_types", ["A"])
         if isinstance(record_types, str):
             record_types = [record_types]
@@ -101,6 +135,9 @@ class DnsLookupTool(BaseTool):
 
         try:
             records: dict[str, list[dict[str, Any]]] = {}
+            authority: dict[str, list[dict[str, Any]]] = {}
+            additional: dict[str, list[dict[str, Any]]] = {}
+            dnssec_ad_flag = False
             cname_chain: list[str] | None = None
             cname_blocked: dict[str, bool] = {}
 
@@ -124,6 +161,14 @@ class DnsLookupTool(BaseTool):
                                 "owner": owner,
                             })
                     records[rt] = rrset_records
+
+                    # DNSSEC: record whether the AD flag was set on this response
+                    if answers.response.flags & dns.flags.AD:
+                        dnssec_ad_flag = True
+
+                    # Collect authority and additional sections
+                    authority = _merge_rrsets(authority, answers.response.authority)
+                    additional = _merge_rrsets(additional, answers.response.additional)
                 except dns.resolver.NoAnswer:
                     records[rt] = []
                 except dns.resolver.NXDOMAIN:
@@ -157,6 +202,9 @@ class DnsLookupTool(BaseTool):
                 data={
                     "domain": target,
                     "records": records,
+                    "authority": authority if authority else None,
+                    "additional": additional if additional else None,
+                    "dnssec_ad_flag": dnssec_ad_flag,
                     "cname_chain": cname_chain,
                     "cname_records": cname_records if cname_records else None,
                 },
@@ -205,6 +253,8 @@ class DnsLookupTool(BaseTool):
         else:
             resolver_obj.timeout = 5
             resolver_obj.lifetime = 8  # 5s timeout + buffer
+        # Enable EDNS with DNSSEC OK flag so resolvers return the AD flag
+        resolver_obj.use_edns(0, dns.flags.DO, 1232)
         return resolver_obj
 
     async def _follow_cname_chain(
@@ -286,6 +336,37 @@ class DnsLookupTool(BaseTool):
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
+                "dnssec_ad_flag": {"type": "boolean"},
+                "authority": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "value": {"type": "string"},
+                                "ttl": {"type": "integer"},
+                                "owner": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "additional": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "value": {"type": "string"},
+                                "ttl": {"type": "integer"},
+                                "owner": {"type": "string"},
+                            },
+                        },
+                    },
+                },
                 "records": {
                     "type": "object",
                     "additionalProperties": {

@@ -69,7 +69,7 @@ Send ICMP echo requests to a target host and display round-trip statistics.
 | Packet Size | integer (bytes) | 56 | 8 to 65507. |
 | DF Bit | boolean | false | Set Don't Fragment flag. |
 | DSCP/ToS | integer | 0 | 0 to 63. |
-| Max Duration | integer (seconds) | 30 | When Count > 0: must be >= count × (timeout + 1). |
+| Max Duration | integer (seconds) | 30 | Whichever limit (count or duration) is reached first ends the execution. No cross-constraint with count. |
 
 #### 3.1.3 Behaviour Rules
 
@@ -99,7 +99,7 @@ Discover the network path to a target host by sending probes with increasing TTL
 | Protocol | enum | UDP | UDP, ICMP, TCP. |
 | Port | integer | 33434 | 1 to 65535. Used for UDP and TCP modes only. |
 | Probes per Hop | integer | 3 | 1 to 10. |
-| Timeout | integer (seconds) | 5 | 1 to 30. |
+| Timeout | integer (seconds) | 1 | 1 to 30. |
 | Max Distance | integer (hops) | 30 | 1 to 64. |
 | DNS Resolution | boolean | true | Resolve IP addresses of each hop to hostnames. |
 
@@ -151,7 +151,7 @@ Query DNS records for a domain name using configurable record types and nameserv
 - No records of requested type: empty result with message.
 - DNS server unreachable or timeout: timeout error.
 - PTR query with no reverse record: "no PTR record found."
-- Internationalized domain names (IDN): accept Unicode, convert to Punycode before querying.
+- Internationalized domain names (IDN): accept Unicode. Punycode conversion is handled automatically by dnspython.
 
 ### 3.4 TLS/SSL Certificate Viewer
 
@@ -174,7 +174,7 @@ Connect to an HTTPS server and display the TLS certificate chain with detailed p
 - Certificate chain validated against system CA store.
 - Server requires client certificate → connection refused, error returned.
 - Server uses IP as hostname (not target) → hostname mismatch reported as validation error.
-- Tool MUST explicitly state that certificate revocation status has NOT been checked.
+- Tool checks certificate revocation status via OCSP with CRL fallback (cached 24h).
 - A "Copy to clipboard" button MUST be available for displayed results.
 
 #### 3.4.4 Edge Cases
@@ -270,7 +270,7 @@ Whois, MAC OUI lookup, IP/subnet calculator, VirusTotal integration, dashboards,
 | OQ-002 | Traceroute loop detection | Defer to post-MVP. |
 | OQ-003 | TCP Ping | ICMP-only for MVP. |
 | OQ-004 | EDNS Client Subnet | Defer. |
-| OQ-005 | Certificate revocation checking | Skip for MVP. Tool states revocation not checked. |
+| OQ-005 | Certificate revocation checking | Implemented: OCSP with CRL fallback (24h disk cache). |
 | OQ-006 | DNSSEC validation | Defer. Display AD flag if available. |
 | OQ-007 | Password complexity | 8-128 chars, upper+lower+digit + zxcvbn. No special char. |
 | OQ-008 | Timing attack protection | Monitor for MVP. |

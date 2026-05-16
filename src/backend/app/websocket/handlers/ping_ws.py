@@ -201,6 +201,7 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
                 "rtt_min_ms": round(min(rtts), 1) if rtts else None,
                 "rtt_avg_ms": round(sum(rtts) / len(rtts), 1) if rtts else None,
                 "rtt_max_ms": round(max(rtts), 1) if rtts else None,
+                "rtt_mdev_ms": round(_stddev(rtts), 1) if len(rtts) >= 2 else None,
             }
         else:
             summary = _build_summary(results_by_seq, use_count)
@@ -235,6 +236,15 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
                 pass
 
 
+def _stddev(values: list[float]) -> float:
+    """Population standard deviation."""
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    variance = sum((x - mean) ** 2 for x in values) / len(values)
+    return variance ** 0.5
+
+
 def _build_summary(results_by_seq: dict[int, dict[str, Any]], expected_count: int) -> dict[str, Any]:
     transmitted = max(expected_count, max(results_by_seq.keys(), default=0))
     received = sum(1 for r in results_by_seq.values() if r.get("status") == "ok")
@@ -250,4 +260,5 @@ def _build_summary(results_by_seq: dict[int, dict[str, Any]], expected_count: in
         "rtt_min_ms": round(min(rtts), 1) if rtts else None,
         "rtt_avg_ms": round(sum(rtts) / len(rtts), 1) if rtts else None,
         "rtt_max_ms": round(max(rtts), 1) if rtts else None,
+        "rtt_mdev_ms": round(_stddev(rtts), 1) if len(rtts) >= 2 else None,
     }

@@ -293,6 +293,10 @@ export default function SslViewerPage() {
                           <p className="font-mono text-[10px] text-[var(--color-text)] break-all">{cert.fingerprint_sha1}</p>
                         </div>
                       </div>
+                      <details className="mt-2">
+                        <summary className="text-xs font-semibold text-[var(--color-text-secondary)] cursor-pointer hover:text-[var(--color-text)]">Raw PEM</summary>
+                        <pre className="font-mono text-[10px] text-[var(--color-text)] bg-[var(--color-surface-alt)] p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">{cert.pem}</pre>
+                      </details>
                     </div>
                   ),
                 };

@@ -250,8 +250,9 @@ export default function PingPage() {
                               <thead>
                                 <tr className="border-b border-[var(--color-border)]">
                                   <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Min</th>
-                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Average</th>
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Avg</th>
                                   <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Max</th>
+                                  <th className="px-3 py-1 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">StdDev</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -259,6 +260,7 @@ export default function PingPage() {
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_min_ms} ms</td>
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_avg_ms} ms</td>
                                   <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_max_ms} ms</td>
+                                  <td className="px-3 py-1 font-mono text-[var(--color-text)]">{pingSummary.rtt_mdev_ms} ms</td>
                                 </tr>
                               </tbody>
                             </table>
@@ -266,7 +268,7 @@ export default function PingPage() {
                         ) : (
                           <pre className="font-mono text-sm text-[var(--color-text)]">
                             {`Approximate round trip times in milliseconds:
-    Minimum = ${pingSummary.rtt_min_ms}ms, Maximum = ${pingSummary.rtt_max_ms}ms, Average = ${pingSummary.rtt_avg_ms}ms`}
+    Min=${pingSummary.rtt_min_ms}ms, Avg=${pingSummary.rtt_avg_ms}ms, Max=${pingSummary.rtt_max_ms}ms, StdDev=${pingSummary.rtt_mdev_ms}ms`}
                           </pre>
                         )
                       ) : (

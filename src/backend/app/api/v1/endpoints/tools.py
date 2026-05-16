@@ -55,7 +55,7 @@ async def list_tool_dns_servers(
     return {
         "tool": tool_name,
         "servers": [
-            {"value": p.ip_address, "label": f"{p.description} ({p.ip_address})"}
+            {"value": p.ip_address, "label": p.description}
             for p in presets
         ],
     }

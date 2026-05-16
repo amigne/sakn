@@ -138,9 +138,11 @@ export default function TraceroutePage() {
         title="Traceroute"
         advanced={
           <>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Port</span>
-              <TextInput type="number" min={1} max={65535} value={form.port} onChange={(e) => update("port", Number(e.target.value))} error={errors.port} />
+            <label className={`flex flex-col gap-1 ${form.protocol === "icmp" ? "opacity-50" : ""}`}>
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+                Port {form.protocol === "icmp" && <span className="font-normal">(unused for ICMP)</span>}
+              </span>
+              <TextInput type="number" min={1} max={65535} value={form.port} onChange={(e) => update("port", Number(e.target.value))} error={errors.port} disabled={form.protocol === "icmp"} />
             </label>
           </>
         }

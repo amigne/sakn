@@ -50,6 +50,7 @@ export interface PingSummary {
   rtt_min_ms: number | null;
   rtt_avg_ms: number | null;
   rtt_max_ms: number | null;
+  rtt_mdev_ms: number | null;
 }
 
 export interface TracerouteProbe {
@@ -76,11 +77,15 @@ export interface DnsRecord {
 export interface DnsResult {
   domain: string;
   records: Record<string, DnsRecord[]>;
+  authority: Record<string, DnsRecord[]> | null;
+  additional: Record<string, DnsRecord[]> | null;
+  dnssec_ad_flag: boolean;
   cname_chain: string[] | null;
   cname_records: Record<string, Record<string, DnsRecord[]>> | null;
 }
 
 export interface SslCertInfo {
+  pem: string;
   subject: string;
   issuer: string;
   valid_from: string;

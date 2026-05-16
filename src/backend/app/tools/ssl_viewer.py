@@ -728,7 +728,11 @@ class SslViewerTool(BaseTool):
         else:
             subject_label = f"CN={subject_cn}"
 
+        # Raw PEM representation
+        pem = cert.public_bytes(Encoding.PEM).decode()
+
         return {
+            "pem": pem,
             "subject": subject_label,
             "issuer": f"CN={issuer_cn}",
             "valid_from": cert.not_valid_before_utc.isoformat(),
@@ -769,6 +773,7 @@ class SslViewerTool(BaseTool):
                     "items": {
                         "type": "object",
                         "properties": {
+                            "pem": {"type": "string"},
                             "subject": {"type": "string"},
                             "issuer": {"type": "string"},
                             "valid_from": {"type": "string"},

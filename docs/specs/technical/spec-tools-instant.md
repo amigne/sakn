@@ -97,7 +97,7 @@ Connect with any SSL/TLS version the server offers. If connection uses TLS < 1.2
 
 ### 3.5 Revocation
 
-The tool does NOT check OCSP/CRL. The result explicitly states that certificate revocation status was not checked.
+The tool checks revocation via OCSP (leaf + intermediates) with automatic CRL fallback (24h disk cache) when OCSP is unavailable. Revoked leaf certificates force `chain_valid = false`.
 
 ---
 

@@ -240,6 +240,7 @@ class PingTool(BaseTool):
                 "rtt_min_ms": float(r[0]),
                 "rtt_avg_ms": float(r[1]),
                 "rtt_max_ms": float(r[2]),
+                "rtt_mdev_ms": float(r[3]),
             }
 
         return {
@@ -250,6 +251,7 @@ class PingTool(BaseTool):
             "rtt_min_ms": None,
             "rtt_avg_ms": None,
             "rtt_max_ms": None,
+            "rtt_mdev_ms": None,
         }
 
     def get_result_schema(self) -> dict[str, Any]:
@@ -280,6 +282,7 @@ class PingTool(BaseTool):
                         "rtt_min_ms": {"type": "number"},
                         "rtt_avg_ms": {"type": "number"},
                         "rtt_max_ms": {"type": "number"},
+                        "rtt_mdev_ms": {"type": "number"},
                     },
                 },
             },
