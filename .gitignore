@@ -16,6 +16,9 @@ __pycache__/
 .env.local
 .env.*.local
 
+# Docker compose
+docker-compose.local.yml
+
 # Docker volumes (persistent data)
 volumes/
 
