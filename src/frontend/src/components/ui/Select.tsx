@@ -1,5 +1,6 @@
 import * as RadixSelect from "@radix-ui/react-select";
 import { forwardRef } from "react";
+import i18n from "@/i18n/i18n";
 
 interface SelectOption {
   value: string;
@@ -19,7 +20,7 @@ interface SelectProps {
 }
 
 const Select = forwardRef<HTMLButtonElement, SelectProps>(
-  ({ options, value, defaultValue, onChange, placeholder = "Select...", disabled, error, className = "", ariaLabel }, ref) => {
+  ({ options, value, defaultValue, onChange, placeholder = i18n.t("common.select"), disabled, error, className = "", ariaLabel }, ref) => {
     return (
       <div className="flex flex-col gap-1">
         <RadixSelect.Root value={value} defaultValue={defaultValue} onValueChange={onChange} disabled={disabled}>

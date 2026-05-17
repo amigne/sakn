@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface PaginationProps {
   offset: number;
   limit: number;
@@ -6,6 +8,7 @@ interface PaginationProps {
 }
 
 export default function Pagination({ offset, limit, total, onChange }: PaginationProps) {
+  const { t } = useTranslation();
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
@@ -18,17 +21,20 @@ export default function Pagination({ offset, limit, total, onChange }: Paginatio
   start = Math.max(1, end - maxVisible + 1);
   for (let i = start; i <= end; i++) pages.push(i);
 
+  const startIndex = offset + 1;
+  const endIndex = Math.min(offset + limit, total);
+
   return (
-    <nav className="flex items-center justify-between text-sm" aria-label="Pagination">
+    <nav className="flex items-center justify-between text-sm" aria-label={t("common.pagination")}>
       <span className="text-[var(--color-text-secondary)]">
-        {offset + 1}-{Math.min(offset + limit, total)} of {total}
+        {t("common.page_info", { start: startIndex, end: endIndex, total })}
       </span>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onChange(Math.max(0, offset - limit))}
           disabled={offset === 0}
           className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)] disabled:opacity-40"
-          aria-label="Previous page"
+          aria-label={t("common.previous_page")}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -64,7 +70,7 @@ export default function Pagination({ offset, limit, total, onChange }: Paginatio
           onClick={() => onChange(offset + limit)}
           disabled={offset + limit >= total}
           className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)] disabled:opacity-40"
-          aria-label="Next page"
+          aria-label={t("common.next_page")}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

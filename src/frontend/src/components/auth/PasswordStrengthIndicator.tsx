@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface PasswordStrengthProps {
   password: string;
 }
@@ -8,11 +10,12 @@ interface CheckItem {
 }
 
 export default function PasswordStrengthIndicator({ password }: PasswordStrengthProps) {
+  const { t } = useTranslation();
   const checks: CheckItem[] = [
-    { label: "Min 8 characters", passed: password.length >= 8 },
-    { label: "At least one uppercase letter", passed: /[A-Z]/.test(password) },
-    { label: "At least one lowercase letter", passed: /[a-z]/.test(password) },
-    { label: "At least one digit", passed: /[0-9]/.test(password) },
+    { label: t("auth.password_min_chars"), passed: password.length >= 8 },
+    { label: t("auth.password_uppercase"), passed: /[A-Z]/.test(password) },
+    { label: t("auth.password_lowercase"), passed: /[a-z]/.test(password) },
+    { label: t("auth.password_digit"), passed: /[0-9]/.test(password) },
   ];
 
   const allPassed = checks.every((c) => c.passed) && password.length > 0;

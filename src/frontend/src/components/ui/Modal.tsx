@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -7,6 +9,7 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, footer }: ModalProps) {
+  const { t } = useTranslation();
   if (!open) return null;
 
   return (
@@ -25,7 +28,7 @@ export default function Modal({ open, onClose, title, children, footer }: ModalP
           <button
             onClick={onClose}
             className="focus-ring rounded p-1 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

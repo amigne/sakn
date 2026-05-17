@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui";
 
 interface ToolFormProps {
@@ -25,9 +26,11 @@ export default function ToolForm({
   onStart,
   onReset,
   onStop,
-  startLabel = "Start",
+  startLabel,
   outputControls,
 }: ToolFormProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="card p-4">
       <h1 className="mb-3 text-lg font-semibold text-[var(--color-text)]">{title}</h1>
@@ -44,7 +47,7 @@ export default function ToolForm({
             <svg className={`h-3 w-3 transition-transform ${advancedOpen ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
-            Advanced
+            {t("common.advanced")}
           </button>
           {advancedOpen && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3 border-t border-[var(--color-border)] pt-3">
@@ -56,11 +59,11 @@ export default function ToolForm({
 
       <div className="flex flex-wrap items-center gap-2">
         {isRunning ? (
-          onStop && <Button variant="danger" onClick={onStop}>Stop</Button>
+          onStop && <Button variant="danger" onClick={onStop}>{t("common.stop")}</Button>
         ) : (
-          <Button onClick={onStart}>{startLabel}</Button>
+          <Button onClick={onStart}>{startLabel || t("common.start")}</Button>
         )}
-        <Button variant="secondary" onClick={onReset} disabled={isRunning}>Reset</Button>
+        <Button variant="secondary" onClick={onReset} disabled={isRunning}>{t("common.reset")}</Button>
         {outputControls}
       </div>
     </div>

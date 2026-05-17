@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Column<T> {
   key: string;
@@ -25,12 +26,15 @@ export default function Table<T>({
   sortBy,
   sortDir,
   onSort,
-  emptyMessage = "No data.",
+  emptyMessage,
   rowKey,
   onRowClick,
 }: TableProps<T>) {
+  const { t } = useTranslation();
+  const displayEmpty = emptyMessage ?? t("common.no_data");
+
   if (data.length === 0) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">{emptyMessage}</p>;
+    return <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">{displayEmpty}</p>;
   }
 
   return (

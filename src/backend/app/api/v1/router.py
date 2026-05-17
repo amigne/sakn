@@ -11,6 +11,7 @@ from app.api.v1.endpoints.admin_rate_limits import router as admin_rate_limits_r
 from app.api.v1.endpoints.admin_modules import router as admin_modules_router
 from app.api.v1.endpoints.admin_logs import router as admin_logs_router
 from app.api.v1.endpoints.admin_settings import router as admin_settings_router
+from app.api.v1.endpoints.public_settings import router as public_settings_router
 
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(auth_router)
@@ -24,3 +25,4 @@ v1_router.include_router(admin_rate_limits_router)
 v1_router.include_router(admin_modules_router)
 v1_router.include_router(admin_logs_router)
 v1_router.include_router(admin_settings_router)
+v1_router.include_router(public_settings_router)
