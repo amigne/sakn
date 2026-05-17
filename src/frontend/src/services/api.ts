@@ -77,12 +77,15 @@ export class ApiError extends Error {
   status: number;
   data: unknown;
   code: string;
+  messageKey: string | null;
 
   constructor(status: number, data: unknown) {
-    const msg = (data as { error?: { message?: string } })?.error?.message ?? `API Error ${status}`;
+    const err = (data as { error?: { code?: string; message?: string; message_key?: string } })?.error;
+    const msg = err?.message ?? `API Error ${status}`;
     super(msg);
     this.status = status;
     this.data = data;
-    this.code = (data as { error?: { code?: string } })?.error?.code ?? "UNKNOWN";
+    this.code = err?.code ?? "UNKNOWN";
+    this.messageKey = err?.message_key ?? null;
   }
 }

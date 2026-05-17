@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { ToggleSwitch, Spinner } from "@/components/ui";
 import { listRolePermissions, updateRolePermissions } from "@/services/admin";
@@ -8,6 +9,7 @@ import { toolDisplayName } from "@/types/admin";
 const ROLES = ["administrator", "authenticated", "visitor"];
 
 export default function AdminAccessPage() {
+  const { t } = useTranslation();
   const [permissions, setPermissions] = useState<AccessPermission[]>([]);
   const [tools, setTools] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,11 +25,11 @@ export default function AdminAccessPage() {
       const uniqueTools = [...new Set(data.permissions.map((p) => p.tool_name))].sort();
       setTools(uniqueTools);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load permissions");
+      setError(e instanceof Error ? e.message : t("admin.failed_load_permissions"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchPermissions();
@@ -47,7 +49,7 @@ export default function AdminAccessPage() {
     try {
       await updateRolePermissions([{ id: (perm as { id?: string }).id || "", allowed: !perm.allowed }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update permission");
+      setError(e instanceof Error ? e.message : t("admin.failed_update_permission"));
       // Revert on failure
       setPermissions(permissions);
     } finally {
@@ -56,10 +58,10 @@ export default function AdminAccessPage() {
   };
 
   return (
-    <AdminLayout title="Access Rights">
+    <AdminLayout title={t("admin.access_rights")}>
       <div className="card p-4 max-w-md">
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          Toggle tool access per role. Changes are saved immediately.
+          {t("admin.access_description")}
         </p>
 
         {error && (
@@ -72,7 +74,7 @@ export default function AdminAccessPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Tool</th>
+                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.tool")}</th>
                 {ROLES.map((r) => (
                   <th key={r} scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize">{r}</th>
                 ))}

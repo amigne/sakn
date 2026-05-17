@@ -11,6 +11,8 @@
   "next": "Suivant",
   "previous": "Précédent",
   "page_info": "{{start}}-{{end}} sur {{total}}",
+  "switch_language": "Changer la langue",
+  "toggle_sidebar": "Afficher/masquer la barre latérale",
   "not_found": "Page introuvable.",
   "start": "Démarrer",
   "stop": "Arrêter",
@@ -19,5 +21,15 @@
   "table": "Tableau",
   "text": "Texte",
   "advanced": "Avancé",
-  "output": "Résultat"
+  "output": "Résultat",
+  "tools": "Outils",
+  "minimize_menu": "Réduire le menu",
+  "summary": "Résumé",
+  "duration": "Durée",
+  "execution_stopped_by_user": "Exécution arrêtée par l'utilisateur.",
+  "privacy": "Confidentialité",
+  "footer": {
+    "tagline": "Couteau suisse pour ingénieurs réseau",
+    "copyright": "Copyright © {{year}} Yann GAUTERON"
+  }
 }

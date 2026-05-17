@@ -1,0 +1,23 @@
+{
+  "email": {
+    "verification": {
+      "subject": "Verify your email address",
+      "body": "Welcome to SAKN! Please verify your email address by clicking the link below.\n\n{link}\n\nThis link expires in 24 hours.\n\nIf you did not create this account, you can ignore this email."
+    },
+    "password_reset": {
+      "subject": "Reset your password",
+      "body": "A password reset was requested for your account. Click the link below to set a new password.\n\n{link}\n\nThis link expires in 1 hour.\n\nIf you did not request this, you can ignore this email."
+    }
+  },
+  "cli": {
+    "admin_created": "Administrator {email} created successfully.",
+    "admin_exists": "Administrator {email} already exists."
+  },
+  "system": {
+    "startup": "SAKN backend starting...",
+    "shutdown": "SAKN backend shutting down...",
+    "health_ok": "healthy",
+    "db_connected": "Database connected.",
+    "redis_connected": "Redis connected."
+  }
+}

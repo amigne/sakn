@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { TextInput, Spinner, ToggleSwitch } from "@/components/ui";
 import { getSettings, updateSettings } from "@/services/admin";
@@ -11,6 +12,7 @@ const defaults: GlobalSettings = {
 };
 
 export default function AdminSettingsPage() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<GlobalSettings>({ ...defaults });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,11 +25,11 @@ export default function AdminSettingsPage() {
       const data = await getSettings();
       setSettings({ ...defaults, ...data.settings });
     } catch {
-      setError("Failed to load settings.");
+      setError(t("admin.failed_load_settings"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchSettings();
@@ -44,7 +46,7 @@ export default function AdminSettingsPage() {
       setSavedKey(key);
       setTimeout(() => setSavedKey(null), 1500);
     } catch {
-      setError("Failed to save setting.");
+      setError(t("admin.failed_save_setting"));
       setSettings(settings); // revert
     } finally {
       setSaving(false);
@@ -53,22 +55,22 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <AdminLayout title="Global Settings">
+      <AdminLayout title={t("admin.global_settings")}>
         <div className="flex justify-center py-12"><Spinner /></div>
       </AdminLayout>
     );
   }
 
   return (
-    <AdminLayout title="Global Settings">
+    <AdminLayout title={t("admin.global_settings")}>
       <div className="card p-4 max-w-md space-y-4">
         {error && (
           <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
 
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-[var(--color-text)]">Log Retention (days)</span>
-          <span className="text-xs text-[var(--color-text-secondary)]">Logs older than this will be automatically deleted.</span>
+          <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.log_retention_days")}</span>
+          <span className="text-xs text-[var(--color-text-secondary)]">{t("admin.log_retention_description")}</span>
           <div className="flex items-center gap-2">
             <TextInput
               type="number"
@@ -78,12 +80,12 @@ export default function AdminSettingsPage() {
               className="w-24"
             />
             {saving && <Spinner size="sm" />}
-            {savedKey === "log_retention_days" && <span className="text-xs text-success-600">Saved</span>}
+            {savedKey === "log_retention_days" && <span className="text-xs text-success-600">{t("admin.saved")}</span>}
           </div>
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-[var(--color-text)]">Session Duration (hours)</span>
+          <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.session_duration_hours")}</span>
           <div className="flex items-center gap-2">
             <TextInput
               type="number"
@@ -92,12 +94,12 @@ export default function AdminSettingsPage() {
               onChange={(e) => update("session_duration_hours", e.target.value)}
               className="w-24"
             />
-            {savedKey === "session_duration_hours" && <span className="text-xs text-success-600">Saved</span>}
+            {savedKey === "session_duration_hours" && <span className="text-xs text-success-600">{t("admin.saved")}</span>}
           </div>
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-[var(--color-text)]">Max Concurrent Sessions</span>
+          <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.max_concurrent_sessions")}</span>
           <div className="flex items-center gap-2">
             <TextInput
               type="number"
@@ -107,14 +109,14 @@ export default function AdminSettingsPage() {
               onChange={(e) => update("max_concurrent_sessions", e.target.value)}
               className="w-24"
             />
-            {savedKey === "max_concurrent_sessions" && <span className="text-xs text-success-600">Saved</span>}
+            {savedKey === "max_concurrent_sessions" && <span className="text-xs text-success-600">{t("admin.saved")}</span>}
           </div>
         </label>
 
         <label className="flex items-center justify-between gap-4">
           <div>
-            <span className="text-sm font-medium text-[var(--color-text)]">Email Verification Required</span>
-            <p className="text-xs text-[var(--color-text-secondary)]">Require email verification before users can log in.</p>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.email_verification_required")}</span>
+            <p className="text-xs text-[var(--color-text-secondary)]">{t("admin.email_verification_description")}</p>
           </div>
           <ToggleSwitch
             checked={settings.email_verification_required !== "false"}

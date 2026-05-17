@@ -11,6 +11,8 @@
   "next": "Next",
   "previous": "Previous",
   "page_info": "{{start}}-{{end}} of {{total}}",
+  "switch_language": "Switch language",
+  "toggle_sidebar": "Toggle sidebar",
   "not_found": "Page not found.",
   "start": "Start",
   "stop": "Stop",
@@ -19,5 +21,15 @@
   "table": "Table",
   "text": "Text",
   "advanced": "Advanced",
-  "output": "Output"
+  "output": "Output",
+  "tools": "Tools",
+  "minimize_menu": "Minimize menu",
+  "summary": "Summary",
+  "duration": "Duration",
+  "execution_stopped_by_user": "Execution stopped by user.",
+  "privacy": "Privacy",
+  "footer": {
+    "tagline": "Swiss Army Knife for Network Engineers",
+    "copyright": "Copyright © {{year}} Yann GAUTERON"
+  }
 }

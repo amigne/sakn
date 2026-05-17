@@ -1,0 +1,23 @@
+{
+  "email": {
+    "verification": {
+      "subject": "Vérifiez votre adresse email",
+      "body": "Bienvenue sur SAKN ! Veuillez vérifier votre adresse email en cliquant sur le lien ci-dessous.\n\n{link}\n\nCe lien expire dans 24 heures.\n\nSi vous n'avez pas créé ce compte, vous pouvez ignorer cet email."
+    },
+    "password_reset": {
+      "subject": "Réinitialisez votre mot de passe",
+      "body": "Une réinitialisation de mot de passe a été demandée pour votre compte. Cliquez sur le lien ci-dessous pour définir un nouveau mot de passe.\n\n{link}\n\nCe lien expire dans 1 heure.\n\nSi vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email."
+    }
+  },
+  "cli": {
+    "admin_created": "Administrateur {email} créé avec succès.",
+    "admin_exists": "L'administrateur {email} existe déjà."
+  },
+  "system": {
+    "startup": "Démarrage du backend SAKN...",
+    "shutdown": "Arrêt du backend SAKN...",
+    "health_ok": "opérationnel",
+    "db_connected": "Base de données connectée.",
+    "redis_connected": "Redis connecté."
+  }
+}

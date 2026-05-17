@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button, Badge, Modal, Spinner } from "@/components/ui";
 import {
@@ -11,6 +12,7 @@ import { useAuthStore } from "@/stores/authStore";
 import type { AdminUserDetail } from "@/types/admin";
 
 export default function AdminUserDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -42,11 +44,11 @@ export default function AdminUserDetailPage() {
         setRlStatus(rl);
       } catch { setRlStatus(null); }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load user");
+      setError(e instanceof Error ? e.message : t("admin.failed_load_user"));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
 
@@ -69,7 +71,7 @@ export default function AdminUserDetailPage() {
       }
       await fetchUser();
     } catch (e) {
-      setError(e instanceof Error ? e.message : `Failed to ${action} user`);
+      setError(e instanceof Error ? e.message : t("admin.failed_action_user", { action }));
     } finally {
       setActing(false);
       setConfirmAction(null);
@@ -80,12 +82,12 @@ export default function AdminUserDetailPage() {
     if (!id) return;
     setSavingNotes(true);
     try { await updateUserNotes(id, notes); } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save notes");
+      setError(e instanceof Error ? e.message : t("admin.failed_save_notes"));
     } finally { setSavingNotes(false); }
   };
 
-  if (loading) return <AdminLayout title="User Detail"><div className="flex justify-center py-12"><Spinner /></div></AdminLayout>;
-  if (!user) return <AdminLayout title="User Detail"><p className="text-sm text-[var(--color-text-secondary)]">{error || "User not found."}</p></AdminLayout>;
+  if (loading) return <AdminLayout title={t("admin.user_detail")}><div className="flex justify-center py-12"><Spinner /></div></AdminLayout>;
+  if (!user) return <AdminLayout title={t("admin.user_detail")}><p className="text-sm text-[var(--color-text-secondary)]">{error || t("admin.user_not_found")}</p></AdminLayout>;
 
   const statusVariant = (s: string) => {
     if (s === "active") return "success";
@@ -94,60 +96,60 @@ export default function AdminUserDetailPage() {
   };
 
   return (
-    <AdminLayout title={`User: ${user.email}`}>
+    <AdminLayout title={`${t("admin.user_detail")}: ${user.email}`}>
       <div className="space-y-4 max-w-lg">
         {/* Info Card */}
         <div className="card p-4 space-y-2">
-          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">Name:</span> {fullName}</p>
+          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">{t("admin.name")}:</span> {fullName}</p>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[var(--color-text)]">Status:</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.status")}:</span>
             <Badge variant={statusVariant(user.status)}>{user.status}</Badge>
           </div>
-          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">Role:</span> {user.role}</p>
+          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">{t("admin.role")}:</span> {user.role}</p>
           <p className="text-sm text-[var(--color-text)]">
-            <span className="font-medium">Email verified:</span> {user.email_verified ? "Yes" : "No"}
+            <span className="font-medium">{t("admin.email_verified")}</span> {user.email_verified ? t("common.yes") : t("common.no")}
             {!user.email_verified && !isSelf && (
-              <Button variant="ghost" size="sm" onClick={() => handleAction("verify")} loading={acting} className="ml-2">Verify now</Button>
+              <Button variant="ghost" size="sm" onClick={() => handleAction("verify")} loading={acting} className="ml-2">{t("admin.verify_now")}</Button>
             )}
           </p>
-          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">Failed login attempts:</span> {user.failed_login_attempts}</p>
-          {user.locked_until && <p className="text-sm text-[var(--color-text)]"><span className="font-medium">Locked until:</span> {new Date(user.locked_until).toLocaleString()}</p>}
-          <p className="text-sm text-[var(--color-text-secondary)]"><span className="font-medium">Created:</span> {new Date(user.created_at).toLocaleString()}</p>
-          <p className="text-sm text-[var(--color-text-secondary)]"><span className="font-medium">Updated:</span> {new Date(user.updated_at).toLocaleString()}</p>
+          <p className="text-sm text-[var(--color-text)]"><span className="font-medium">{t("admin.failed_login_attempts")}</span> {user.failed_login_attempts}</p>
+          {user.locked_until && <p className="text-sm text-[var(--color-text)]"><span className="font-medium">{t("admin.locked_until")}</span> {new Date(user.locked_until).toLocaleString()}</p>}
+          <p className="text-sm text-[var(--color-text-secondary)]"><span className="font-medium">{t("admin.created_at")}:</span> {new Date(user.created_at).toLocaleString()}</p>
+          <p className="text-sm text-[var(--color-text-secondary)]"><span className="font-medium">{t("admin.last_updated")}:</span> {new Date(user.updated_at).toLocaleString()}</p>
         </div>
 
         {/* Actions */}
         {!isSelf && (
           <div className="card p-4 flex flex-wrap gap-2">
             {user.status === "blocked" ? (
-              <Button variant="secondary" onClick={() => setConfirmAction("unblock")} disabled={acting}>Unblock</Button>
+              <Button variant="secondary" onClick={() => setConfirmAction("unblock")} disabled={acting}>{t("admin.unblock")}</Button>
             ) : (
-              <Button variant="secondary" onClick={() => setConfirmAction("block")} disabled={acting}>Block</Button>
+              <Button variant="secondary" onClick={() => setConfirmAction("block")} disabled={acting}>{t("admin.block")}</Button>
             )}
             {user.status === "locked" ? (
-              <Button variant="secondary" onClick={() => setConfirmAction("unlock")} disabled={acting}>Unlock</Button>
+              <Button variant="secondary" onClick={() => setConfirmAction("unlock")} disabled={acting}>{t("admin.unlock")}</Button>
             ) : (
-              <Button variant="secondary" onClick={() => setConfirmAction("lock")} disabled={acting}>Lock</Button>
+              <Button variant="secondary" onClick={() => setConfirmAction("lock")} disabled={acting}>{t("admin.lock")}</Button>
             )}
             {user.role === "administrator" ? (
-              <Button variant="secondary" onClick={() => setConfirmAction("demote")} disabled={acting}>Demote to User</Button>
+              <Button variant="secondary" onClick={() => setConfirmAction("demote")} disabled={acting}>{t("admin.demote_to_user")}</Button>
             ) : (
-              <Button variant="primary" onClick={() => handleAction("promote")} loading={acting}>Promote to Admin</Button>
+              <Button variant="primary" onClick={() => handleAction("promote")} loading={acting}>{t("admin.promote_to_admin")}</Button>
             )}
-            <Button variant="danger" onClick={() => setConfirmAction("delete")} disabled={acting}>Delete</Button>
+            <Button variant="danger" onClick={() => setConfirmAction("delete")} disabled={acting}>{t("admin.delete")}</Button>
           </div>
         )}
 
         {isSelf && (
           <div className="card p-4">
-            <p className="text-sm text-[var(--color-text-secondary)]">This is your account. Self-modification is restricted.</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">{t("admin.self_modification_restricted")}</p>
           </div>
         )}
 
         {/* Rate Limit Status */}
         <div className="card p-4 space-y-1">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-[var(--color-text)]">Rate Limits (live)</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("admin.rate_limits_live")}</h3>
             <button
               onClick={async () => {
                 if (!id) return;
@@ -155,43 +157,43 @@ export default function AdminUserDetailPage() {
               }}
               className="text-xs text-primary-600 hover:text-primary-700"
             >
-              Refresh
+              {t("admin.refresh")}
             </button>
           </div>
           {rlStatus ? (
             <>
               <p className="text-sm text-[var(--color-text)]">
-                <span className="font-medium">Soft limit:</span>{" "}
+                <span className="font-medium">{t("admin.soft_limit")}</span>{" "}
                 <span className="font-mono">{rlStatus.soft_count} / {rlStatus.soft_limit === 0 ? "∞" : rlStatus.soft_limit}</span>
-                <span className="text-xs text-[var(--color-text-secondary)] ml-1">(req/s)</span>
+                <span className="text-xs text-[var(--color-text-secondary)] ml-1">{t("admin.unit_req_s")}</span>
               </p>
               <p className="text-sm text-[var(--color-text)]">
-                <span className="font-medium">Hard limit:</span>{" "}
+                <span className="font-medium">{t("admin.hard_limit")}</span>{" "}
                 <span className="font-mono">{rlStatus.hard_count} / {rlStatus.hard_limit === 0 ? "∞" : rlStatus.hard_limit}</span>
-                <span className="text-xs text-[var(--color-text-secondary)] ml-1">(req/h)</span>
+                <span className="text-xs text-[var(--color-text-secondary)] ml-1">{t("admin.unit_req_h")}</span>
               </p>
             </>
           ) : (
-            <p className="text-xs text-[var(--color-text-secondary)]">Click Refresh to load rate limit counters.</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">{t("admin.click_refresh_rate_limits")}</p>
           )}
         </div>
 
         {/* Admin Notes */}
         <div className="card p-4 space-y-2">
-          <label className="text-sm font-medium text-[var(--color-text)]">Admin Notes</label>
+          <label className="text-sm font-medium text-[var(--color-text)]">{t("admin.admin_notes")}</label>
           <textarea className="w-full min-h-[80px] rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm text-[var(--color-text)]" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <Button variant="primary" onClick={handleSaveNotes} loading={savingNotes}>Save Notes</Button>
+          <Button variant="primary" onClick={handleSaveNotes} loading={savingNotes}>{t("admin.save_notes")}</Button>
         </div>
 
         {/* Sessions */}
         {sessions.length > 0 && (
           <div className="card p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-[var(--color-text)]">Active Sessions ({sessions.length})</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("admin.active_sessions", { count: sessions.length })}</h3>
             {sessions.map((s) => (
               <div key={s.id} className="text-xs text-[var(--color-text-secondary)] border-b border-[var(--color-border)] pb-2">
-                <p><span className="font-medium">IP:</span> {s.ip_address}</p>
-                <p><span className="font-medium">Agent:</span> {s.user_agent}</p>
-                <p><span className="font-medium">Activity:</span> {new Date(s.last_activity_at).toLocaleString()}</p>
+                <p><span className="font-medium">{t("admin.ip_label")}</span> {s.ip_address}</p>
+                <p><span className="font-medium">{t("admin.agent")}</span> {s.user_agent}</p>
+                <p><span className="font-medium">{t("admin.activity")}</span> {new Date(s.last_activity_at).toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -199,11 +201,11 @@ export default function AdminUserDetailPage() {
 
         {error && <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-        <Modal open={confirmAction !== null} onClose={() => setConfirmAction(null)} title={`Confirm ${confirmAction}`}>
-          <p className="text-sm text-[var(--color-text)] mb-4">Are you sure you want to {confirmAction} user {user.email}?</p>
+        <Modal open={confirmAction !== null} onClose={() => setConfirmAction(null)} title={t("admin.confirm_action_title", { action: confirmAction || "" })}>
+          <p className="text-sm text-[var(--color-text)] mb-4">{t("admin.confirm_action_message", { action: confirmAction || "", email: user.email })}</p>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setConfirmAction(null)}>Cancel</Button>
-            <Button variant={confirmAction === "delete" ? "danger" : "primary"} onClick={() => confirmAction && handleAction(confirmAction)} loading={acting}>Confirm</Button>
+            <Button variant="ghost" onClick={() => setConfirmAction(null)}>{t("common.cancel")}</Button>
+            <Button variant={confirmAction === "delete" ? "danger" : "primary"} onClick={() => confirmAction && handleAction(confirmAction)} loading={acting}>{t("admin.confirm")}</Button>
           </div>
         </Modal>
       </div>

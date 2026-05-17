@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import { useAuthStore } from "@/stores/authStore";
 import { ApiError } from "@/services/api";
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
@@ -16,7 +18,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email || !password) { setError("Email and password are required."); return; }
+    if (!email || !password) { setError(t("errors.email_password_required")); return; }
     setLoading(true);
     try {
       await login(email, password);
@@ -25,7 +27,7 @@ export default function LoginPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred.");
+        setError(t("errors.unexpected_error"));
       }
     } finally {
       setLoading(false);
@@ -35,13 +37,13 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">Sign In</h1>
+        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.sign_in")}</h1>
 
         {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Email</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
             <TextInput
               type="email"
               placeholder="user@example.com"
@@ -52,7 +54,7 @@ export default function LoginPage() {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Password</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.password")}</span>
             <div className="relative">
               <TextInput
                 type={showPassword ? "text" : "password"}
@@ -65,7 +67,7 @@ export default function LoginPage() {
                 type="button"
                 className="absolute end-2 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("auth.hide_password") : t("auth.show_password")}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   {showPassword ? (
@@ -81,13 +83,13 @@ export default function LoginPage() {
             </div>
           </label>
 
-          <Button type="submit" className="w-full" loading={loading}>Sign In</Button>
+          <Button type="submit" className="w-full" loading={loading}>{t("auth.sign_in")}</Button>
         </form>
 
         <div className="mt-4 text-center text-sm space-y-2">
-          <p><Link to="/reset-password" className="text-primary-600 hover:text-primary-700">Forgot password?</Link></p>
-          <p className="text-[var(--color-text-secondary)]">Don't have an account? <Link to="/register" className="text-primary-600 hover:text-primary-700">Sign up</Link></p>
-          <p><Link to="/ping" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">Continue as guest</Link></p>
+          <p><Link to="/reset-password" className="text-primary-600 hover:text-primary-700">{t("auth.forgot_password")}</Link></p>
+          <p className="text-[var(--color-text-secondary)]">{t("auth.no_account")} <Link to="/register" className="text-primary-600 hover:text-primary-700">{t("auth.sign_up")}</Link></p>
+          <p><Link to="/ping" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">{t("auth.continue_as_guest")}</Link></p>
         </div>
       </div>
     </div>

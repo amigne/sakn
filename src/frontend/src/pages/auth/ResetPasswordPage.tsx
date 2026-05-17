@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
@@ -6,6 +7,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { ApiError } from "@/services/api";
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const requestReset = useAuthStore((s) => s.requestPasswordReset);
@@ -21,7 +23,7 @@ export default function ResetPasswordPage() {
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) { setError("Email is required."); return; }
+    if (!email.trim()) { setError(t("errors.email_required")); return; }
     setLoading(true);
     setError(null);
     try {
@@ -32,7 +34,7 @@ export default function ResetPasswordPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred.");
+        setError(t("errors.unexpected_error"));
       }
     } finally {
       setLoading(false);
@@ -42,9 +44,9 @@ export default function ResetPasswordPage() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!password || !passwordConfirm) { setError("All fields are required."); return; }
-    if (password !== passwordConfirm) { setError("Passwords do not match."); return; }
-    if (!token) { setError("Missing reset token."); return; }
+    if (!password || !passwordConfirm) { setError(t("errors.all_fields_required")); return; }
+    if (password !== passwordConfirm) { setError(t("errors.password_mismatch")); return; }
+    if (!token) { setError(t("errors.missing_reset_token")); return; }
     setLoading(true);
     try {
       const msg = await resetPassword(token, password, passwordConfirm);
@@ -54,7 +56,7 @@ export default function ResetPasswordPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred.");
+        setError(t("errors.unexpected_error"));
       }
     } finally {
       setLoading(false);
@@ -68,10 +70,10 @@ export default function ResetPasswordPage() {
           <svg className="mx-auto h-12 w-12 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">Password Reset</h1>
+          <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">{t("auth.password_reset_title")}</h1>
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{successMsg}</p>
           <Link to="/login" className="mt-4 inline-block">
-            <Button>Sign In</Button>
+            <Button>{t("auth.sign_in")}</Button>
           </Link>
         </div>
       </div>
@@ -82,7 +84,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
         <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-          <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">Reset Password</h1>
+          <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.reset_password")}</h1>
 
           {success && (
             <Alert variant="success" className="mb-4">{successMsg}</Alert>
@@ -91,14 +93,14 @@ export default function ResetPasswordPage() {
 
           <form onSubmit={handleRequest} className="space-y-4">
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Email</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
               <TextInput type="email" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
             </label>
-            <Button type="submit" className="w-full" loading={loading}>Send Reset Link</Button>
+            <Button type="submit" className="w-full" loading={loading}>{t("auth.send_reset_link")}</Button>
           </form>
 
           <p className="mt-4 text-center text-sm">
-            <Link to="/login" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">Back to sign in</Link>
+            <Link to="/login" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">{t("auth.back_to_sign_in")}</Link>
           </p>
         </div>
       </div>
@@ -108,21 +110,21 @@ export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">Set New Password</h1>
+        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.set_new_password")}</h1>
 
         {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
         <form onSubmit={handleReset} className="space-y-4">
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">New Password</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.new_password")}</span>
             <TextInput type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
             <PasswordStrengthIndicator password={password} />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Confirm Password</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.confirm_password")}</span>
             <TextInput type="password" placeholder="••••••••" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} autoComplete="new-password" />
           </label>
-          <Button type="submit" className="w-full" loading={loading}>Reset Password</Button>
+          <Button type="submit" className="w-full" loading={loading}>{t("auth.reset_password")}</Button>
         </form>
       </div>
     </div>

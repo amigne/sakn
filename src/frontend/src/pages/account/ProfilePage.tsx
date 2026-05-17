@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { Select, RadioButton, TextInput } from "@/components/ui";
 import { useThemeStore } from "@/stores/themeStore";
@@ -55,6 +56,7 @@ const ALL_LOCALES: { value: string; label: string }[] = [
 ];
 
 export default function ProfilePage() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const preferences = useAuthStore((s) => s.preferences);
   const updateProfile = useAuthStore((s) => s.updateProfile);
@@ -122,7 +124,7 @@ export default function ProfilePage() {
       // Revert to last good values
       setFirstName(lastGoodFirst.current);
       setLastName(lastGoodLast.current);
-      setNameError("First name and last name cannot be empty.");
+      setNameError(t("account.name_empty_error"));
       return;
     }
 
@@ -131,7 +133,7 @@ export default function ProfilePage() {
       await updateProfile(trimmedFirst, trimmedLast);
       lastGoodFirst.current = trimmedFirst;
       lastGoodLast.current = trimmedLast;
-      flash("Name saved");
+      flash(t("account.name_saved"));
     } catch (err) {
       // Revert to last good values on API error
       setFirstName(lastGoodFirst.current);
@@ -139,7 +141,7 @@ export default function ProfilePage() {
       if (err instanceof ApiError) {
         setNameError(err.message);
       } else {
-        setNameError("Failed to save names.");
+        setNameError(t("account.name_save_failed"));
       }
     }
   }, [firstName, lastName, updateProfile]);
@@ -148,7 +150,7 @@ export default function ProfilePage() {
     setLanguage(lang);
     try {
       await savePreferences({ language: lang });
-      flash("Language saved");
+      flash(t("account.language_saved"));
     } catch (_err) {}
   }, [savePreferences]);
 
@@ -156,7 +158,7 @@ export default function ProfilePage() {
     setLocale(loc);
     try {
       await savePreferences({ locale: loc });
-      flash("Locale saved");
+      flash(t("account.locale_saved"));
     } catch (_err) {}
   }, [savePreferences]);
 
@@ -164,7 +166,7 @@ export default function ProfilePage() {
     setMode(m);
     try {
       await savePreferences({ theme: m });
-      flash("Theme saved");
+      flash(t("account.theme_saved"));
     } catch (_err) {}
   }, [setMode, savePreferences]);
 
@@ -172,7 +174,7 @@ export default function ProfilePage() {
     <PageLayout>
       <div className="max-w-lg">
         <div className="flex items-center gap-3 mb-4">
-          <h1 className="text-lg font-semibold text-[var(--color-text)]">Profile</h1>
+          <h1 className="text-lg font-semibold text-[var(--color-text)]">{t("account.profile")}</h1>
           {saved && (
             <span className="text-xs text-green-600 dark:text-green-400 animate-pulse">{saved}</span>
           )}
@@ -181,11 +183,11 @@ export default function ProfilePage() {
         <div className="card p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">First Name</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.first_name")}</span>
               <TextInput type="text" value={firstName} onChange={(e) => { setFirstName(e.target.value); setNameError(null); }} onBlur={() => saveNames()} />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Last Name</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.last_name")}</span>
               <TextInput type="text" value={lastName} onChange={(e) => { setLastName(e.target.value); setNameError(null); }} onBlur={() => saveNames()} />
             </label>
           </div>
@@ -193,18 +195,18 @@ export default function ProfilePage() {
 
           <div>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Email</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
               <TextInput type="email" value={user?.email || ""} disabled />
             </label>
           </div>
 
           <div>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Language</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("account.language")}</span>
               <Select
                 options={[
-                  { value: "en", label: "English" },
-                  { value: "fr", label: "Français" },
+                  { value: "en", label: t("account.locale_en") },
+                  { value: "fr", label: t("account.locale_fr") },
                 ]}
                 value={language}
                 onChange={saveLanguage}
@@ -213,7 +215,7 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <span className="text-sm font-medium text-[var(--color-text)]">Theme</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("account.theme")}</span>
             <div className="mt-2 space-y-2">
               {(["light", "dark", "system"] as ThemeMode[]).map((m) => (
                 <RadioButton
@@ -221,7 +223,7 @@ export default function ProfilePage() {
                   name="theme"
                   checked={mode === m}
                   onChange={() => handleThemeChange(m)}
-                  label={m.charAt(0).toUpperCase() + m.slice(1)}
+                  label={t(`account.theme_${m}`)}
                 />
               ))}
             </div>
@@ -229,7 +231,7 @@ export default function ProfilePage() {
 
           <div>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Locale</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("account.locale")}</span>
               <Select options={ALL_LOCALES} value={locale} onChange={saveLocale} />
             </label>
           </div>

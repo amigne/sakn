@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
+import "@/i18n/i18n";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,9 @@ function AuthInitializer({ children }: { children: ReactNode }) {
         const prefs = useAuthStore.getState().preferences;
         if (prefs?.theme) {
           useThemeStore.getState().setMode(prefs.theme);
+        }
+        if (prefs?.locale) {
+          import("@/i18n/i18n").then(({ setLanguage }) => setLanguage(prefs.locale!));
         }
       }
     };

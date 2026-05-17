@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Spinner } from "@/components/ui";
 import { listRateLimits, updateRateLimits } from "@/services/admin";
@@ -12,6 +13,7 @@ interface EditState {
 }
 
 export default function AdminRateLimitsPage() {
+  const { t } = useTranslation();
   const [limits, setLimits] = useState<RateLimit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +27,11 @@ export default function AdminRateLimitsPage() {
       const data = await listRateLimits();
       setLimits(data.rate_limits);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load rate limits");
+      setError(e instanceof Error ? e.message : t("admin.failed_load_rate_limits"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchLimits();
@@ -68,10 +70,10 @@ export default function AdminRateLimitsPage() {
         window_seconds: target.window_seconds,
       };
       await updateRateLimits([payload]);
-      setSuccessMsg("Rate limits updated");
+      setSuccessMsg(t("admin.rate_limits_updated"));
       setTimeout(() => setSuccessMsg(null), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update rate limit");
+      setError(e instanceof Error ? e.message : t("admin.failed_update_rate_limit"));
       setLimits(prevLimits);
     }
   };
@@ -108,7 +110,7 @@ export default function AdminRateLimitsPage() {
             autoFocus
           />
         ) : (
-          value || "0 (unlimited)"
+          value || t("admin.unlimited")
         )}
       </td>
     );
@@ -116,14 +118,14 @@ export default function AdminRateLimitsPage() {
 
   if (loading) {
     return (
-      <AdminLayout title="Rate Limits">
+      <AdminLayout title={t("admin.rate_limits")}>
         <div className="flex justify-center py-12"><Spinner /></div>
       </AdminLayout>
     );
   }
 
   return (
-    <AdminLayout title="Rate Limits">
+    <AdminLayout title={t("admin.rate_limits")}>
       <div className="space-y-6 max-w-2xl">
         {error && (
           <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
@@ -134,16 +136,16 @@ export default function AdminRateLimitsPage() {
 
         {/* Global limits */}
         <div className="card p-4">
-          <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">Global limits</h2>
+          <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t("admin.global_limits")}</h2>
           <p className="text-xs text-[var(--color-text-secondary)] mb-4">
-            Soft limit: requests per second (1s window). Hard limit: requests per hour (3600s). 0 = no limit. Click a value to edit.
+            {t("admin.rate_limit_description")}
           </p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Role</th>
-                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Soft limit (req/s)</th>
-                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Hard limit (req/h)</th>
+                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.role")}</th>
+                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.soft_limit_req_s")}</th>
+                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.hard_limit_req_h")}</th>
               </tr>
             </thead>
             <tbody>
@@ -161,17 +163,17 @@ export default function AdminRateLimitsPage() {
         {/* Per-tool limits */}
         {perToolLimits.length > 0 && (
           <div className="card p-4">
-            <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">Per-tool limits</h2>
+            <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t("admin.per_tool_limits")}</h2>
             <p className="text-xs text-[var(--color-text-secondary)] mb-4">
-              Optional overrides for specific tools. Must be &le; the global limit for the same role. 0 = no limit.
+              {t("admin.per_tool_limits_description")}
             </p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Role</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Tool</th>
-                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Soft limit</th>
-                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Hard limit</th>
+                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.role")}</th>
+                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.tool")}</th>
+                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.soft_limit_header")}</th>
+                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.hard_limit_header")}</th>
                 </tr>
               </thead>
               <tbody>

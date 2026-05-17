@@ -1,14 +1,15 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import type { ReactNode } from "react";
 
-const adminTabs = [
-  { label: "Users", to: "/admin/users" },
-  { label: "Access", to: "/admin/access" },
-  { label: "Rate Limits", to: "/admin/rate-limits" },
-  { label: "Modules", to: "/admin/modules" },
-  { label: "Settings", to: "/admin/settings" },
-  { label: "Logs", to: "/admin/logs" },
+const ADMIN_TAB_KEYS = [
+  { key: "admin.users", to: "/admin/users" },
+  { key: "admin.access", to: "/admin/access" },
+  { key: "admin.rate_limits", to: "/admin/rate-limits" },
+  { key: "admin.modules", to: "/admin/modules" },
+  { key: "admin.settings", to: "/admin/settings" },
+  { key: "admin.logs", to: "/admin/logs" },
 ];
 
 interface AdminLayoutProps {
@@ -17,13 +18,14 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, title }: AdminLayoutProps) {
+  const { t } = useTranslation();
   const location = useLocation();
 
   return (
     <PageLayout>
       <div className="border-b border-[var(--color-border)] mb-4">
-        <nav className="flex overflow-x-auto" aria-label="Admin tabs">
-          {adminTabs.map((tab) => {
+        <nav className="flex overflow-x-auto" aria-label={t("admin.section_title")}>
+          {ADMIN_TAB_KEYS.map((tab) => {
             const isActive = location.pathname.startsWith(tab.to);
             return (
               <NavLink
@@ -35,7 +37,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
                     : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
                 }`}
               >
-                {tab.label}
+                {t(tab.key)}
               </NavLink>
             );
           })}

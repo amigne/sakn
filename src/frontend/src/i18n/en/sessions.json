@@ -1,0 +1,4 @@
+{
+  "revoked": "Session revoked.",
+  "limit_reached": "Maximum number of sessions reached. Please revoke an existing session first."
+}

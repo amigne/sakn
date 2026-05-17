@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { ThemeMode } from "@/types/user";
+import { setLanguage, getLanguage } from "@/i18n/i18n";
 import { useState, useRef, useEffect } from "react";
 
 interface TopBarProps {
@@ -11,6 +13,7 @@ interface TopBarProps {
 
 export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBarProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { mode, setMode } = useThemeStore();
@@ -26,10 +29,22 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const [currentLang, setCurrentLang] = useState(() => getLanguage());
+
   const toggleTheme = () => {
     const order: ThemeMode[] = ["light", "dark", "system"];
     const idx = order.indexOf(mode ?? "system");
     setMode(order[(idx + 1) % order.length] ?? "system");
+  };
+
+  const toggleLanguage = () => {
+    const next = currentLang === "en" ? "fr" : "en";
+    setLanguage(next);
+    setCurrentLang(next);
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser) {
+      useAuthStore.getState().savePreferences({ locale: next }).catch(() => {});
+    }
   };
 
   // Compute initials for avatar (skip whitespace-only names)
@@ -37,13 +52,13 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
     const first = user?.first_name?.trim();
     const last = user?.last_name?.trim();
     if (first && last) {
-      return (first[0] + last[0]).toUpperCase();
+      return (first.charAt(0) + last.charAt(0)).toUpperCase();
     }
     if (first) {
-      return first[0].toUpperCase();
+      return first.charAt(0).toUpperCase();
     }
     if (user?.email) {
-      return user.email.trim()[0].toUpperCase();
+      return user.email.trim().charAt(0).toUpperCase();
     }
     return "?";
   })();
@@ -61,7 +76,7 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
           <button
             onClick={onToggleSidebar}
             className="rounded p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            aria-label="Toggle sidebar"
+            aria-label={t("common.toggle_sidebar")}
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -78,10 +93,11 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
 
       <div className="flex items-center gap-2">
         <button
+          onClick={toggleLanguage}
           className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          aria-label="Switch language"
+          aria-label={t("common.switch_language")}
         >
-          EN
+          {currentLang.toUpperCase()}
         </button>
 
         <button
@@ -110,16 +126,16 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
             </button>
             {menuOpen && (
               <div className="absolute end-0 top-full mt-1 w-48 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-50">
-                <Link to="/account/preferences" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Preferences</Link>
-                <Link to="/account/sessions" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Sessions</Link>
+                <Link to="/account/preferences" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.preferences")}</Link>
+                <Link to="/account/sessions" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.sessions")}</Link>
                 <hr className="border-gray-200 dark:border-gray-700" />
-                <button onClick={async () => { await logout(); setMenuOpen(false); navigate("/ping"); }} className="w-full px-3 py-2 text-start text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">Logout</button>
+                <button onClick={async () => { await logout(); setMenuOpen(false); navigate("/ping"); }} className="w-full px-3 py-2 text-start text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.logout")}</button>
               </div>
             )}
           </div>
         ) : (
           <Link to="/login" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
-            Sign In
+            {t("auth.sign_in")}
           </Link>
         )}
       </div>

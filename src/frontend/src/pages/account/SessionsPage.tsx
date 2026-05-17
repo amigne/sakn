@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button, Badge, Modal } from "@/components/ui";
 import * as sessionService from "@/services/sessionService";
 import type { Session } from "@/types/user";
 
 export default function SessionsPage() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,7 @@ export default function SessionsPage() {
       const result = await sessionService.listSessions();
       setSessions(result.sessions);
     } catch {
-      setError("Failed to load sessions.");
+      setError(t("account.load_sessions_failed"));
     } finally {
       setLoading(false);
     }
@@ -30,7 +32,7 @@ export default function SessionsPage() {
       await sessionService.revokeSession(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
     } catch {
-      setError("Failed to revoke session.");
+      setError(t("account.revoke_failed"));
     } finally {
       setRevokeTarget(null);
     }
@@ -43,24 +45,24 @@ export default function SessionsPage() {
   return (
     <PageLayout>
       <div className="max-w-2xl">
-        <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4">Active Sessions</h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4">{t("account.active_sessions")}</h1>
 
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
         {loading ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">Loading...</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">{t("common.loading")}</p>
         ) : (
           <div className="card overflow-hidden">
             {sessions.length === 0 ? (
-              <p className="p-4 text-sm text-[var(--color-text-secondary)]">No active sessions.</p>
+              <p className="p-4 text-sm text-[var(--color-text-secondary)]">{t("account.no_sessions")}</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">IP Address</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Browser</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Last Activity</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Status</th>
+                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.ip_address")}</th>
+                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("account.browser")}</th>
+                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("account.last_activity")}</th>
+                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.status")}</th>
                     <th scope="col" className="px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20" />
                   </tr>
                 </thead>
@@ -71,11 +73,11 @@ export default function SessionsPage() {
                       <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={s.user_agent}>{s.user_agent?.split(" ").slice(0, 2).join(" ") || "—"}</td>
                       <td className="px-3 py-2 text-[var(--color-text-secondary)]">{formatDate(s.last_activity_at)}</td>
                       <td className="px-3 py-2">
-                        {s.current ? <Badge variant="info">Current</Badge> : <span className="text-xs text-[var(--color-text-secondary)]">—</span>}
+                        {s.current ? <Badge variant="info">{t("account.current_session")}</Badge> : <span className="text-xs text-[var(--color-text-secondary)]">—</span>}
                       </td>
                       <td className="px-3 py-2">
                         {!s.current && (
-                          <button onClick={() => setRevokeTarget(s.id)} className="text-xs text-error-600 hover:text-error-700">Revoke</button>
+                          <button onClick={() => setRevokeTarget(s.id)} className="text-xs text-error-600 hover:text-error-700">{t("account.revoke")}</button>
                         )}
                       </td>
                     </tr>
@@ -89,15 +91,15 @@ export default function SessionsPage() {
         <Modal
           open={!!revokeTarget}
           onClose={() => setRevokeTarget(null)}
-          title="Revoke Session"
+          title={t("account.revoke_session")}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setRevokeTarget(null)}>Cancel</Button>
-              <Button variant="danger" onClick={() => revokeTarget && handleRevoke(revokeTarget)}>Revoke</Button>
+              <Button variant="secondary" onClick={() => setRevokeTarget(null)}>{t("common.cancel")}</Button>
+              <Button variant="danger" onClick={() => revokeTarget && handleRevoke(revokeTarget)}>{t("account.revoke")}</Button>
             </>
           }
         >
-          <p>Are you sure you want to revoke this session? The device will be signed out immediately.</p>
+          <p>{t("account.revoke_session_confirm")}</p>
         </Modal>
       </div>
     </PageLayout>

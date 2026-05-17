@@ -8,6 +8,12 @@
         -Server
     }
 
+    handle /api/v1/tools/*/ws {
+        reverse_proxy backend:8000 {
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+
     handle /api/* {
         reverse_proxy backend:8000
     }

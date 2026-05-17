@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { TextInput, Select, Badge, Pagination, Spinner } from "@/components/ui";
 import { listUsers } from "@/services/admin";
 import type { AdminUser } from "@/types/admin";
 
 export default function AdminUsersPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -29,11 +31,11 @@ export default function AdminUsersPage() {
       setUsers(data.users);
       setTotal(data.pagination.total);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load users");
+      setError(e instanceof Error ? e.message : t("admin.failed_load_users"));
     } finally {
       setLoading(false);
     }
-  }, [offset, search, statusFilter, sortField, sortOrder]);
+  }, [offset, search, statusFilter, sortField, sortOrder, t]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -63,23 +65,23 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <AdminLayout title="User Management">
+    <AdminLayout title={t("admin.user_management")}>
       <div className="card p-4">
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="flex-1 min-w-[200px]">
             <TextInput
-              placeholder="Search by email..."
+              placeholder={t("admin.search_email")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
             />
           </div>
           <Select
             options={[
-              { value: "all", label: "All Status" },
-              { value: "active", label: "Active" },
-              { value: "pending", label: "Pending" },
-              { value: "blocked", label: "Blocked" },
-              { value: "locked", label: "Locked" },
+              { value: "all", label: t("admin.all_status") },
+              { value: "active", label: t("admin.active_status") },
+              { value: "pending", label: t("admin.pending_status") },
+              { value: "blocked", label: t("admin.blocked_status") },
+              { value: "locked", label: t("admin.locked_status") },
             ]}
             value={statusFilter}
             onChange={(v) => { setStatusFilter(v); setOffset(0); }}
@@ -101,18 +103,18 @@ export default function AdminUsersPage() {
                 <tr className="border-b border-[var(--color-border)]">
                   <th scope="col" onClick={() => handleSort("name")}
                     className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase cursor-pointer hover:text-[var(--color-text)] select-none hidden md:table-cell">
-                    Name{sortField === "name" ? (sortOrder === "asc" ? " ▴" : " ▾") : ""}
+                    {t("admin.name")}{sortField === "name" ? (sortOrder === "asc" ? " ▴" : " ▾") : ""}
                   </th>
-                  <SortHeader field="email">Email</SortHeader>
-                  <SortHeader field="status">Status</SortHeader>
-                  <SortHeader field="role">Role</SortHeader>
-                  <SortHeader field="created_at">Joined</SortHeader>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">Actions</th>
+                  <SortHeader field="email">{t("admin.email")}</SortHeader>
+                  <SortHeader field="status">{t("admin.status")}</SortHeader>
+                  <SortHeader field="role">{t("admin.role")}</SortHeader>
+                  <SortHeader field="created_at">{t("admin.joined")}</SortHeader>
+                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">{t("admin.actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
-                  <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-text-secondary)]">No users found.</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--color-text-secondary)]">{t("admin.no_users_found")}</td></tr>
                 ) : (
                   users.map((user) => (
                     <tr key={user.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
@@ -122,7 +124,7 @@ export default function AdminUsersPage() {
                       <td className="px-3 py-2 text-[var(--color-text)] capitalize">{user.role}</td>
                       <td className="px-3 py-2 text-[var(--color-text-secondary)]">{new Date(user.created_at).toLocaleDateString()}</td>
                       <td className="px-3 py-2">
-                        <button onClick={() => navigate(`/admin/users/${user.id}`)} className="text-xs text-primary-600 hover:text-primary-700">View</button>
+                        <button onClick={() => navigate(`/admin/users/${user.id}`)} className="text-xs text-primary-600 hover:text-primary-700">{t("admin.view")}</button>
                       </td>
                     </tr>
                   ))

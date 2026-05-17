@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import TopBar from "./TopBar";
 import Sidebar from "./Sidebar";
 
@@ -20,6 +21,7 @@ function getDefaultCollapsed(bp: Breakpoint): boolean {
 }
 
 export default function PageLayout({ children }: PageLayoutProps) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return getDefaultCollapsed(getBreakpoint(window.innerWidth));
@@ -96,9 +98,9 @@ export default function PageLayout({ children }: PageLayoutProps) {
         </main>
       </div>
       <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1 text-center text-xs text-gray-500 dark:text-gray-400">
-        SAKN v0.0.1 — Swiss Army Knife for Network Engineers — Copyright © 2026 Yann GAUTERON
+        SAKN v0.0.1 — {t("common.footer.tagline")} — {t("common.footer.copyright", { year: 2026 })}
         {" "}·{" "}
-        <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">Privacy</Link>
+        <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">{t("common.privacy")}</Link>
       </footer>
     </div>
   );

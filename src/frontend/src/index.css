@@ -69,6 +69,22 @@
   }
 }
 
+/* Reduced motion: disable non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .spinner,
+  .progress-bar {
+    animation-duration: 2s !important;
+  }
+}
+
 @layer components {
   .card {
     @apply bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg;

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
@@ -39,6 +40,7 @@ interface DnsServerInputProps {
 }
 
 function DnsServerInput({ servers, value, onChange, onEnter }: DnsServerInputProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,12 +52,12 @@ function DnsServerInput({ servers, value, onChange, onEnter }: DnsServerInputPro
 
   return (
     <label className="flex flex-col gap-1 relative">
-      <span className="text-xs font-medium text-[var(--color-text-secondary)]">DNS Server</span>
+      <span className="text-xs font-medium text-[var(--color-text-secondary)]">{t("tools.dns.resolver_label")}</span>
       <input
         ref={inputRef}
         type="text"
         className="focus-ring w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] border-[var(--color-border)] dark:[color-scheme:dark]"
-        placeholder="System Default (or enter IP)"
+        placeholder={t("tools.dns.system_default_or_enter_ip")}
         value={displayValue}
         onChange={(e) => { onChange(e.target.value || "__system__"); setOpen(true); setFocusedIdx(-1); }}
         onFocus={() => { setOpen(true); setFocusedIdx(-1); }}
@@ -87,11 +89,12 @@ function DnsServerInput({ servers, value, onChange, onEnter }: DnsServerInputPro
 }
 
 export default function DnsLookupPage() {
+  const { t } = useTranslation();
   const [form, setForm] = useState<DnsFormData>({ ...defaults });
   const [errors, setErrors] = useState<Partial<Record<keyof DnsFormData, string>>>({});
   const { status, data, error, duration, execute, reset } = useToolExecution();
   const [dnsServers, setDnsServers] = useState<DnsServerOption[]>([
-    { value: "__system__", label: "System Default" },
+    { value: "__system__", label: "" },
   ]);
 
   useEffect(() => {
@@ -101,15 +104,15 @@ export default function DnsLookupPage() {
   useEffect(() => {
     api<{ servers?: DnsServerOption[] }>("/tools/dns_lookup/dns-servers")
       .then((res) => {
-        if (res.servers?.length) setDnsServers([{ value: "__system__", label: "System Default" }, ...res.servers]);
+        if (res.servers?.length) setDnsServers([{ value: "__system__", label: "" }, ...res.servers]);
       })
       .catch(() => {});
   }, []);
 
   const validate = (): boolean => {
     const errs: typeof errors = {};
-    if (!form.domain.trim()) errs.domain = "Domain is required.";
-    if (form.record_types.length === 0) errs.record_types = "Select at least one record type.";
+    if (!form.domain.trim()) errs.domain = t("tools.dns.domain_required");
+    if (form.record_types.length === 0) errs.record_types = t("tools.dns.select_record_type");
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -168,7 +171,7 @@ export default function DnsLookupPage() {
 
   const renderRecords = (records: DnsRecord[], ownerLabel?: string) => {
     if (records.length === 0) {
-      return <p className="text-xs text-error-600 dark:text-error-500 font-mono">No records found</p>;
+      return <p className="text-xs text-error-600 dark:text-error-500 font-mono">{t("tools.dns.no_records")}</p>;
     }
     return records.map((r: DnsRecord, i: number) => {
       const showOwner = r.owner && r.owner !== ownerLabel;
@@ -223,12 +226,12 @@ export default function DnsLookupPage() {
   return (
     <PageLayout>
       <ToolForm
-        title="DNS Lookup"
+        title={t("tools.dns.name")}
         advancedOpen={false}
         isRunning={isRunning}
         onStart={handleStart}
         onReset={handleReset}
-        startLabel="Lookup"
+        startLabel={t("tools.dns.start_label")}
         outputControls={
           <span className="text-xs text-[var(--color-text-secondary)]">
             {duration !== null ? `${(duration / 1000).toFixed(1)}s` : ""}
@@ -236,7 +239,7 @@ export default function DnsLookupPage() {
         }
       >
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Domain</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{t("tools.dns.target_label")}</span>
           <TextInput type="text" placeholder="example.com" value={form.domain} onChange={(e) => update("domain", e.target.value)} error={errors.domain} onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }} />
         </label>
         <DnsServerInput
@@ -246,11 +249,11 @@ export default function DnsLookupPage() {
           onEnter={handleStart}
         />
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Recursive CNAME</span>
-          <Checkbox checked={form.recursive_cname} onChange={(v) => update("recursive_cname", v === true)} label="Follow CNAME chain" />
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{t("tools.dns.cname_label")}</span>
+          <Checkbox checked={form.recursive_cname} onChange={(v) => update("recursive_cname", v === true)} label={t("tools.dns.cname_desc")} />
         </label>
         <div className="sm:col-span-2 lg:col-span-4">
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Record Types</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{t("tools.dns.record_type_label")}</span>
           {errors.record_types && <p className="text-xs text-error-600 dark:text-error-500">{errors.record_types}</p>}
           <div className="flex flex-wrap gap-3 mt-1">
             {RECORD_TYPES.map((rt) => (
@@ -274,12 +277,12 @@ export default function DnsLookupPage() {
           <div className="space-y-3">
             {dnsResult.dnssec_ad_flag && (
               <div className="card p-2 bg-success-50 dark:bg-success-50/10 border-success-500">
-                <span className="text-xs font-mono text-success-600 dark:text-success-500">DNSSEC Authenticated Data (AD) flag set — response validated</span>
+                <span className="text-xs font-mono text-success-600 dark:text-success-500">{t("tools.dns.dnssec_ad_flag")}</span>
               </div>
             )}
             {dnsResult.cname_chain && (
               <div className="card p-3">
-                <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-2">CNAME Chain (Recursive)</h3>
+                <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase mb-2">{t("tools.dns.cname_chain_title")}</h3>
                 <div className="font-mono text-sm text-[var(--color-text)]">
                   {dnsResult.cname_chain.map((hop, i) => (
                     <span key={i} className="text-primary-600 dark:text-primary-400">
@@ -298,7 +301,7 @@ export default function DnsLookupPage() {
               <div className="space-y-2">
                 {sortedOwnEntries().map(([type, recs]) => (
                   <div key={type}>
-                    <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase mb-1">{type} Records</h4>
+                    <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase mb-1">{t("tools.dns.records_section", { type })}</h4>
                     {renderRecords(recs, dnsResult.domain)}
                   </div>
                 ))}
@@ -312,7 +315,7 @@ export default function DnsLookupPage() {
               return (
               <div key={hop} className="card p-3 border-l-2 border-primary-400">
                 <h3 className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase mb-2">
-                  {hop} <span className="text-[var(--color-text-secondary)] font-normal normal-case">(CNAME chain)</span>
+                  {hop} <span className="text-[var(--color-text-secondary)] font-normal normal-case">{t("tools.dns.cname_chain_suffix")}</span>
                 </h3>
                 <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
                   {allRecs.map((r: DnsRecord, i: number) => {
@@ -334,7 +337,7 @@ export default function DnsLookupPage() {
             {/* Authority section */}
             {dnsResult.authority && Object.keys(dnsResult.authority).length > 0 && (
               <div className="card p-3 border-l-2 border-warning-500">
-                <h3 className="text-xs font-semibold text-warning-600 dark:text-warning-500 uppercase mb-2">Authority</h3>
+                <h3 className="text-xs font-semibold text-warning-600 dark:text-warning-500 uppercase mb-2">{t("tools.dns.authority_section")}</h3>
                 <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
                   {Object.entries(dnsResult.authority).flatMap(([type, records]) =>
                     (records as DnsRecord[]).map((r: DnsRecord, i: number) => (
@@ -352,7 +355,7 @@ export default function DnsLookupPage() {
             {/* Additional section */}
             {dnsResult.additional && Object.keys(dnsResult.additional).length > 0 && (
               <div className="card p-3 border-l-2 border-info-500">
-                <h3 className="text-xs font-semibold text-info-600 dark:text-info-500 uppercase mb-2">Additional</h3>
+                <h3 className="text-xs font-semibold text-info-600 dark:text-info-500 uppercase mb-2">{t("tools.dns.additional_section")}</h3>
                 <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
                   {Object.entries(dnsResult.additional).flatMap(([type, records]) =>
                     (records as DnsRecord[]).map((r: DnsRecord, i: number) => (

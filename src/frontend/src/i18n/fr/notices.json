@@ -1,0 +1,4 @@
+{
+  "ipv6_not_available": "IPv6 n'est pas disponible sur ce réseau. Basculement sur IPv4.",
+  "ipv4_fallback": "Le test IPv6 a échoué, utilisation d'IPv4 à la place."
+}

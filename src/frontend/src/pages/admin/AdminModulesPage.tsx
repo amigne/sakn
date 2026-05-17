@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { ToggleSwitch, Button, TextInput, Modal, Spinner } from "@/components/ui";
 import { api } from "@/services/api";
@@ -7,6 +8,7 @@ import type { DnsServerPreset, ToolModule } from "@/types/admin";
 import { toolDisplayName } from "@/types/admin";
 
 export default function AdminModulesPage() {
+  const { t } = useTranslation();
   const [modules, setModules] = useState<ToolModule[]>([]);
   const [modulesLoading, setModulesLoading] = useState(true);
   const [modulesError, setModulesError] = useState<string | null>(null);
@@ -32,11 +34,11 @@ export default function AdminModulesPage() {
       const data = await listModules();
       setModules(data.modules);
     } catch (e) {
-      setModulesError(e instanceof Error ? e.message : "Failed to load modules");
+      setModulesError(e instanceof Error ? e.message : t("admin.failed_load_modules"));
     } finally {
       setModulesLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchModules();
@@ -50,7 +52,7 @@ export default function AdminModulesPage() {
     try {
       await updateModule(name, { enabled: !currentEnabled });
     } catch (e) {
-      setModulesError(e instanceof Error ? e.message : "Failed to update module");
+      setModulesError(e instanceof Error ? e.message : t("admin.failed_update_module"));
       // Revert
       setModules((prev) =>
         prev.map((m) => (m.name === name ? { ...m, enabled: currentEnabled } : m))
@@ -82,11 +84,11 @@ export default function AdminModulesPage() {
         setShowPrivateHops(val === "true");
       }
     } catch {
-      setSettingsError("Failed to load settings.");
+      setSettingsError(t("admin.failed_load_settings"));
     } finally {
       setSettingsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const saveTracerouteSettings = useCallback(async (value: boolean) => {
     setSettingsSaving(true);
@@ -98,11 +100,11 @@ export default function AdminModulesPage() {
       });
       setShowPrivateHops(value);
     } catch {
-      setSettingsError("Failed to save settings.");
+      setSettingsError(t("admin.failed_save_settings"));
     } finally {
       setSettingsSaving(false);
     }
-  }, []);
+  }, [t]);
 
   const handleShowPrivateToggle = (value: boolean) => {
     setShowPrivateHops(value);
@@ -117,11 +119,11 @@ export default function AdminModulesPage() {
       const data = await listDnsServers("dns_lookup");
       setDnsPresets(data.presets ?? []);
     } catch {
-      setPresetError("Failed to load DNS presets.");
+      setPresetError(t("admin.failed_load_dns_presets"));
     } finally {
       setDnsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const openEditPreset = (preset: DnsServerPreset) => {
     setEditingPreset(preset);
@@ -141,11 +143,11 @@ export default function AdminModulesPage() {
   const savePreset = async () => {
     setPresetError("");
     if (!isValidIp(presetIp.trim())) {
-      setPresetError("Invalid IPv4 address.");
+      setPresetError(t("admin.invalid_ipv4"));
       return;
     }
     if (!presetDesc.trim()) {
-      setPresetError("Description is required.");
+      setPresetError(t("admin.description_required"));
       return;
     }
     try {
@@ -165,7 +167,7 @@ export default function AdminModulesPage() {
       setPresetDesc("");
       await loadDnsPresets();
     } catch {
-      setPresetError("Failed to save preset.");
+      setPresetError(t("admin.failed_save_preset"));
     }
   };
 
@@ -174,7 +176,7 @@ export default function AdminModulesPage() {
       await deleteDnsServer("dns_lookup", id);
       await loadDnsPresets();
     } catch {
-      setPresetError("Failed to delete preset.");
+      setPresetError(t("admin.failed_delete_preset"));
     }
   };
 
@@ -194,14 +196,14 @@ export default function AdminModulesPage() {
 
   if (modulesLoading) {
     return (
-      <AdminLayout title="Module Activation">
+      <AdminLayout title={t("admin.module_activation")}>
         <div className="flex justify-center py-12"><Spinner /></div>
       </AdminLayout>
     );
   }
 
   return (
-    <AdminLayout title="Module Activation">
+    <AdminLayout title={t("admin.module_activation")}>
       <div className="space-y-4 max-w-lg">
         {modulesError && (
           <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{modulesError}</div>
@@ -211,9 +213,9 @@ export default function AdminModulesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Module</th>
-                <th scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">Enabled</th>
-                <th scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">Settings</th>
+                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.module")}</th>
+                <th scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">{t("admin.enabled")}</th>
+                <th scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">{t("admin.settings")}</th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +246,7 @@ export default function AdminModulesPage() {
         </div>
 
         {/* DNS Server Presets Modal */}
-        <Modal open={showDnsEditor} onClose={() => setShowDnsEditor(false)} title="DNS Server Presets">
+        <Modal open={showDnsEditor} onClose={() => setShowDnsEditor(false)} title={t("admin.dns_presets")}>
           <div className="space-y-3">
             {dnsLoading ? (
               <div className="flex justify-center py-4"><Spinner /></div>
@@ -258,8 +260,8 @@ export default function AdminModulesPage() {
                 </button>
                 <span className="font-mono flex-1">{preset.ip_address}</span>
                 <span className="text-[var(--color-text-secondary)]">{preset.description}</span>
-                <button onClick={() => openEditPreset(preset)} className="text-primary-600 hover:text-primary-700 text-xs">Edit</button>
-                <button onClick={() => deletePreset(preset.id)} className="text-error-600 hover:text-error-700 text-xs">Delete</button>
+                <button onClick={() => openEditPreset(preset)} className="text-primary-600 hover:text-primary-700 text-xs">{t("admin.edit")}</button>
+                <button onClick={() => deletePreset(preset.id)} className="text-error-600 hover:text-error-700 text-xs">{t("admin.delete")}</button>
               </div>
             ))}
 
@@ -268,17 +270,17 @@ export default function AdminModulesPage() {
             {presetError && <p className="text-xs text-error-600 dark:text-error-500">{presetError}</p>}
 
             <div className="flex gap-2">
-              <TextInput placeholder="IP Address" value={presetIp} onChange={(e) => { setPresetIp(e.target.value); setPresetError(""); }} />
-              <TextInput placeholder="Description" value={presetDesc} onChange={(e) => { setPresetDesc(e.target.value); setPresetError(""); }} />
-              <Button size="sm" onClick={savePreset}>{editingPreset ? "Update" : "Add"}</Button>
+              <TextInput placeholder={t("admin.ip_address")} value={presetIp} onChange={(e) => { setPresetIp(e.target.value); setPresetError(""); }} />
+              <TextInput placeholder={t("admin.description")} value={presetDesc} onChange={(e) => { setPresetDesc(e.target.value); setPresetError(""); }} />
+              <Button size="sm" onClick={savePreset}>{editingPreset ? t("admin.update") : t("admin.add")}</Button>
             </div>
 
-            {editingPreset && <p className="text-xs text-[var(--color-text-secondary)]">Editing: {editingPreset.ip_address}</p>}
+            {editingPreset && <p className="text-xs text-[var(--color-text-secondary)]">{t("admin.editing_preset_hint", { ip: editingPreset.ip_address })}</p>}
           </div>
         </Modal>
 
         {/* Traceroute Settings Modal */}
-        <Modal open={showTracerouteSettings} onClose={() => setShowTracerouteSettings(false)} title="Traceroute Settings">
+        <Modal open={showTracerouteSettings} onClose={() => setShowTracerouteSettings(false)} title={t("admin.traceroute_settings")}>
           {settingsLoading ? (
             <div className="flex justify-center py-4"><Spinner /></div>
           ) : (
@@ -286,8 +288,8 @@ export default function AdminModulesPage() {
               {settingsError && <p className="text-xs text-error-600 dark:text-error-500">{settingsError}</p>}
               <label className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-[var(--color-text)]">Show Private Hops</p>
-                  <p className="text-xs text-[var(--color-text-secondary)]">Display private IP addresses in traceroute results.</p>
+                  <p className="text-sm font-medium text-[var(--color-text)]">{t("admin.show_private_hops")}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">{t("admin.show_private_hops_description")}</p>
                 </div>
                 <span className="flex items-center gap-2">
                   {settingsSaving && <Spinner size="sm" />}

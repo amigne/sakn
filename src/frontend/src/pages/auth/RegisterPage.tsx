@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { TextInput, Button, Alert } from "@/components/ui";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
@@ -6,6 +7,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { ApiError } from "@/services/api";
 
 export default function RegisterPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const register = useAuthStore((s) => s.register);
   const [email, setEmail] = useState("");
@@ -20,8 +22,8 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email || !firstName || !lastName || !password || !passwordConfirm) { setError("All fields are required."); return; }
-    if (password !== passwordConfirm) { setError("Passwords do not match."); return; }
+    if (!email || !firstName || !lastName || !password || !passwordConfirm) { setError(t("errors.all_fields_required")); return; }
+    if (password !== passwordConfirm) { setError(t("errors.password_mismatch")); return; }
     setLoading(true);
     try {
       await register(email, password, passwordConfirm, firstName, lastName);
@@ -30,7 +32,7 @@ export default function RegisterPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("An unexpected error occurred.");
+        setError(t("errors.unexpected_error"));
       }
     } finally {
       setLoading(false);
@@ -40,29 +42,29 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">Create Account</h1>
+        <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.create_account")}</h1>
 
         {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Email</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
             <TextInput type="email" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">First Name *</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.first_name")} *</span>
               <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-[var(--color-text)]">Last Name *</span>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.last_name")} *</span>
               <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />
             </label>
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Password</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.password")}</span>
             <div className="relative">
               <TextInput
                 type={showPassword ? "text" : "password"}
@@ -75,7 +77,7 @@ export default function RegisterPage() {
                 type="button"
                 className="absolute end-2 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("auth.hide_password") : t("auth.show_password")}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   {showPassword ? (
@@ -93,15 +95,15 @@ export default function RegisterPage() {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-[var(--color-text)]">Confirm Password</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.confirm_password")}</span>
             <TextInput type="password" placeholder="••••••••" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} autoComplete="new-password" />
           </label>
 
-          <Button type="submit" className="w-full" loading={loading}>Create Account</Button>
+          <Button type="submit" className="w-full" loading={loading}>{t("auth.create_account")}</Button>
         </form>
 
         <p className="mt-4 text-center text-sm text-[var(--color-text-secondary)]">
-          Already have an account? <Link to="/login" className="text-primary-600 hover:text-primary-700">Sign in</Link>
+          {t("auth.has_account")} <Link to="/login" className="text-primary-600 hover:text-primary-700">{t("auth.sign_in")}</Link>
         </p>
       </div>
     </div>
