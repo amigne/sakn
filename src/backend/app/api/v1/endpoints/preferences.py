@@ -14,6 +14,8 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
 class PreferencesUpdate(BaseModel):
+    model_config = {"extra": "allow"}
+
     language: str | None = None
     locale: str | None = None
     theme: str | None = None
@@ -60,14 +62,19 @@ async def put_prefs(
     session_id = getattr(request.state, "session_id", None)
 
     updates = {}
-    if body.language is not None:
-        updates["language"] = body.language
-    if body.locale is not None:
-        updates["locale"] = body.locale
-    if body.theme is not None:
-        updates["theme"] = body.theme
-    if body.display_mode is not None:
-        updates["display_mode"] = body.display_mode
+    # Include both defined fields and extra fields (arbitrary keys)
+    all_fields = set(body.model_fields_set)
+    if hasattr(body, "model_extra") and body.model_extra:
+        all_fields.update(body.model_extra.keys())
+    for field_name in all_fields:
+        value = getattr(body, field_name, None)
+        if value is None and body.model_extra:
+            value = body.model_extra.get(field_name)
+        if value is not None:
+            updates[field_name] = str(value) if not isinstance(value, str) else value
+
+    if not updates:
+        return {"preferences": await get_preferences(db, user_id=user_id, session_id=session_id)}
 
     prefs = await set_preferences(db, user_id=user_id, session_id=session_id, updates=updates)
     return {"preferences": prefs}

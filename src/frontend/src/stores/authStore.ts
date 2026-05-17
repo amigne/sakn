@@ -12,7 +12,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, passwordConfirm: string, firstName: string, lastName: string) => Promise<string>;
   updateProfile: (firstName: string, lastName: string) => Promise<void>;
-  savePreferences: (updates: Partial<Preferences>) => Promise<void>;
+  savePreferences: (updates: Record<string, string>) => Promise<void>;
   loadPreferences: () => Promise<void>;
   logout: () => Promise<void>;
   verifyEmail: (token: string) => Promise<string>;

@@ -4,9 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import UserPreference
 from app.models.base import new_uuid7
 
-VALID_PREFERENCES = {"language", "locale", "theme", "display_mode"}
-
-
 async def get_preferences(db: AsyncSession, *, user_id: str | None, session_id: str | None) -> dict:
     """Get preferences for a user or session. Returns key-value dict."""
     if user_id:
@@ -31,11 +28,8 @@ async def set_preferences(
     session_id: str | None,
     updates: dict[str, str],
 ) -> dict:
-    """Set preferences for a user or session. Only valid keys are stored."""
+    """Set preferences for a user or session."""
     for key, value in updates.items():
-        if key not in VALID_PREFERENCES:
-            continue
-
         if user_id:
             result = await db.execute(
                 select(UserPreference).where(

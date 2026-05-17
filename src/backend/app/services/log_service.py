@@ -103,7 +103,11 @@ async def query_tool_execution_logs(
     from_date: datetime | None = None,
     to_date: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    query = select(ToolExecutionLog)
+    from app.models import User
+
+    query = select(ToolExecutionLog, User.email).outerjoin(
+        User, ToolExecutionLog.user_id == User.id
+    )
     count_query = select(func.count(ToolExecutionLog.id))
 
     if tool:
@@ -128,9 +132,15 @@ async def query_tool_execution_logs(
     rows = await db.execute(
         query.order_by(desc(ToolExecutionLog.created_at)).offset(offset).limit(limit)
     )
-    entries = rows.scalars().all()
+    results = rows.all()
 
-    return [_tool_execution_to_dict(e) for e in entries], total
+    entries = []
+    for e, user_email in results:
+        d = _tool_execution_to_dict(e)
+        d["user_email"] = user_email
+        entries.append(d)
+
+    return entries, total
 
 
 async def query_security_event_logs(
@@ -143,7 +153,11 @@ async def query_security_event_logs(
     from_date: datetime | None = None,
     to_date: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    query = select(SecurityEventLog)
+    from app.models import User
+
+    query = select(SecurityEventLog, User.email).outerjoin(
+        User, SecurityEventLog.user_id == User.id
+    )
     count_query = select(func.count(SecurityEventLog.id))
 
     if event_type:
@@ -165,9 +179,15 @@ async def query_security_event_logs(
     rows = await db.execute(
         query.order_by(desc(SecurityEventLog.created_at)).offset(offset).limit(limit)
     )
-    entries = rows.scalars().all()
+    results = rows.all()
 
-    return [_security_event_to_dict(e) for e in entries], total
+    entries = []
+    for e, user_email in results:
+        d = _security_event_to_dict(e)
+        d["user_email"] = user_email
+        entries.append(d)
+
+    return entries, total
 
 
 async def query_audit_logs(
@@ -181,7 +201,11 @@ async def query_audit_logs(
     from_date: datetime | None = None,
     to_date: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    query = select(AuditLog)
+    from app.models import User
+
+    query = select(AuditLog, User.email).outerjoin(
+        User, AuditLog.admin_id == User.id
+    )
     count_query = select(func.count(AuditLog.id))
 
     if admin_id:
@@ -206,9 +230,15 @@ async def query_audit_logs(
     rows = await db.execute(
         query.order_by(desc(AuditLog.created_at)).offset(offset).limit(limit)
     )
-    entries = rows.scalars().all()
+    results = rows.all()
 
-    return [_audit_log_to_dict(e) for e in entries], total
+    entries = []
+    for e, admin_email in results:
+        d = _audit_log_to_dict(e)
+        d["admin_email"] = admin_email
+        entries.append(d)
+
+    return entries, total
 
 
 # ── Cleanup ─────────────────────────────────────────────────────────────────
@@ -245,13 +275,21 @@ async def cleanup_old_logs(db: AsyncSession, retention_days: int = 90) -> dict[s
 
 
 def _tool_execution_to_dict(e: ToolExecutionLog) -> dict[str, Any]:
+    params = json.loads(e.parameters) if isinstance(e.parameters, str) else e.parameters
+    # Extract a human-readable query string from parameters
+    query = ""
+    if isinstance(params, dict):
+        query = params.get("target") or params.get("domain") or params.get("url") or ""
+        if not query:
+            query = ", ".join(f"{k}={v}" for k, v in params.items() if k not in ("record_types",))
     return {
         "id": e.id,
         "user_id": e.user_id,
         "session_id": e.session_id,
         "source_ip": e.source_ip,
         "tool_name": e.tool_name,
-        "parameters": json.loads(e.parameters) if isinstance(e.parameters, str) else e.parameters,
+        "query": query,
+        "parameters": params,
         "result": e.result,
         "duration_ms": e.duration_ms,
         "error_message": e.error_message,

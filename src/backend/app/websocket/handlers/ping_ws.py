@@ -15,10 +15,30 @@ logger = logging.getLogger(__name__)
 PING_INTERVAL = 1.0
 
 
+async def _log_tool_exec(
+    tool_name: str, params: dict, result: str, duration_ms: int,
+    error_msg: str | None, user_id: str | None, session_id: str, source_ip: str,
+) -> None:
+    try:
+        from app.database import async_session_factory, is_db_available
+        if not is_db_available():
+            return
+        import json
+        import app.services.log_service as log_svc
+        async with async_session_factory() as db:
+            await log_svc.create_tool_execution_log(
+                db, user_id=user_id, session_id=session_id, source_ip=source_ip,
+                tool_name=tool_name, parameters=params, result=result,
+                duration_ms=duration_ms, error_message=error_msg,
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to log WS tool execution")
+
+
 async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str | None, source_ip: str) -> None:
     tool = PingTool(executor=SubprocessExecutor(hard_timeout=90.0))
     process: asyncio.subprocess.Process | None = None
-
     try:
         raw = await websocket.receive_json()
         if raw.get("type") != "start":
@@ -215,11 +235,21 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
             },
         })
 
+        # Log tool execution
+        result = "success" if terminated_by != "error" else "failure"
+        await _log_tool_exec("ping", validated, result, round(duration_ms), None,
+                             user_id, session_id, source_ip)
+
     except WebSocketDisconnect:
+        await _log_tool_exec("ping", params, "partial",
+                             round(duration_ms) if 'duration_ms' in dir() else 0,
+                             "Cancelled by user", user_id, session_id, source_ip)
         if process and process.returncode is None:
             process.kill()
-    except Exception:
+    except Exception as e:
         logger.exception("ping_ws error")
+        await _log_tool_exec("ping", params, "failure", 0, str(e),
+                             user_id, session_id, source_ip)
         try:
             await websocket.send_json({
                 "type": "error",

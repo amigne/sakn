@@ -197,12 +197,15 @@ async def login(
     if user is None:
         # Enumeration-safe: identical response
         await _log_security_event(db, "login_failed_no_user", source_ip, details={"email": email})
+        # Commit before AppError rollback
+        await db.commit()
         return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
 
     # Check block/lock
     is_locked, lock_key = _check_brute_force_lock(user)
     if is_locked:
         await _log_security_event(db, "login_blocked", source_ip, user_id=user.id, details={"reason": lock_key})
+        await db.commit()
         return {"success": False, "message_key": lock_key, "message": "Account is locked or blocked."}
 
     # Verify password
@@ -212,13 +215,15 @@ async def login(
         duration = _brute_force_duration(user.failed_login_attempts)
         if duration:
             user.locked_until = utcnow() + duration
-        # Persist immediately — don't let AppError roll back security state
-        await db.commit()
 
+        # Log BEFORE commit so the event survives the AppError rollback
         await _log_security_event(
             db, "login_failed", source_ip, user_id=user.id,
             details={"failed_attempts": user.failed_login_attempts},
         )
+        # Persist immediately — don't let AppError roll back security state
+        await db.commit()
+
         return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
 
     # Success: reset failed counter

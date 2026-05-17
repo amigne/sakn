@@ -14,13 +14,15 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [offset, setOffset] = useState(0);
+  const [sortField, setSortField] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState("desc");
   const limit = 20;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string | number> = { offset, limit };
+      const params: Record<string, string | number> = { offset, limit, sort: sortField, order: sortOrder };
       if (search) params.search = search;
       if (statusFilter !== "all") params.status = statusFilter;
       const data = await listUsers(params as never);
@@ -31,7 +33,24 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [offset, search, statusFilter]);
+  }, [offset, search, statusFilter, sortField, sortOrder]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+    setOffset(0);
+  };
+
+  const SortHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <th scope="col" onClick={() => handleSort(field)}
+      className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase cursor-pointer hover:text-[var(--color-text)] select-none whitespace-nowrap">
+      {children}{sortField === field ? (sortOrder === "asc" ? " ▴" : " ▾") : ""}
+    </th>
+  );
 
   useEffect(() => {
     fetchUsers();
@@ -80,11 +99,14 @@ export default function AdminUsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase hidden md:table-cell">Name</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Email</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Status</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Role</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">Joined</th>
+                  <th scope="col" onClick={() => handleSort("name")}
+                    className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase cursor-pointer hover:text-[var(--color-text)] select-none hidden md:table-cell">
+                    Name{sortField === "name" ? (sortOrder === "asc" ? " ▴" : " ▾") : ""}
+                  </th>
+                  <SortHeader field="email">Email</SortHeader>
+                  <SortHeader field="status">Status</SortHeader>
+                  <SortHeader field="role">Role</SortHeader>
+                  <SortHeader field="created_at">Joined</SortHeader>
                   <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20">Actions</th>
                 </tr>
               </thead>

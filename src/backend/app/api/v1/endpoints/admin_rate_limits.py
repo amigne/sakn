@@ -127,6 +127,8 @@ async def update_rate_limits(
 
         if config:
             old_values = {
+                "role": config.role,
+                "tool_id": config.tool_id,
                 "soft_limit": config.soft_limit,
                 "hard_limit": config.hard_limit,
                 "window_seconds": config.window_seconds,
@@ -153,6 +155,8 @@ async def update_rate_limits(
             entity_id=config.id,
             old_value=old_values if old_values else None,
             new_value={
+                "role": config.role,
+                "tool_id": config.tool_id,
                 "soft_limit": config.soft_limit,
                 "hard_limit": config.hard_limit,
                 "window_seconds": config.window_seconds,

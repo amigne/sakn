@@ -24,6 +24,8 @@ async def list_users(
     limit: int = Query(20, ge=1, le=100),
     status: str | None = Query(None),
     search: str | None = Query(None),
+    sort: str | None = Query(None),
+    order: str | None = Query("asc"),
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin),
 ) -> dict[str, Any]:
@@ -40,8 +42,24 @@ async def list_users(
     total_row = await session.execute(count_q)
     total = total_row.scalar() or 0
 
+    # Sorting
+    sort_col = User.created_at
+    if sort == "email":
+        sort_col = User.email
+    elif sort == "name":
+        sort_col = User.first_name
+    elif sort == "status":
+        sort_col = User.status
+    elif sort == "role":
+        sort_col = User.role
+
+    if order == "desc":
+        sort_col = sort_col.desc()
+    else:
+        sort_col = sort_col.asc()
+
     rows = await session.execute(
-        query.order_by(User.created_at.desc()).offset(offset).limit(limit)
+        query.order_by(sort_col).offset(offset).limit(limit)
     )
     users = rows.scalars().all()
 

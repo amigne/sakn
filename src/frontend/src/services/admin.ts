@@ -20,6 +20,8 @@ export interface ListUsersParams {
   limit?: number;
   status?: string;
   search?: string;
+  sort?: string;
+  order?: string;
 }
 
 export async function listUsers(
@@ -30,6 +32,8 @@ export async function listUsers(
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
   if (params.status) sp.set("status", params.status);
   if (params.search) sp.set("search", params.search);
+  if (params.sort) sp.set("sort", params.sort);
+  if (params.order) sp.set("order", params.order);
   const qs = sp.toString();
   return api(`/admin/users${qs ? `?${qs}` : ""}`);
 }
