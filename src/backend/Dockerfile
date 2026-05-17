@@ -12,11 +12,12 @@ FROM python:3.14-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping traceroute dnsutils openssl ca-certificates curl \
-    redis-tools \
+    redis-tools libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Grant raw socket capabilities for ping/traceroute
-RUN setcap cap_net_raw+ep /usr/bin/ping /usr/sbin/traceroute
+RUN setcap cap_net_raw+ep /usr/bin/ping 
+RUN setcap cap_net_raw+ep /usr/bin/traceroute.db
 
 COPY --from=builder /app/.venv /app/.venv
 COPY app/ ./app/
