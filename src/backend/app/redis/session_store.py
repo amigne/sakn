@@ -2,11 +2,29 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.preferences import GlobalSetting
 from app.redis.connection import get_redis
 
 logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_SESSIONS = 10
+
+
+async def _get_max_sessions(db: AsyncSession) -> int:
+    """Read max_concurrent_sessions from GlobalSetting. Default 10."""
+    try:
+        result = await db.execute(
+            select(GlobalSetting).where(GlobalSetting.key == "max_concurrent_sessions")
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            return int(row.value)
+    except (ValueError, TypeError, Exception):
+        pass
+    return MAX_CONCURRENT_SESSIONS
 
 
 async def _redis_available() -> bool:

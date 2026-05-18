@@ -37,11 +37,13 @@ src/
           VerifyEmailPage.tsx
           ResetPasswordPage.tsx
         admin/
-          DashboardPage.tsx
-          UsersPage.tsx
-          ToolsConfigPage.tsx
-          RateLimitsPage.tsx
-          LogsPage.tsx
+          AdminUsersPage.tsx
+          AdminUserDetailPage.tsx
+          AdminAccessPage.tsx
+          AdminRateLimitsPage.tsx
+          AdminModulesPage.tsx
+          AdminSettingsPage.tsx
+          AdminLogsPage.tsx
         account/
           ProfilePage.tsx
           SessionsPage.tsx
@@ -57,15 +59,17 @@ src/
         useToolExecution.ts   # Mutation hook (instant tools)
         useWebSocket.ts       # WebSocket hook (continuous tools)
         useAuth.ts            # Login, logout, current user
-        usePreferences.ts     # Language, theme, locale
+
         useSession.ts         # Session management
+      // Note: Preferences are managed via authStore (Zustand) and themeStore, not a dedicated hook.
 
       services/
         api.ts                # Base API client (fetch wrapper with CSRF)
         auth.ts               # Auth API calls
-        tools.ts              # Tool execution API calls
+
         admin.ts              # Admin API calls
         preferences.ts        # Preferences API calls
+      // Note: Tool API calls use useWebSocket and useToolExecution hooks directly rather than a separate service layer.
 
       stores/
         authStore.ts          # Auth state (current user)

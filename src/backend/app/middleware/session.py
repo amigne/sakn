@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.models.base import new_uuid7
 from app.security.tokens import hash_token
 from app.security.csrf import generate_csrf_token, set_csrf_cookie
+from app.security.cookies import get_session_token
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        session_token = request.cookies.get("sakn_session")
+        session_token = get_session_token(request)
 
         if session_token:
             token_hash = hash_token(session_token)

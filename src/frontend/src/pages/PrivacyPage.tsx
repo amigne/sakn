@@ -47,7 +47,7 @@ export default function PrivacyPage() {
                 </thead>
                 <tbody className="align-top">
                   <tr className="border-b border-[var(--color-border)]">
-                    <td className="py-2 pe-4 font-mono text-xs">sakn_session</td>
+                    <td className="py-2 pe-4 font-mono text-xs">__Host-sakn_session</td>
                     <td className="py-2 pe-4">{t("privacy.cookies.session_purpose")}</td>
                     <td className="py-2 pe-4 text-xs">{t("privacy.cookies.session_duration")}</td>
                     <td className="py-2 text-xs">{t("privacy.cookies.session_access")}</td>

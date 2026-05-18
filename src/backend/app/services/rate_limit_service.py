@@ -96,6 +96,37 @@ async def get_effective_limits(
     }
 
 
+async def _get_visitor_ip_limits(db: AsyncSession) -> tuple[int, int]:
+    """Return (soft_limit, hard_limit) for visitor IP-based rate limiting.
+
+    Reads from GlobalSettings so admins can adjust via the admin panel.
+    Defaults: soft=5 req/s, hard=500 req/h.
+    """
+    from sqlalchemy import select as sel
+    from app.models.preferences import GlobalSetting
+
+    soft = 5
+    hard = 500
+    try:
+        row = await db.execute(
+            sel(GlobalSetting).where(GlobalSetting.key.in_(
+                ("visitor_ip_soft_limit", "visitor_ip_hard_limit")
+            ))
+        )
+        for s in row.scalars().all():
+            try:
+                val = int(s.value)
+            except (ValueError, TypeError):
+                continue
+            if s.key == "visitor_ip_soft_limit":
+                soft = val
+            elif s.key == "visitor_ip_hard_limit":
+                hard = val
+    except Exception:
+        pass  # DB might not be available, use defaults
+    return soft, hard
+
+
 async def check_tool_rate_limit(
     db: AsyncSession,
     *,
@@ -128,8 +159,10 @@ async def check_tool_rate_limit(
         if not session_result.allowed:
             return session_result
 
+        # Visitor IP limits: read from GlobalSettings (fallback to defaults)
+        ip_soft, ip_hard = await _get_visitor_ip_limits(db)
         ip_result = await limiter.check(
-            "ip", source_ip, 5, 500, soft_window_s, hard_window_s
+            "ip", source_ip, ip_soft, ip_hard, soft_window_s, hard_window_s
         )
         if not ip_result.allowed:
             return ip_result

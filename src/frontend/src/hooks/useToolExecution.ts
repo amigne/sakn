@@ -8,7 +8,13 @@ export function useToolExecution() {
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
 
+  const executingRef = { current: false };
+
   const execute = useCallback(async (toolName: string, params: Record<string, unknown>) => {
+    // Guard: prevent concurrent execution (double-click protection)
+    if (executingRef.current) return;
+    executingRef.current = true;
+
     setStatus("running");
     setError(null);
     setData(null);
@@ -36,10 +42,13 @@ export function useToolExecution() {
       setError(message);
       setStatus("error");
       throw err;
+    } finally {
+      executingRef.current = false;
     }
   }, []);
 
   const reset = useCallback(() => {
+    executingRef.current = false;
     setStatus("idle");
     setData(null);
     setError(null);

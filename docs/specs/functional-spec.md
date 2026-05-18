@@ -64,7 +64,7 @@ Send ICMP echo requests to a target host and display round-trip statistics.
 | Parameter | Type | Default | Constraints |
 |---|---|---|---|
 | Target | string (hostname or IP) | (required) | Must pass address validation and security filter. |
-| Count | integer | optional, unlimited | 0 to 100. 0 or empty = unlimited until Max Duration or user stops. |
+| Count | integer | 4 | 0 to 100. 0 = unlimited until Max Duration or user stops. |
 | Timeout | integer (seconds) | 10 | 1 to 60. |
 | Packet Size | integer (bytes) | 56 | 8 to 65507. |
 | DF Bit | boolean | false | Set Don't Fragment flag. |

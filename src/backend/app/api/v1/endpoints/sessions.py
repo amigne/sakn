@@ -7,6 +7,7 @@ from app.database import get_session
 from app.services import session_service
 from app.security.tokens import hash_token
 from app.security.csrf import validate_csrf, SAFE_METHODS
+from app.security.cookies import get_session_token, session_cookie_name
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ async def list_sessions(
 
         raise AppError(401, "SESSION_EXPIRED", "errors.session_expired", "Session required.")
 
-    session_token = request.cookies.get("sakn_session")
+    session_token = get_session_token(request)
     current_token_hash = hash_token(session_token) if session_token else None
 
     sessions = await session_service.list_for_user(db, user_id, current_token_hash)
@@ -62,8 +63,9 @@ async def revoke_session(
         raise AppError(404, "NOT_FOUND", "errors.not_found", "Session not found.")
 
     # If revoking current session, clear cookie
-    current_token = request.cookies.get("sakn_session")
+    current_token = get_session_token(request)
     if current_token and hash_token(current_token) == token_hash:
-        response.delete_cookie("sakn_session", path="/")
+        is_secure = request.url.scheme == "https"
+        response.delete_cookie(session_cookie_name(is_secure), path="/")
 
     return {"message_key": "sessions.revoked", "message": "Session revoked."}

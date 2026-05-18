@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import User, EmailVerification, PasswordReset, SecurityEventLog, Session
+from app.models import User, UserPreference, EmailVerification, PasswordReset, SecurityEventLog, Session
 from app.models.base import new_uuid7, utcnow
 from app.security.password import hash_password, verify_password, validate_password_strength
 from app.security.tokens import generate_token, hash_token, verify_token
@@ -244,6 +244,21 @@ async def login(
         db, user_id=user.id, ip_address=source_ip, user_agent=user_agent,
     )
 
+    # Build user dict with actual locale from preferences
+    user_locale = locale
+    try:
+        locale_row = await db.execute(
+            select(UserPreference).where(
+                UserPreference.user_id == user.id,
+                UserPreference.key == "locale",
+            )
+        )
+        locale_pref = locale_row.scalar_one_or_none()
+        if locale_pref:
+            user_locale = locale_pref.value
+    except Exception:
+        pass  # Fall back to parameter default
+
     await _log_security_event(db, "login_success", source_ip, user_id=user.id)
 
     return {
@@ -256,7 +271,7 @@ async def login(
             "role": user.role,
             "status": user.status,
             "email_verified": user.email_verified_at is not None,
-            "locale": locale,
+            "locale": user_locale,
             "created_at": user.created_at.isoformat(),
         },
         "session_token": session_token,

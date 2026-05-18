@@ -477,5 +477,8 @@
   "auth.password_min_chars": "Min 8 caractères",
   "auth.password_uppercase": "Au moins une majuscule",
   "auth.password_lowercase": "Au moins une minuscule",
-  "auth.password_digit": "Au moins un chiffre"
+  "auth.password_digit": "Au moins un chiffre",
+  "auth.account_deleted": "Compte supprimé.",
+  "common.back_home": "Retour à l'accueil",
+  "common.forbidden": "Vous n'avez pas la permission d'accéder à cette page."
 }

@@ -2,13 +2,16 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
 from app.database import get_session
-from app.models import User
+from app.models import User, Session
+from app.models.log import ToolExecutionLog, SecurityEventLog, AuditLog
+from app.models.preferences import UserPreference, EmailVerification, PasswordReset
 from app.security.csrf import validate_csrf, SAFE_METHODS
+from app.security.password import verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,10 @@ router = APIRouter(prefix="/account", tags=["account"])
 class ProfileUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
 
 
 def _csrf_required(request: Request) -> None:
@@ -69,3 +76,53 @@ async def update_profile(
             "created_at": user.created_at.isoformat(),
         }
     }
+
+
+@router.delete("")
+async def delete_account(
+    body: DeleteAccountRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+):
+    """Delete the authenticated user's account. Requires password confirmation.
+
+    - Verifies the provided password
+    - Deletes preferences, verification tokens, password resets, sessions
+    - Anonymizes log references (user_id set to NULL)
+    - Deletes the user record
+    """
+    _csrf_required(request)
+
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is None:
+        raise AppError(401, "SESSION_EXPIRED", "errors.session_expired", "Session required.")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise AppError(404, "NOT_FOUND", "errors.not_found", "User not found.")
+
+    # Verify password
+    if not verify_password(body.password, user.password_hash):
+        raise AppError(401, "INVALID_CREDENTIALS", "errors.invalid_credentials", "Invalid password.")
+
+    # Delete related data
+    related_tables = [UserPreference, EmailVerification, PasswordReset, Session]
+    for model in related_tables:
+        await db.execute(
+            delete(model).where(model.user_id == user_id)  # type: ignore[arg-type]
+        )
+
+    # Anonymize logs (set user_id to NULL, keep the log entries)
+    log_models = [ToolExecutionLog, SecurityEventLog, AuditLog]
+    for model in log_models:
+        await db.execute(
+            update(model).where(model.user_id == user_id).values(user_id=None)  # type: ignore[arg-type]
+        )
+
+    # Delete the user
+    await db.delete(user)
+    await db.commit()
+
+    logger.info("Account deleted", extra={"user_id": user_id})
+    return {"message": "Account deleted.", "message_key": "auth.account_deleted"}

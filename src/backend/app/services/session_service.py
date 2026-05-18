@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
 from app.models.base import utcnow
+from app.models.preferences import GlobalSetting
 from app.redis.session_store import (
     create_session as redis_create_session,
     get_session as redis_get_session,
@@ -12,7 +13,7 @@ from app.redis.session_store import (
     list_user_sessions,
     update_activity,
     enforce_concurrent_limit,
-    MAX_CONCURRENT_SESSIONS,
+    _get_max_sessions,
 )
 from app.security.tokens import generate_token, hash_token
 
@@ -23,15 +24,31 @@ def _now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+async def _get_session_duration(db: AsyncSession) -> int:
+    """Read session_duration_hours from GlobalSetting. Default 24."""
+    try:
+        result = await db.execute(
+            select(GlobalSetting).where(GlobalSetting.key == "session_duration_hours")
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            return int(row.value)
+    except (ValueError, TypeError, Exception):
+        pass
+    return SESSION_DURATION_HOURS
+
+
 async def create(db: AsyncSession, *, user_id: str | None, ip_address: str, user_agent: str | None = None) -> tuple[str, Session]:
     """Create a session in Redis and DB. Returns (raw_token, db_session)."""
     token = generate_token()
     token_hash = hash_token(token)
     now = utcnow()
-    expires_at = now + timedelta(hours=SESSION_DURATION_HOURS)
+    duration_hours = await _get_session_duration(db)
+    expires_at = now + timedelta(hours=duration_hours)
 
     if user_id:
-        await enforce_concurrent_limit(user_id)
+        max_sessions = await _get_max_sessions(db)
+        await enforce_concurrent_limit(user_id, max_sessions=max_sessions)
 
     session = Session(
         user_id=user_id,
@@ -54,7 +71,7 @@ async def create(db: AsyncSession, *, user_id: str | None, ip_address: str, user
             "last_activity_at": now.isoformat(),
             "expires_at": expires_at.isoformat(),
         },
-        ttl_seconds=SESSION_DURATION_HOURS * 3600,
+        ttl_seconds=duration_hours * 3600,
     )
 
     return token, session

@@ -133,7 +133,7 @@ def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
     # Parse session token from cookie header
     for part in cookies.split(";"):
         part = part.strip()
-        if part.startswith("sakn_session="):
+        if part.startswith("__Host-sakn_session=") or part.startswith("sakn_session="):
             return part.split("=", 1)[1], None
     return f"anon_{new_uuid7()}", None
 
@@ -288,13 +288,18 @@ async def execute_tool(
     """Execute an instant tool."""
     tool = registry.get(tool_name)
     if tool is None:
-        return {
-            "error": {
-                "code": "NOT_FOUND",
-                "message_key": "errors.not_found",
-                "message": f"Tool '{tool_name}' not found",
-            }
-        }
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message_key": "errors.not_found",
+                    "message": f"Tool '{tool_name}' not found",
+                }
+            },
+        )
 
     await _check_tool_access(tool_name, request, session)
 

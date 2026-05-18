@@ -84,7 +84,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # If session middleware didn't resolve the user but a cookie is present,
         # try to resolve it directly from the DB
         if role == "visitor" and user_id is None:
-            session_token = request.cookies.get("sakn_session")
+            from app.security.cookies import get_session_token
+
+            session_token = get_session_token(request)
             if session_token:
                 try:
                     from app.security.tokens import hash_token
@@ -140,6 +142,33 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "path": path,
                 },
             )
+            # Persist SecurityEventLog row
+            try:
+                from app.database import async_session_factory
+                from app.models.log import SecurityEventLog
+                from app.models.base import new_uuid7
+
+                async with async_session_factory() as se_db:
+                    se_db.add(SecurityEventLog(
+                        id=new_uuid7(),
+                        event_type="rate_limit_exceeded",
+                        source_ip=source_ip,
+                        user_id=user_id,
+                        session_id=session_id if session_id != "unknown" else None,
+                        details={
+                            "role": role,
+                            "path": path,
+                            "limit_type": result.limit_type,
+                            "soft_limit": result.soft_limit,
+                            "hard_limit": result.hard_limit,
+                            "soft_count": result.soft_count,
+                            "hard_count": result.hard_count,
+                        },
+                    ))
+                    await se_db.commit()
+            except Exception:
+                pass  # Don't block the 429 response on logging failure
+
             limit_type = result.limit_type
             retry_msg = f"{limit_type.capitalize()} limit reached ({result.soft_limit}/s soft, {result.hard_limit}/h hard). Retry after {result.retry_after}s."
             return JSONResponse(

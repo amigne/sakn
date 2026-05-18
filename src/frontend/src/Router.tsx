@@ -18,6 +18,8 @@ import ProfilePage from "@/pages/account/ProfilePage";
 import SessionsPage from "@/pages/account/SessionsPage";
 import AccountDeletePage from "@/pages/account/AccountDeletePage";
 import PrivacyPage from "@/pages/PrivacyPage";
+import NotFoundPage from "@/pages/NotFoundPage";
+import ForbiddenPage from "@/pages/ForbiddenPage";
 // Admin
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "@/pages/admin/AdminUserDetailPage";
@@ -64,14 +66,7 @@ export default function Router() {
       <Route path="/admin/logs" element={<AdminGuard><AdminLogsPage /></AdminGuard>} />
 
       {/* 404 */}
-      <Route path="*" element={
-        <div className="flex h-screen items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-[var(--color-text)]">404</h1>
-            <p className="mt-2 text-[var(--color-text-secondary)]">Page not found.</p>
-          </div>
-        </div>
-      } />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

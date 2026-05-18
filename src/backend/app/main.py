@@ -179,6 +179,8 @@ async def lifespan(app: FastAPI) -> Any:
                     "log_retention_days": "90",
                     "session_duration_hours": "24",
                     "max_concurrent_sessions": "10",
+                    "visitor_ip_soft_limit": "5",
+                    "visitor_ip_hard_limit": "500",
                 }
                 for key, value in default_settings.items():
                     row = await db.execute(
@@ -222,6 +224,29 @@ async def lifespan(app: FastAPI) -> Any:
                     logger.info("Log cleanup completed", extra={"deleted": deleted})
             except Exception:
                 logger.exception("Log cleanup failed")
+
+        @scheduler.scheduled_job("cron", hour=3, minute=30)
+        async def cleanup_unverified_accounts():
+            """Delete user accounts that haven't been verified within 7 days."""
+            try:
+                from datetime import timedelta, timezone
+                from sqlalchemy import delete as del_stmt
+                from app.models.user import User
+
+                cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+                async with async_session_factory() as db:
+                    result = await db.execute(
+                        del_stmt(User).where(
+                            User.email_verified_at.is_(None),
+                            User.created_at < cutoff,
+                        )
+                    )
+                    await db.commit()
+                    count = result.rowcount
+                    if count:
+                        logger.info("Unverified account cleanup", extra={"deleted": count})
+            except Exception:
+                logger.exception("Unverified account cleanup failed")
 
         scheduler.start()
     except Exception:

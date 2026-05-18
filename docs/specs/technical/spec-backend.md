@@ -97,7 +97,6 @@ src/
         network/
           __init__.py
           executor.py           # Subprocess runner with sandboxing
-          blocking.py           # IP blocking set and check
 
       middleware/
         __init__.py
@@ -479,6 +478,8 @@ Redis sorted sets per key. Lua script atomically: cleans expired entries (`ZREMR
 
 Python-side: `SlidingWindowRateLimiter` class with `check(key, soft_limit, hard_limit, soft_window_s, hard_window_s) -> RateLimitResult` and `increment(key)`.
 
+The soft-limit window is fixed at 1 second and is not configurable via `window_seconds`. The `window_seconds` column in `RateLimitConfig` applies only to the hard limit. This is by design — a 1-second burst window is an industry standard for rate limiting.
+
 ### 6.2 Limit Types
 
 - **Soft limit** (1s window): HTTP 429 + `Retry-After: 1`. Controls bursts.
@@ -631,21 +632,26 @@ RUN uv sync --no-dev --frozen
 FROM python:3.14-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    iputils-ping traceroute dnsutils openssl ca-certificates curl \
+    iputils-ping traceroute dnsutils openssl ca-certificates curl redis-tools \
     && rm -rf /var/lib/apt/lists/*
 RUN setcap cap_net_raw+ep /usr/bin/ping \
     && setcap cap_net_raw+ep /usr/sbin/traceroute
 COPY --from=builder /app/.venv /app/.venv
-COPY src/ ./src/
+COPY app/ ./app/
+COPY tests/ ./tests/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+COPY startup.sh ./
+RUN chmod +x startup.sh
 RUN useradd --create-home --uid 1000 sakn
 USER sakn
 ENV PATH="/app/.venv/bin:$PATH"
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:8000/health || exit 1
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./startup.sh"]
 ```
+
+**startup.sh** waits for PostgreSQL and Redis, runs Alembic migrations, then starts uvicorn.
 
 Base image rationale: `python:3.14-slim` (Debian) — musl (Alpine) causes issues with Python C extensions (asyncpg, argon2-cffi). Debian Slim provides reliable network tool availability. Non-root user (`uid=1000`). Capabilities via `setcap` on ping/traceroute binaries at build time.
 

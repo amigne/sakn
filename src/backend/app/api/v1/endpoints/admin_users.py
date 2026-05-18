@@ -131,6 +131,17 @@ async def get_user(
     }
 
 
+def _action_message_key(action: str, new_status: str | None) -> str:
+    """Return the correct i18n message_key for a user status change action."""
+    key_map = {
+        "user.block": "admin.user_blocked",
+        "user.unblock": "admin.user_unblocked",
+        "user.lock": "admin.user_locked",
+        "user.unlock": "admin.user_unlocked",
+    }
+    return key_map.get(action, f"admin.user_{action}")
+
+
 async def _change_user_status(
     session: AsyncSession,
     user_id: str,
@@ -168,7 +179,7 @@ async def _change_user_status(
             "role": user.role,
             "status": user.status,
         },
-        "message_key": f"admin.user_{'blocked' if new_status == 'blocked' else 'unblocked' if new_status == 'active' else action}",
+        "message_key": _action_message_key(action, new_status),
         "message": f"User {action}.",
     }
 

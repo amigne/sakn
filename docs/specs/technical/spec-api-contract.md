@@ -116,11 +116,13 @@ POST /auth/register
   "email": "user@example.com",
   "password": "SecurePass1",
   "password_confirm": "SecurePass1",
+  "first_name": "John",
+  "last_name": "Doe",
   "locale": "fr-FR"
 }
 ```
 
-`locale` is optional, defaults to `en-US`.
+`locale` is optional, defaults to `en-US`. `first_name` and `last_name` are required.
 
 **Response** (201):
 ```json
@@ -131,6 +133,8 @@ POST /auth/register
 ```
 
 No user object returned (prevents enumeration). No session created until email verified.
+
+**Enumeration protection**: duplicate email registration returns HTTP 200 with a generic success message (identical to a fresh registration). This prevents attackers from testing whether an email is already registered. Internally, error code `EMAIL_ALREADY_EXISTS` is logged but not exposed.
 
 ### 3.2 Login
 
@@ -152,6 +156,8 @@ POST /auth/login
   "user": {
     "id": "0193c8d4-...",
     "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
     "role": "authenticated",
     "status": "active",
     "email_verified": true,
@@ -613,7 +619,7 @@ PUT    /admin/modules/{tool_name}/dns-servers/reorder
 ```
 
 **POST/PUT Request**: `{"ip_address": "8.8.8.8", "description": "Google DNS"}`
-**Reorder Request**: `{"ids": ["id1", "id3", "id2"]}` — sets sort_order by array position.
+**Reorder Request**: `{"order": ["id1", "id3", "id2"]}` — sets sort_order by array position.
 
 ### 7.11 Global Settings
 

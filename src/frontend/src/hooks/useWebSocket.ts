@@ -36,6 +36,11 @@ export function useWebSocket<TResult = unknown, TSummary = unknown>(
 
   const connect = useCallback(
     (params: Record<string, unknown>) => {
+      // Guard: prevent concurrent WebSocket connections
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        return;
+      }
+
       cancelledRef.current = false;
       setStatus("running");
       setResults([]);

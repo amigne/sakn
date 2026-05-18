@@ -8,6 +8,7 @@ from app.api.errors import AppError
 from app.database import get_session
 from app.services import auth_service
 from app.services.rate_limit_service import auth_check as rl_check, auth_record as rl_record
+from app.security.cookies import session_cookie_name, get_session_token
 from app.security.csrf import (
     generate_csrf_token,
     set_csrf_cookie,
@@ -123,7 +124,7 @@ async def login(
     # Set session cookie
     is_secure = request.url.scheme == "https"
     response.set_cookie(
-        key="sakn_session",
+        key=session_cookie_name(is_secure),
         value=result["session_token"],
         httponly=True,
         samesite="lax",
@@ -147,12 +148,13 @@ async def logout(
 ):
     _csrf_required(request)
 
-    session_token = request.cookies.get("sakn_session")
+    is_secure = request.url.scheme == "https"
+    session_token = get_session_token(request)
     if session_token:
         token_hash = hash_token(session_token)
         await auth_service.logout(db, session_token_hash=token_hash)
 
-    response.delete_cookie("sakn_session", path="/")
+    response.delete_cookie(session_cookie_name(is_secure), path="/")
     return {"message_key": "auth.logout_success", "message": "Logged out."}
 
 
@@ -228,12 +230,22 @@ async def me(
         raise AppError(401, "SESSION_EXPIRED", "errors.session_expired", "Session required.")
 
     from sqlalchemy import select
-    from app.models import User
+    from app.models import User, UserPreference
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise AppError(404, "NOT_FOUND", "errors.not_found", "User not found.")
+
+    # Load locale from preferences
+    locale_result = await db.execute(
+        select(UserPreference).where(
+            UserPreference.user_id == user_id,
+            UserPreference.key == "locale",
+        )
+    )
+    locale_pref = locale_result.scalar_one_or_none()
+    user_locale = locale_pref.value if locale_pref else "en-US"
 
     return {
         "user": {
@@ -244,7 +256,7 @@ async def me(
             "role": user.role,
             "status": user.status,
             "email_verified": user.email_verified_at is not None,
-            "locale": "en-US",  # TODO: load from preferences
+            "locale": user_locale,
             "created_at": user.created_at.isoformat(),
         }
     }
