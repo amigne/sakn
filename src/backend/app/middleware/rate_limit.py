@@ -90,7 +90,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if session_token:
                 try:
                     from app.security.tokens import hash_token
-                    from app.database import async_session_factory
                     from sqlalchemy import select
                     from app.models import Session, User
 
@@ -144,7 +143,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
             # Persist SecurityEventLog row
             try:
-                from app.database import async_session_factory
                 from app.models.log import SecurityEventLog
                 from app.models.base import new_uuid7
 
