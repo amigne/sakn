@@ -56,13 +56,19 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
     }
   }
 
-  // On 401, clear auth state and redirect to login (except auth endpoints themselves)
+  // On 401, clear auth state and redirect to login (except auth endpoints themselves).
+  // INVALID_CREDENTIALS means the user is authenticated but password confirmation failed —
+  // don't log them out, let the caller handle the error.
   if (response.status === 401 && !path.startsWith("/auth/")) {
-    const { useAuthStore } = await import("@/stores/authStore");
-    // Clear user directly — don't call logout() which would trigger another API call
-    useAuthStore.setState({ user: null, preferences: null });
-    window.location.href = "/login";
-    throw new ApiError(401, { error: { message: "Session expired." } });
+    const errorData = await response.json().catch(() => ({}));
+    const errorCode = errorData?.error?.code;
+    if (errorCode !== "INVALID_CREDENTIALS") {
+      const { useAuthStore } = await import("@/stores/authStore");
+      useAuthStore.setState({ user: null, preferences: null });
+      window.location.href = "/login";
+      throw new ApiError(401, { error: { message: "Session expired." } });
+    }
+    throw new ApiError(401, errorData);
   }
 
   if (!response.ok) {

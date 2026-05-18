@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { TextInput, Button, Alert, Modal } from "@/components/ui";
 import { useAuthStore } from "@/stores/authStore";
+import { api, ApiError } from "@/services/api";
 
 export default function AccountDeletePage() {
   const { t } = useTranslation();
@@ -16,12 +17,22 @@ export default function AccountDeletePage() {
 
   const handleDelete = async () => {
     setError(null);
-    if (!password) { setError(t("account.password_required")); return; }
+    if (!password) {
+      setError(t("account.password_required"));
+      return;
+    }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setLoading(false);
-    logout();
-    navigate("/login");
+    try {
+      await api("/account", { method: "DELETE", body: { password } });
+      logout();
+      navigate("/login");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setError(apiErr.messageKey ? t(apiErr.messageKey) : apiErr.message);
+    } finally {
+      setLoading(false);
+      setConfirmOpen(false);
+    }
   };
 
   return (
