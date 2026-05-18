@@ -6,6 +6,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
     volumes:
       - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -32,7 +34,7 @@ services:
       context: ./src/backend
       dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://sakn:${POSTGRES_PASSWORD:-sakn}@postgres:5432/sakn}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://sakn:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sakn}
       - SECRET_KEY=${SECRET_KEY}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - HOST=0.0.0.0
@@ -70,7 +72,7 @@ services:
     environment:
       - POSTGRES_DB=sakn
       - POSTGRES_USER=sakn
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sakn}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql
     networks:

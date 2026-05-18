@@ -1,28 +1,38 @@
-:80 {
-    header {
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; form-action 'self'"
-        Strict-Transport-Security "max-age=63072000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        -Server
-    }
+# HTTP → HTTPS redirect
+http://{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} 301
+}
 
-    handle /api/v1/tools/*/ws {
-        reverse_proxy backend:8000 {
-            header_up X-Forwarded-For {remote_host}
-        }
-    }
+# HTTPS site (ACME auto)
+{$DOMAIN} {
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; form-action 'self'"
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 
-    handle /api/* {
-        reverse_proxy backend:8000
-    }
+	handle /api/v1/tools/*/ws {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
 
-    handle /health {
-        reverse_proxy backend:8000
-    }
+	handle /api/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
 
-    handle {
-        reverse_proxy frontend:80
-    }
+	handle /health {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
 }
