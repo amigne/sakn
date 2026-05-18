@@ -45,9 +45,13 @@ def _check_brute_force_lock(user: User) -> tuple[bool, str | None]:
         return True, "errors.user_blocked"
     if user.status == "locked":
         return True, "errors.user_locked"
-    now = _now_naive()
-    if user.locked_until and user.locked_until > now:
-        return True, "errors.account_locked"
+    now = utcnow()
+    if user.locked_until is not None:
+        locked = user.locked_until
+        if locked.tzinfo is None:
+            now = now.replace(tzinfo=None)
+        if locked > now:
+            return True, "errors.account_locked"
     return False, None
 
 
@@ -201,12 +205,12 @@ async def login(
         await db.commit()
         return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
 
-    # Check block/lock
+    # Check block/lock (enumeration-safe: same response as invalid credentials)
     is_locked, lock_key = _check_brute_force_lock(user)
     if is_locked:
         await _log_security_event(db, "login_blocked", source_ip, user_id=user.id, details={"reason": lock_key})
         await db.commit()
-        return {"success": False, "message_key": lock_key, "message": "Account is locked or blocked."}
+        return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
 
     # Verify password
     if not verify_password(password, user.password_hash):

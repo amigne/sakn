@@ -229,20 +229,11 @@ async def lifespan(app: FastAPI) -> Any:
         async def cleanup_unverified_accounts():
             """Delete user accounts that haven't been verified within 7 days."""
             try:
-                from datetime import timedelta, timezone
-                from sqlalchemy import delete as del_stmt
-                from app.models.user import User
+                from app.services.account_cleanup_service import cleanup_unverified_accounts as do_cleanup
 
-                cutoff = datetime.now(timezone.utc) - timedelta(days=7)
                 async with async_session_factory() as db:
-                    result = await db.execute(
-                        del_stmt(User).where(
-                            User.email_verified_at.is_(None),
-                            User.created_at < cutoff,
-                        )
-                    )
+                    count = await do_cleanup(db, retention_days=7)
                     await db.commit()
-                    count = result.rowcount
                     if count:
                         logger.info("Unverified account cleanup", extra={"deleted": count})
             except Exception:
@@ -278,7 +269,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Request ID middleware (outermost — must be first so all other middleware see the ID)
+# Request ID middleware
 from app.middleware.request_id import RequestIDMiddleware
 
 app.add_middleware(RequestIDMiddleware)
@@ -306,6 +297,12 @@ app.add_middleware(RateLimitMiddleware)
 from app.middleware.security_headers import SecurityHeadersMiddleware
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Trusted proxy middleware (outermost — corrects scope["scheme"] and scope["client"]
+# before any other middleware reads them)
+from app.middleware.proxy_trust import TrustedProxyMiddleware
+
+app.add_middleware(TrustedProxyMiddleware, trusted_hops=settings.TRUSTED_PROXY_HOPS)
 
 # API router
 from app.api.v1.router import v1_router

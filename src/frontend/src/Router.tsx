@@ -19,7 +19,6 @@ import SessionsPage from "@/pages/account/SessionsPage";
 import AccountDeletePage from "@/pages/account/AccountDeletePage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import NotFoundPage from "@/pages/NotFoundPage";
-import ForbiddenPage from "@/pages/ForbiddenPage";
 // Admin
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "@/pages/admin/AdminUserDetailPage";

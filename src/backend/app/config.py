@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@sakn.example.com"
 
+    # Reverse proxy trust (see ADR-003)
+    TRUSTED_PROXY_HOPS: int = 0
+
     # Email verification
     EMAIL_VERIFICATION_REQUIRED: bool = True
 

@@ -31,8 +31,14 @@ echo "PostgreSQL is ready."
 
 # Wait for Redis
 echo "Waiting for Redis..."
-REDIS_HOST=$(echo "$REDIS_URL" | sed -n 's|.*@\?\([^:/]*\).*|\1|p')
-while ! redis-cli -h "${REDIS_HOST:-redis}" ping 2>/dev/null | grep -q PONG; do
+REDIS_HOST=$(echo "$REDIS_URL" | sed -n 's|^redis://[^@]*@\([^:/]*\).*|\1|p')
+if [ -z "$REDIS_HOST" ]; then
+  REDIS_HOST=$(echo "$REDIS_URL" | sed -n 's|^redis://\([^:/]*\).*|\1|p')
+fi
+REDIS_PASS=$(echo "$REDIS_URL" | sed -n 's|^redis://:\([^@]*\)@.*|\1|p')
+REDIS_AUTH=""
+[ -n "$REDIS_PASS" ] && REDIS_AUTH="-a $REDIS_PASS --no-auth-warning"
+while ! redis-cli $REDIS_AUTH -h "${REDIS_HOST:-redis}" ping 2>/dev/null | grep -q PONG; do
   echo "Redis not ready — retrying in 2s..."
   sleep 2
 done
@@ -44,4 +50,4 @@ alembic upgrade head
 
 # Start the application
 echo "Starting SAKN backend..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-proxy-headers

@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
+from app.config import settings
 from app.database import get_session, async_session_factory
 from app.tools.registry import ToolRegistry
 
@@ -138,6 +139,14 @@ def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
     return f"anon_{new_uuid7()}", None
 
 
+def _is_allowed_origin(origin: str | None) -> bool:
+    """Check Origin header against CORS_ORIGINS allowlist (CSWSH protection for WebSockets)."""
+    if not origin:
+        return True  # non-browser clients don't send Origin
+    allowed = [o.strip() for o in settings.CORS_ORIGINS.split(",")]
+    return origin in allowed
+
+
 @router.websocket("/{tool_name}/stream")
 async def tool_stream(websocket: WebSocket, tool_name: str):
     from app.websocket.handlers.ping_ws import handle_ping_stream
@@ -208,7 +217,16 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                     await websocket.close(code=4003)
                     return
     except Exception:
-        pass  # Allow execution if DB check fails
+        logger.exception("DB error during WebSocket authorization check for tool=%s", tool_name)
+        await websocket.close(code=4503)
+        return
+
+    # CSWSH protection: validate Origin header (CORSMiddleware does not cover WebSockets)
+    origin = websocket.headers.get("origin")
+    if not _is_allowed_origin(origin):
+        logger.warning("WebSocket origin rejected: tool=%s origin=%s", tool_name, origin)
+        await websocket.close(code=4003)
+        return
 
     manager = _get_ws_manager(websocket.app)
     source_ip = websocket.client.host if websocket.client else "unknown"

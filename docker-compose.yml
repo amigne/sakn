@@ -36,7 +36,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://sakn:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sakn}
       - SECRET_KEY=${SECRET_KEY}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0}
       - HOST=0.0.0.0
       - PORT=8000
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -48,6 +48,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-noreply@sakn.example.com}
       - EMAIL_VERIFICATION_REQUIRED=${EMAIL_VERIFICATION_REQUIRED:-true}
+      - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
     cap_add:
       - NET_RAW
       - NET_ADMIN
@@ -86,13 +87,15 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     networks:
       - sakn-internal
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a $$REDIS_PASSWORD ping | grep -q PONG"]
       interval: 5s
       timeout: 5s
       retries: 5

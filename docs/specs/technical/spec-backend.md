@@ -468,6 +468,26 @@ Double Submit Cookie pattern:
 
 All security events logged to `SecurityEventLog` with: timestamp (UTC), source IP, user ID (if applicable), event type, detailed payload (blocked target, rule triggered). No internal infrastructure details in frontend error messages.
 
+### 5.6 Proxy Trust Policy
+
+The backend runs behind a reverse proxy (Caddy in the reference deployment; Traefik, Nginx, HAProxy or other HTTP-aware proxies in alternative deployments). To remain proxy-agnostic, the application implements its own ASGI middleware `TrustedProxyMiddleware` (`app/middleware/proxy_trust.py`). Uvicorn's built-in `ProxyHeadersMiddleware` is disabled via `--no-proxy-headers`.
+
+**Configuration**: env var `TRUSTED_PROXY_HOPS` (integer, default `0`).
+
+| Value | Meaning |
+|---|---|
+| `0` | App directly exposed. Forwarded headers ignored. Client = TCP peer. |
+| `1` | Single reverse proxy in front (Caddy/Traefik/Nginx). Default for the production compose profile. |
+| `N` | N proxies in front (e.g. CDN + ingress controller). |
+
+**`X-Forwarded-Proto` handling**: when `TRUSTED_PROXY_HOPS > 0`, the rightmost value (`http`/`https` only) sets `scope["scheme"]`. For WebSocket connections, the scheme is mapped to `ws`/`wss`.
+
+**`X-Forwarded-For` handling**: when `TRUSTED_PROXY_HOPS > 0`, the application parses the comma-separated list and takes the entry at position `-TRUSTED_PROXY_HOPS` (i.e. the Nth entry from the right). This is the IP observed by the trusted proxy; it cannot be spoofed by an external client because each proxy appends to the right.
+
+**Effects downstream**: `request.url.scheme` returns `https` (→ cookies emitted with `Secure` + `__Host-` prefix in `auth.py`, `session.py`, `sessions.py`); `request.client.host` returns the original client IP (→ correct IP-based rate limit keys and `source_ip` in `SecurityEventLog`/`ToolExecutionLog`).
+
+See ADR-003 (`docs/adr/003-proxy-trust-policy.md`) for the design rationale.
+
 ---
 
 ## 6. Rate Limiting Implementation
@@ -661,7 +681,7 @@ See `docker-compose.yml` and `docker-compose.dev.yml` in the repository for the 
 
 Key points:
 - Caddy: image `caddy:2-alpine`, ports 80/443, Caddyfile mounted.
-- Backend: env vars for `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`; `cap_add: [NET_RAW, NET_ADMIN]`.
+- Backend: env vars for `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `TRUSTED_PROXY_HOPS` (see §5.6); `cap_add: [NET_RAW, NET_ADMIN]`. Started with `uvicorn --no-proxy-headers` so the application controls proxy-header trust via `TrustedProxyMiddleware` (see ADR-003).
 - PostgreSQL: image `postgres:18-alpine`, `POSTGRES_DB=sakn`.
 - Redis: image `redis:7-alpine`, `--appendonly yes`, healthcheck via `redis-cli ping`.
 - Dev: Caddy and frontend profiles set to `prod` only; backend uses SQLite; Redis active in both dev and prod.
