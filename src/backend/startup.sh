@@ -8,9 +8,14 @@ echo "Waiting for PostgreSQL..."
 until python -c "
 import asyncio, asyncpg, os
 async def check():
+    dsn = os.getenv('DATABASE_URL')
+    if not dsn:
+        print('DATABASE_URL is not set', file=sys.stderr)
+        return False
+    dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://', 1)
     try:
         conn = await asyncio.wait_for(
-            asyncpg.connect(os.environ['DATABASE_URL']),
+            asyncpg.connect(dsn),
             timeout=5
         )
         await conn.close()
