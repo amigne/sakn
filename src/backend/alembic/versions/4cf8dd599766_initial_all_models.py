@@ -1,7 +1,7 @@
 """initial_all_models
 
 Revision ID: 4cf8dd599766
-Revises: 
+Revises:
 Create Date: 2026-05-14 18:15:14.930910
 """
 from typing import Sequence, Union
@@ -45,6 +45,8 @@ def upgrade() -> None:
     sa.Column('failed_login_attempts', sa.Integer(), nullable=False),
     sa.Column('locked_until', sa.DateTime(timezone=True), nullable=True),
     sa.Column('admin_notes', sa.Text(), nullable=True),
+    sa.Column('first_name', sa.String(length=128), nullable=True),
+    sa.Column('last_name', sa.String(length=128), nullable=True),
     sa.Column('email_verified_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
