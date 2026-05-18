@@ -274,7 +274,7 @@ async def _check_tool_access(
             },
         )
 
-    # Check role permission
+    # Check role permission — auto-create if missing (self-healing from seed failures)
     perm_row = await session.execute(
         select(RoleToolPermission).where(
             RoleToolPermission.role == role,
@@ -282,7 +282,11 @@ async def _check_tool_access(
         )
     )
     perm = perm_row.scalar_one_or_none()
-    if perm is None or not perm.allowed:
+    if perm is None:
+        perm = RoleToolPermission(role=role, tool_id=tool_mod.id, allowed=True)
+        session.add(perm)
+        await session.flush()
+    if not perm.allowed:
         raise HTTPException(
             status_code=403,
             detail={
