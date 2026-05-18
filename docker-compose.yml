@@ -94,8 +94,10 @@ services:
       - redis_data:/data
     networks:
       - sakn-internal
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}      
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
