@@ -29,6 +29,9 @@ async def create_tool_execution_log(
     duration_ms: int,
     error_message: str | None = None,
 ) -> ToolExecutionLog:
+    if session_id is not None and str(session_id).startswith("anon_"):
+        session_id = None
+
     entry = ToolExecutionLog(
         id=new_uuid7(),
         user_id=user_id,
