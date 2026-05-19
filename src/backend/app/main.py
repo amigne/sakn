@@ -40,11 +40,20 @@ async def lifespan(app: FastAPI) -> Any:
         set_db_available(True)
         db_available = True
     except Exception:
+        # In production, fail fast — no silent fallback to SQLite
+        if settings.ENVIRONMENT != "development":
+            logger.critical(
+                "Primary database unavailable at %s in %s environment, shutting down",
+                cfg.DATABASE_URL,
+                settings.ENVIRONMENT,
+            )
+            raise
+
         logger.warning(
             "Primary database unavailable at %s, trying SQLite fallback",
             cfg.DATABASE_URL,
         )
-        # Fall back to local SQLite if the primary DB is unreachable
+        # Fall back to local SQLite in development only
         try:
             from sqlalchemy.ext.asyncio import create_async_engine as cae, AsyncSession, async_sessionmaker
 
