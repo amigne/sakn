@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
 
 
 class Settings(BaseSettings):
@@ -10,6 +11,22 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "change-me-in-production-use-at-least-32-bytes-base64"
     SECURITY_DNS_RESOLVER: str = "1.1.1.1"
+
+    @model_validator(mode="after")
+    def validate_secret_key(self) -> "Settings":
+        if self.ENVIRONMENT != "production":
+            return self
+        if self.SECRET_KEY == "change-me-in-production-use-at-least-32-bytes-base64":
+            raise ValueError(
+                "SECRET_KEY is still set to the default value. "
+                "Generate a real key (at least 32 bytes base64) and set it via the SECRET_KEY environment variable."
+            )
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError(
+                f"SECRET_KEY must be at least 32 characters (got {len(self.SECRET_KEY)}). "
+                "Generate a real key and set it via the SECRET_KEY environment variable."
+            )
+        return self
 
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
