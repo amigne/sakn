@@ -62,3 +62,101 @@ async def test_health_database_check(client):
     response = await client.get("/health")
     data = response.json()
     assert data["checks"]["database"] in ("ok", "unavailable")
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_blocks_after_hard_limit_reached(client):
+    """Authenticated user is rate-limited after exceeding the hard limit.
+
+    This test would have caught the UnboundLocalError on async_session_factory
+    (issue #37): if the rate-limit middleware silently fails, no 429 is returned.
+    """
+    from datetime import timedelta
+    from sqlalchemy import delete
+    from app.database import async_session_factory as test_factory
+    from app.models.base import new_uuid7, utcnow
+    from app.models import User, Session
+    from app.models.tool_module import RateLimitConfig
+    from app.security.tokens import generate_token, hash_token
+    from app.redis.rate_limit_store import get_rate_limiter
+    import app.middleware.rate_limit as rl_module
+
+    # Monkey-patch the rate-limit middleware's module-level reference so it
+    # uses the test DB (the mw_module patch in conftest.py doesn't cover it).
+    original_rl_factory = rl_module.async_session_factory
+    rl_module.async_session_factory = test_factory
+
+    # Clear the in-memory rate limit store between tests
+    get_rate_limiter()._db_fallback.clear()
+
+    raw_token = generate_token()
+    token_hash = hash_token(raw_token)
+
+    try:
+        async with test_factory() as db:
+            user = User(
+                id=new_uuid7(),
+                email="ratelimit-test@example.com",
+                password_hash="hashed",
+                role="authenticated",
+                status="active",
+                email_verified_at=utcnow(),
+            )
+            db.add(user)
+            await db.flush()
+
+            session_obj = Session(
+                id=new_uuid7(),
+                user_id=user.id,
+                token_hash=token_hash,
+                ip_address="127.0.0.1",
+                expires_at=utcnow() + timedelta(hours=24),
+            )
+            db.add(session_obj)
+            await db.flush()
+
+            # Low hard limit so the test doesn't need 500 requests
+            db.add(RateLimitConfig(
+                role="authenticated",
+                tool_id=None,
+                soft_limit=5,
+                hard_limit=3,
+                window_seconds=3600,
+            ))
+            await db.commit()
+
+        cookies = {"sakn_session": raw_token}
+
+        # First 3 requests should pass (hard_limit=3)
+        for i in range(3):
+            resp = await client.post(
+                "/api/v1/tools/nonexistent/execute", json={}, cookies=cookies
+            )
+            assert resp.status_code != 429, (
+                f"Request {i+1}/3: expected non-429, got {resp.status_code}"
+            )
+
+        # 4th request must be rate-limited
+        resp = await client.post(
+            "/api/v1/tools/nonexistent/execute", json={}, cookies=cookies
+        )
+        assert resp.status_code == 429
+        data = resp.json()
+        assert data["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+        assert data["error"]["details"]["limit_type"] == "hard"
+
+    finally:
+        rl_module.async_session_factory = original_rl_factory
+
+        # Clean up DB rows
+        async with test_factory() as db:
+            await db.execute(
+                delete(Session).where(Session.token_hash == token_hash)
+            )
+            await db.execute(
+                delete(RateLimitConfig).where(RateLimitConfig.role == "authenticated")
+            )
+            await db.execute(
+                delete(User).where(User.email == "ratelimit-test@example.com")
+            )
+            await db.commit()
