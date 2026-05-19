@@ -219,6 +219,9 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 if perm is None or not perm.allowed:
                     await websocket.close(code=4003)
                     return
+        else:
+            await websocket.close(code=4503)
+            return
     except Exception:
         logger.exception("DB error during WebSocket authorization check for tool=%s", tool_name)
         await websocket.close(code=4503)
