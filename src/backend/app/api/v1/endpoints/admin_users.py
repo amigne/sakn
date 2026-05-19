@@ -36,8 +36,10 @@ async def list_users(
         query = query.where(User.status == status)
         count_q = count_q.where(User.status == status)
     if search:
-        query = query.where(User.email.ilike(f"%{search}%"))
-        count_q = count_q.where(User.email.ilike(f"%{search}%"))
+        # Escape LIKE wildcards in user input to prevent wildcard enumeration
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.where(User.email.ilike(f"%{escaped}%", escape="\\"))
+        count_q = count_q.where(User.email.ilike(f"%{escaped}%", escape="\\"))
 
     total_row = await session.execute(count_q)
     total = total_row.scalar() or 0
