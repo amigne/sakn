@@ -219,6 +219,21 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 if perm is None or not perm.allowed:
                     await websocket.close(code=4003)
                     return
+
+                # Check rate limit (WebSocket bypasses BaseHTTPMiddleware)
+                from app.services.rate_limit_service import check_tool_rate_limit
+                source_ip = websocket.client.host if websocket.client else "unknown"
+                rate_result = await check_tool_rate_limit(
+                    db,
+                    role=role,
+                    user_id=user_id,
+                    session_id=session_token,
+                    source_ip=source_ip,
+                    tool_id=tool_mod.id,
+                )
+                if not rate_result.allowed:
+                    await websocket.close(code=4029)
+                    return
         else:
             await websocket.close(code=4503)
             return
