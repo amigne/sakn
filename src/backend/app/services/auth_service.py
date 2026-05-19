@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -22,6 +24,15 @@ RESET_TOKEN_TTL = timedelta(hours=1)
 def _now_naive() -> datetime:
     """Return timezone-naive UTC now, for comparison with DB-stored values (SQLite compat)."""
     return utcnow().replace(tzinfo=None)
+
+
+def _hash_email_for_log(email: str) -> str:
+    """HMAC-SHA256 the email for safe storage in security event logs."""
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        email.encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 # Brute force lockout tiers
 BRUTE_FORCE_TIERS = [
@@ -105,7 +116,7 @@ async def register_user(
     existing = result.scalar_one_or_none()
     if existing:
         # Enumeration-safe: return same success message
-        await _log_security_event(db, "registration_duplicate", source_ip, details={"email": email})
+        await _log_security_event(db, "registration_duplicate", source_ip, details={"email_hash": _hash_email_for_log(email)})
         return "auth.registration_success", "Registration successful. Check your email to verify your account."
 
     # Create user
@@ -200,7 +211,7 @@ async def login(
 
     if user is None:
         # Enumeration-safe: identical response
-        await _log_security_event(db, "login_failed_no_user", source_ip, details={"email": email})
+        await _log_security_event(db, "login_failed_no_user", source_ip, details={"email_hash": _hash_email_for_log(email)})
         # Commit before AppError rollback
         await db.commit()
         return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
@@ -309,7 +320,7 @@ async def request_password_reset(
     user = result.scalar_one_or_none()
 
     if user is None:
-        await _log_security_event(db, "password_reset_request_no_user", source_ip, details={"email": email})
+        await _log_security_event(db, "password_reset_request_no_user", source_ip, details={"email_hash": _hash_email_for_log(email)})
         return "auth.reset_email_sent", "If this email is registered, a reset link has been sent."
 
     # Create reset token
