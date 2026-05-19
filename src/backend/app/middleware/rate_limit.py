@@ -109,7 +109,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                                 user_id = sess.user_id
                                 session_id = sess.id
                 except Exception:
-                    pass  # Keep visitor defaults if lookup fails
+                    logger.exception("Session lookup failed in rate limit middleware, using visitor defaults")
 
         result = None
         if is_db_available():
