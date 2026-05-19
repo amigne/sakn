@@ -93,11 +93,14 @@ async def list_tool_dns_servers(
     session=Depends(get_session),
 ) -> dict[str, Any]:
     """Return DNS server presets for a tool (public endpoint)."""
-    from app.models.tool_module import DnsServerPreset
+    from app.models.tool_module import DnsServerPreset, RoleToolPermission
     from app.models import ToolModule
 
     row = await session.execute(
-        select(ToolModule).where(ToolModule.name == tool_name)
+        select(ToolModule)
+        .where(ToolModule.name == tool_name, ToolModule.enabled == True)
+        .join(RoleToolPermission, RoleToolPermission.tool_id == ToolModule.id)
+        .where(RoleToolPermission.role == "visitor", RoleToolPermission.allowed == True)
     )
     tool = row.scalar_one_or_none()
     if tool is None:
