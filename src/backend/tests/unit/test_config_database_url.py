@@ -22,7 +22,7 @@ class TestDatabaseUrlAssembly:
         parsed = urlparse(url)
         assert parsed.scheme == "postgresql+asyncpg"
         # Password must be encoded
-        assert "p%40ss%2Fw%2Bord%25%23%3F" in url
+        assert "p%40ss%2Fw%2Bord%25%23%3F" in url  # quote and quote_plus encode identically on these chars
 
     def test_database_url_explicit_override_bypasses_assembly(self):
         s = Settings(
@@ -39,3 +39,8 @@ class TestDatabaseUrlAssembly:
     def test_postgres_user_special_chars_quoted(self):
         s = Settings(_env_file=None, POSTGRES_USER="user@name", POSTGRES_PASSWORD="secret")
         assert "user%40name" in s.DATABASE_URL
+
+    def test_database_url_password_with_space(self):
+        s = Settings(_env_file=None, POSTGRES_PASSWORD="pass word")
+        assert "pass%20word" in s.DATABASE_URL
+        assert "pass+word" not in s.DATABASE_URL

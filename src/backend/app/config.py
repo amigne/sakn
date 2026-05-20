@@ -1,4 +1,4 @@
-from urllib.parse import quote_plus
+from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
@@ -22,8 +22,8 @@ class Settings(BaseSettings):
             return self
         if self.POSTGRES_PASSWORD:
             self.DATABASE_URL = (
-                f"postgresql+asyncpg://{quote_plus(self.POSTGRES_USER)}"
-                f":{quote_plus(self.POSTGRES_PASSWORD)}"
+                f"postgresql+asyncpg://{quote(self.POSTGRES_USER, safe='')}"
+                f":{quote(self.POSTGRES_PASSWORD, safe='')}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
         return self
