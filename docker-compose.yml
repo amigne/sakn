@@ -34,7 +34,11 @@ services:
       context: ./src/backend
       dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://sakn:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sakn}
+      - POSTGRES_USER=${POSTGRES_USER:-sakn}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-sakn}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
       - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0}
       - HOST=0.0.0.0

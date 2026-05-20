@@ -10,7 +10,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Escape % to %% — configparser interprets % as interpolation variable prefix
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 target_metadata = Base.metadata
 
 

@@ -4,11 +4,14 @@ set -e
 echo "SAKN backend startup..."
 
 # Wait for PostgreSQL (poll until we can connect with python)
+# NOTE: config.py MUST remain importable without database or network access.
+# The inline python import below is the single source of truth for DATABASE_URL assembly.
 echo "Waiting for PostgreSQL..."
 until python -c "
-import asyncio, asyncpg, os, sys
+import asyncio, asyncpg, sys
+from app.config import settings
 async def check():
-    dsn = os.getenv('DATABASE_URL')
+    dsn = settings.DATABASE_URL
     if not dsn:
         sys.exit(1)
     dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://', 1)

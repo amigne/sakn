@@ -103,7 +103,7 @@ All present ✅. Server header removed (`-Server` in Caddy config).
 ### Bug #2 — `docker-compose.yml` DATABASE_URL password encoding
 - **Root cause**: `POSTGRES_PASSWORD` interpolated directly into URL without URL-encoding
 - **Impact**: Passwords containing `/`, `@`, `:`, `%` produce malformed URLs
-- **Fix**: Documented as known limitation. Workaround: use URL-safe passwords
+- **Fix**: Fixed in #90 — `config.py` assembles `DATABASE_URL` with `quote_plus` on user and password
 
 ### Bug #3 — Caddyfile WebSocket route mismatch
 - **Root cause**: Caddy route `/api/v1/tools/*/ws` doesn't match backend route `/{tool_name}/stream`

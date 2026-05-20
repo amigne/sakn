@@ -1,3 +1,5 @@
+from urllib.parse import quote_plus
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
 
@@ -7,6 +9,24 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./sakn.db"
+    POSTGRES_USER: str = "sakn"
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_HOST: str = "postgres"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "sakn"
+
+    @model_validator(mode="after")
+    def assemble_database_url(self) -> "Settings":
+        # Keep explicit DATABASE_URL as-is for backward compatibility
+        if "DATABASE_URL" in self.model_fields_set:
+            return self
+        if self.POSTGRES_PASSWORD:
+            self.DATABASE_URL = (
+                f"postgresql+asyncpg://{quote_plus(self.POSTGRES_USER)}"
+                f":{quote_plus(self.POSTGRES_PASSWORD)}"
+                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
+        return self
 
     # Security
     SECRET_KEY: str = "change-me-in-production-use-at-least-32-bytes-base64"
