@@ -6,12 +6,11 @@ echo "SAKN backend startup..."
 # Wait for PostgreSQL (poll until we can connect with python)
 echo "Waiting for PostgreSQL..."
 until python -c "
-import asyncio, asyncpg, os
+import asyncio, asyncpg, os, sys
 async def check():
     dsn = os.getenv('DATABASE_URL')
     if not dsn:
-        print('DATABASE_URL is not set', file=sys.stderr)
-        return False
+        sys.exit(1)
     dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://', 1)
     try:
         conn = await asyncio.wait_for(
@@ -22,7 +21,7 @@ async def check():
         return True
     except Exception:
         return False
-asyncio.run(check()) or exit(1)
+asyncio.run(check()) or sys.exit(1)
 " 2>/dev/null; do
   echo "PostgreSQL not ready — retrying in 2s..."
   sleep 2

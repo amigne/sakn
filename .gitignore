@@ -15,6 +15,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+.env.prod-test
 
 # Docker compose
 docker-compose.local.yml
