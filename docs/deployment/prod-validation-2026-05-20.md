@@ -63,7 +63,8 @@ GET /api/v1/tools → Returns 4 tools (ping, traceroute, dns_lookup, ssl_viewer)
 
 ### WebSocket
 - Direct backend: WebSocket upgrade OK, connection established
-- Via Caddy HTTPS: Requires valid TLS cert (test limitation, not a bug)
+- Via Caddy HTTPS (wss://): Handshake OK, bidirectionnel frames OK — `websocat -k` pour contourner le cert self-signed
+- Ping complet testé: `{"type":"start","params":{"target":"1.1.1.1","count":2}}` → 2 frames `result` + 1 frame `complete` (2/2 transmitted, 0 loss)
 - Caddy route fixed: `/api/v1/tools/*/ws` → `/api/v1/tools/*/stream` (was mismatched)
 
 ## Step 5 — Security Headers
@@ -117,7 +118,7 @@ All present ✅. Server header removed (`-Server` in Caddy config).
 ## Known Limitations
 
 - SMTP not tested: `smtp.example.com` is a dummy host (email sending fails silently in test)
-- WebSocket via Caddy HTTPS not tested: self-signed cert doesn't work with websocket clients
+- WebSocket via Caddy HTTPS: tested OK with `websocat -k` (self-signed cert requires --insecure flag)
 - Scheduler jobs not tested end-to-end: cron timing requires production runtime
 
 ## Final State
