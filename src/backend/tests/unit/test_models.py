@@ -91,6 +91,25 @@ async def test_create_role_permission(db_session):
 
 
 @pytest.mark.asyncio
+async def test_role_permission_unique_constraint(db_session):
+    """Inserting a duplicate (role, tool_id) must raise IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+    from app.models.base import new_uuid7
+    from app.models.tool_module import RoleToolPermission
+
+    tool = await create_tool_module(db_session, name="unique-ping")
+
+    perm1 = RoleToolPermission(id=new_uuid7(), role="visitor", tool_id=tool.id, allowed=True)
+    db_session.add(perm1)
+    await db_session.flush()
+
+    perm2 = RoleToolPermission(id=new_uuid7(), role="visitor", tool_id=tool.id, allowed=False)
+    db_session.add(perm2)
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
 async def test_create_rate_limit_config(db_session):
     config = await create_rate_limit_config(db_session, role="authenticated", soft_limit=1, hard_limit=500)
     assert config.role == "authenticated"

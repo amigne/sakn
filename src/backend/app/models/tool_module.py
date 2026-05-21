@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUID7Mixin, TimestampMixin
@@ -20,6 +20,10 @@ class RoleToolPermission(Base, UUID7Mixin):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     tool_id: Mapped[str] = mapped_column(ForeignKey("tool_modules.id", ondelete="CASCADE"), nullable=False)
     allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("role", "tool_id", name="uq_role_tool_permission_role_tool"),
+    )
 
 
 class RateLimitConfig(Base, UUID7Mixin):

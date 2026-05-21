@@ -304,9 +304,24 @@ async def _check_tool_access(
     )
     perm = perm_row.scalar_one_or_none()
     if perm is None:
+        from sqlalchemy.exc import IntegrityError
+
         perm = RoleToolPermission(role=role, tool_id=tool_mod.id, allowed=True)
         session.add(perm)
-        await session.flush()
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            # Race: another request created the row between our SELECT and INSERT
+            perm_row = await session.execute(
+                select(RoleToolPermission).where(
+                    RoleToolPermission.role == role,
+                    RoleToolPermission.tool_id == tool_mod.id,
+                )
+            )
+            perm = perm_row.scalar_one_or_none()
+            if perm is None:
+                raise  # should not happen — constraint exists, must be a different error
     if not perm.allowed:
         raise HTTPException(
             status_code=403,
