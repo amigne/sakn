@@ -208,6 +208,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                         from app.redis.session_store import get_session as redis_get
                         redis_data = await redis_get(token_hash)
                     except Exception:
+                        logger.exception("Redis session lookup failed for WS")
                         redis_data = None
 
                     if redis_data:
