@@ -96,8 +96,14 @@ export function useWebSocket<TResult = unknown, TSummary = unknown>(
         }
       };
 
-      ws.onclose = () => {
-        if (!cancelledRef.current && status === "running") {
+      ws.onclose = (event: CloseEvent) => {
+        if (cancelledRef.current) return;
+        // Application-level close codes (4000-4999) indicate a rejection
+        // before the WebSocket handshake completes.
+        if (event.code >= 4000 && event.code <= 4999) {
+          setError(`connection_closed_${event.code}`);
+          setStatus("error");
+        } else if (status === "running") {
           setStatus("completed");
         }
       };

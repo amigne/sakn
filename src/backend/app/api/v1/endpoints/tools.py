@@ -174,14 +174,14 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     from app.websocket.handlers.traceroute_ws import handle_traceroute_stream
 
     if tool_name not in ("ping", "traceroute"):
-        await websocket.close(code=WS_CLOSE_UNKNOWN_TOOL)
+        await websocket.close(code=WS_CLOSE_UNKNOWN_TOOL, reason="unknown_tool")
         return
 
     # CSWSH protection: validate Origin BEFORE any DB/Redis query
     origin = websocket.headers.get("origin")
     if not _is_allowed_origin(origin):
         logger.warning("WebSocket origin rejected: tool=%s origin=%s", tool_name, origin)
-        await websocket.close(code=WS_CLOSE_INVALID_ORIGIN)
+        await websocket.close(code=WS_CLOSE_INVALID_ORIGIN, reason="origin_not_allowed")
         return
 
     # Resolve session and check access BEFORE accepting
@@ -203,7 +203,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 )
                 tool_mod = row.scalar_one_or_none()
                 if tool_mod is None or not tool_mod.enabled:
-                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED)
+                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED, reason="tool_disabled")
                     return
 
                 # Resolve user from session
@@ -243,7 +243,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 )
                 perm = perm_row.scalar_one_or_none()
                 if perm is None or not perm.allowed:
-                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED)
+                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED, reason="permission_denied")
                     return
 
                 # Check rate limit (WebSocket bypasses BaseHTTPMiddleware)
@@ -275,14 +275,14 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                         await db.commit()
                     except Exception:
                         logger.exception("Failed to log WS rate limit security event")
-                    await websocket.close(code=WS_CLOSE_RATE_LIMITED)
+                    await websocket.close(code=WS_CLOSE_RATE_LIMITED, reason="rate_limit_exceeded")
                     return
         else:
-            await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE)
+            await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE, reason="db_unavailable")
             return
     except Exception:
         logger.exception("DB error during WebSocket authorization check for tool=%s", tool_name)
-        await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE)
+        await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE, reason="db_unavailable")
         return
 
     manager = _get_ws_manager(websocket.app)

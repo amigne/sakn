@@ -57,6 +57,7 @@ class TestWebSocketExceptionFailClosed:
 
             ws.close.assert_called_once()
             assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+            assert ws.close.call_args[1]["reason"] == "db_unavailable"
             mock_log.assert_called_once()
             assert "DB error" in mock_log.call_args[0][0]
         finally:
@@ -80,6 +81,7 @@ class TestWebSocketExceptionFailClosed:
             await tools_mod.tool_stream(ws, "ping")
             ws.close.assert_called_once()
             assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+            assert ws.close.call_args[1]["reason"] == "db_unavailable"
         finally:
             db_module.async_session_factory = original
 
@@ -96,6 +98,7 @@ class TestWebSocketDBUnavailable:
 
         ws.close.assert_called_once()
         assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+        assert ws.close.call_args[1]["reason"] == "db_unavailable"
         # Accept must NOT have been called
         ws.accept.assert_not_called()
 
@@ -158,6 +161,7 @@ class TestWebSocketRateLimit:
             assert ws2.close.call_args[1]["code"] == WS_CLOSE_RATE_LIMITED, (
                 f"Expected WS_CLOSE_RATE_LIMITED, got {ws2.close.call_args}"
             )
+            assert ws2.close.call_args[1]["reason"] == "rate_limit_exceeded"
         finally:
             db_module.async_session_factory = original_factory
             tools_mod.async_session_factory = original_tools_factory
@@ -240,6 +244,7 @@ class TestWebSocketRedisSessionException:
             ws2 = _make_mock_ws(cookies=cookies)
             await tools_mod.tool_stream(ws2, "ping")
             assert ws2.close.call_args[1]["code"] == WS_CLOSE_RATE_LIMITED
+            assert ws2.close.call_args[1]["reason"] == "rate_limit_exceeded"
 
             # Verify SecurityEventLog row was created
             from app.models.log import SecurityEventLog
@@ -276,6 +281,7 @@ class TestWebSocketOriginValidation:
         # Should close with DB_UNAVAILABLE (4503), meaning origin check passed
         ws.close.assert_called_once()
         assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+        assert ws.close.call_args[1]["reason"] == "db_unavailable"
 
     @pytest.mark.asyncio
     async def test_origin_absent_rejected_when_flag_true(self):
@@ -288,6 +294,7 @@ class TestWebSocketOriginValidation:
 
         ws.close.assert_called_once()
         assert ws.close.call_args[1]["code"] == WS_CLOSE_INVALID_ORIGIN
+        assert ws.close.call_args[1]["reason"] == "origin_not_allowed"
 
     @pytest.mark.asyncio
     async def test_origin_not_in_allowlist_rejected(self):
@@ -298,3 +305,4 @@ class TestWebSocketOriginValidation:
 
         ws.close.assert_called_once()
         assert ws.close.call_args[1]["code"] == WS_CLOSE_INVALID_ORIGIN
+        assert ws.close.call_args[1]["reason"] == "origin_not_allowed"
