@@ -42,7 +42,8 @@ function getDirForLang(_lang: string): "ltr" | "rtl" {
 export function setLanguage(lang: string): void {
   if (!SUPPORTED_LANGUAGES.includes(lang as (typeof SUPPORTED_LANGUAGES)[number])) return;
   i18n.changeLanguage(lang);
-  document.cookie = `lang=${lang};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  const secureFlag = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `lang=${lang};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax${secureFlag}`;
   document.documentElement.lang = lang;
   document.documentElement.dir = getDirForLang(lang);
 }
