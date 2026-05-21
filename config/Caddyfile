@@ -6,7 +6,7 @@ http://{$DOMAIN} {
 # HTTPS site (ACME auto)
 {$DOMAIN} {
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"

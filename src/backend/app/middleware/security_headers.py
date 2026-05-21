@@ -9,8 +9,10 @@ _EXEMPT_PREFIXES = {"/docs", "/redoc", "/openapi.json"}
 
 # Security header values — computed once at import time
 _CSP_HEADER = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data:; connect-src 'self' ws: wss:; form-action 'self'"
+    "default-src 'self'; script-src 'self'; style-src-elem 'self'; "
+    "style-src-attr 'unsafe-inline'; img-src 'self' data:; "
+    "connect-src 'self' ws: wss:; form-action 'self'; "
+    "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 )
 _HSTS_HEADER = "max-age=63072000; includeSubDomains"
 

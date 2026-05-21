@@ -321,6 +321,12 @@ class TestSecurityHeaders:
         assert resp.headers.get("X-Frame-Options") == "DENY"
         assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
         assert "Content-Security-Policy" in resp.headers
+        csp = resp.headers["Content-Security-Policy"]
+        assert "style-src-elem 'self'" in csp
+        assert "style-src-attr 'unsafe-inline'" in csp
+        assert "object-src 'none'" in csp
+        assert "base-uri 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
 
 
 class TestIPBruteForce:
