@@ -14,23 +14,35 @@ from tests.factories import create_user
 
 async def _create_admin_session(client: AsyncClient, db) -> tuple[str, str]:
     """Create an admin user, set up a session, and return (user_id, session_token)."""
-    from app.models import Session
+    from datetime import timedelta
 
-    user = await create_user(
-        db,
-        email="admin@test.com",
-        password_hash=hash_password("adminpass"),
-        role="administrator",
+    from app.models import Session, User
+    from app.models.base import new_uuid7, utcnow
+    from sqlalchemy import select as sa_select
+
+    # Check if admin already exists (committed from a previous test)
+    existing = await db.execute(
+        sa_select(User).where(User.email == "admin@test.com")
     )
+    user = existing.scalar_one_or_none()
+    if user is None:
+        user = await create_user(
+            db,
+            email="admin@test.com",
+            password_hash=hash_password("adminpass"),
+            role="administrator",
+        )
+
     session_token = generate_token()
     session = Session(
-        id="ses_admin",
+        id=new_uuid7(),
         user_id=user.id,
         token_hash=hash_token(session_token),
         ip_address="127.0.0.1",
+        expires_at=utcnow() + timedelta(hours=24),
     )
     db.add(session)
-    await db.flush()
+    await db.commit()
     return user.id, session_token
 
 
@@ -150,3 +162,65 @@ class TestAdminRateLimits:
             cookies={"sakn_session": token},
         )
         assert response.status_code == 200
+
+
+class TestAdminLikeEscape:
+    """Issue #50: LIKE wildcards (% and _) must be escaped in admin user search."""
+
+    @pytest.mark.asyncio
+    async def test_search_percent_escaped(self, client: AsyncClient, db_session):
+        """Search for % should match only literal %, not all users."""
+        # Create test users BEFORE _create_admin_session (which commits)
+        await create_user(db_session, email="wildcard%test@example.com")
+        await create_user(db_session, email="normal@example.com")
+
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        resp = await client.get(
+            "/api/v1/admin/users",
+            params={"search": "%"},
+            cookies={"sakn_session": token},
+        )
+        assert resp.status_code == 200
+        users = resp.json()["users"]
+        emails = [u["email"] for u in users]
+        assert "wildcard%test@example.com" in emails
+        assert "normal@example.com" not in emails
+
+    @pytest.mark.asyncio
+    async def test_search_underscore_escaped(self, client: AsyncClient, db_session):
+        """Search for _ should match only literal _, not any single character."""
+        await create_user(db_session, email="test_user@example.com")
+        await create_user(db_session, email="testZuser@example.com")
+
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        resp = await client.get(
+            "/api/v1/admin/users",
+            params={"search": "_"},
+            cookies={"sakn_session": token},
+        )
+        assert resp.status_code == 200
+        users = resp.json()["users"]
+        emails = [u["email"] for u in users]
+        assert "test_user@example.com" in emails
+        assert "testZuser@example.com" not in emails
+
+    @pytest.mark.asyncio
+    async def test_search_backslash_escaped(self, client: AsyncClient, db_session):
+        """Search with backslash should be properly escaped and match literal backslash."""
+        await create_user(db_session, email="bslash\\user@example.com")
+        await create_user(db_session, email="bslashZuser@example.com")
+
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        resp = await client.get(
+            "/api/v1/admin/users",
+            params={"search": "\\"},
+            cookies={"sakn_session": token},
+        )
+        assert resp.status_code == 200
+        users = resp.json()["users"]
+        emails = [u["email"] for u in users]
+        assert "bslash\\user@example.com" in emails
+        assert "bslashZuser@example.com" not in emails
