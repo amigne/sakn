@@ -17,8 +17,18 @@ async def test_health_endpoint_minimal(client):
 
 
 @pytest.mark.asyncio
-async def test_health_full_missing_token(client):
-    """/health/full returns 401 when token is missing."""
+async def test_health_full_not_configured(client):
+    """/health/full returns 503 when HEALTH_FULL_TOKEN is not set."""
+    response = await client.get("/health/full")
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"]["code"] == "SERVICE_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_health_full_missing_token(client, monkeypatch):
+    """/health/full returns 401 when token is missing but endpoint IS configured."""
+    monkeypatch.setattr("app.main.settings.HEALTH_FULL_TOKEN", "configured-token")
     response = await client.get("/health/full")
     assert response.status_code == 401
     data = response.json()
@@ -26,29 +36,24 @@ async def test_health_full_missing_token(client):
 
 
 @pytest.mark.asyncio
-async def test_health_full_bad_token(client):
+async def test_health_full_bad_token(client, monkeypatch):
     """/health/full returns 401 when token is wrong."""
+    monkeypatch.setattr("app.main.settings.HEALTH_FULL_TOKEN", "correct-token")
     response = await client.get("/health/full", headers={"X-Health-Token": "wrong"})
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_health_full_correct_token(client):
-    """/health/full returns checks when token is correct."""
-    from app.config import settings as app_settings
-
-    original = app_settings.HEALTH_FULL_TOKEN
-    app_settings.HEALTH_FULL_TOKEN = "test-health-token"
-    try:
-        response = await client.get("/health/full", headers={"X-Health-Token": "test-health-token"})
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert "checks" in data
-        assert data["checks"]["database"] in ("ok", "unavailable")
-        assert data["checks"]["redis"] in ("ok", "unavailable")
-    finally:
-        app_settings.HEALTH_FULL_TOKEN = original
+async def test_health_full_correct_token(client, monkeypatch):
+    """/health/full returns checks when token is correct (constant-time comparison)."""
+    monkeypatch.setattr("app.main.settings.HEALTH_FULL_TOKEN", "test-health-token")
+    response = await client.get("/health/full", headers={"X-Health-Token": "test-health-token"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "checks" in data
+    assert data["checks"]["database"] in ("ok", "unavailable")
+    assert data["checks"]["redis"] in ("ok", "unavailable")
 
 
 @pytest.mark.asyncio

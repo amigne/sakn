@@ -335,10 +335,21 @@ async def health_full(request: Request):
     """Full health check with database and Redis checks.
 
     Protected by X-Health-Token header matching HEALTH_FULL_TOKEN env var.
-    Returns 401 if the token is missing or incorrect.
+    Returns 503 if HEALTH_FULL_TOKEN is not configured, 401 if token is
+    missing or incorrect.
     """
+    import secrets
+
+    if not settings.HEALTH_FULL_TOKEN:
+        raise AppError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            message_key="errors.not_configured",
+            message="Health check endpoint not configured. Set HEALTH_FULL_TOKEN to enable.",
+        )
+
     token = request.headers.get("X-Health-Token", "")
-    if not settings.HEALTH_FULL_TOKEN or token != settings.HEALTH_FULL_TOKEN:
+    if not secrets.compare_digest(token.encode("utf-8"), settings.HEALTH_FULL_TOKEN.encode("utf-8")):
         raise AppError(
             status_code=401,
             code="UNAUTHORIZED",

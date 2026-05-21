@@ -43,7 +43,9 @@ binding (`if request.headers["host"] == "backend:8000"`) because:
 - Infrastructure status is no longer publicly accessible — the `/health/full`
   endpoint requires a pre-shared token.
 - Operators must set `HEALTH_FULL_TOKEN` in `.env` to enable detailed health
-  monitoring. If unset, `/health/full` returns 401.
+  monitoring. If unset, `/health/full` returns 503 (Service Unavailable);
+  this allows orchestrators to distinguish "endpoint not configured" from
+  "invalid credentials" (401).
 - The Docker Compose healthcheck command (`curl -f localhost:8000/health`) is
   unaffected — it checks the minimal endpoint, which only needs HTTP 200.
 - Sprint 1 documentation (`secrets-management.md`, `incident-response.md`)
