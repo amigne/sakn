@@ -12,6 +12,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // DEV-ONLY: The Vite dev server proxy uses unencrypted HTTP (not HTTPS).
+    // This is acceptable for local development only. In production, Caddy
+    // terminates TLS and forwards traffic to the backend over the internal
+    // Docker network. Never expose the Vite dev server to untrusted networks.
     proxy: {
       "/api": {
         target: "http://localhost:8000",
