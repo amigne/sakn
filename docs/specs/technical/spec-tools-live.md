@@ -38,6 +38,19 @@ WebSocket-based continuous tools. Load with `spec-common.md`, `spec-backend.md`,
 
 Client connects → authenticated via session cookie → sends `start` → server streams `result`/`notice` → optional client `cancel` → server sends `complete` → client closes. Server treats disconnect as implicit cancel.
 
+### 1.5 Connection Rejection Codes
+
+The server may close the WebSocket before accepting the handshake. The following close codes (RFC 6455 §7.4.2, application range 4000–4999) are defined in `src/backend/app/api/v1/endpoints/ws_codes.py`:
+
+| Constant | Code | Semantics | Trigger |
+|---|---|---|---|
+| `WS_CLOSE_INVALID_ORIGIN` | 4003 | Origin header not in CORS_ORIGINS allowlist | CSWSH check fails |
+| `WS_CLOSE_PERMISSION_DENIED` | 4003 | Access denied (tool disabled, role not allowed) | Permission check fails |
+| `WS_CLOSE_UNKNOWN_TOOL` | 4004 | Tool name not recognized | Unknown tool in WS path |
+| `WS_CLOSE_RATE_LIMITED` | 4029 | Rate limit exceeded | Visitor/authenticated hard limit hit |
+| `WS_CLOSE_INVALID_SESSION` | 4401 | Session invalid or expired (reserved) | — |
+| `WS_CLOSE_DB_UNAVAILABLE` | 4503 | Database unavailable for authorization | `is_db_available()` returns False |
+
 ---
 
 ## 2. Ping
