@@ -14,6 +14,13 @@ async def test_health_endpoint_minimal(client):
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert "Content-Security-Policy" in response.headers
+    csp = response.headers["Content-Security-Policy"]
+    # CSP style-src hardening (#22): unsafe-inline must not be in style-src-elem
+    assert "style-src-elem 'self'" in csp
+    assert "style-src-attr 'unsafe-inline'" in csp
+    assert "object-src 'none'" in csp
+    assert "base-uri 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
 
 
 @pytest.mark.asyncio

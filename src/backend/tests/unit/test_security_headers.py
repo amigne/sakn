@@ -84,3 +84,49 @@ class TestSecurityHeaders:
         request = Request(scope)
         response = await middleware.dispatch(request, call_next)
         assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+    @pytest.mark.asyncio
+    async def test_csp_style_src_elem_blocks_unsafe_inline(self, middleware, call_next):
+        """style-src-elem must allow 'self' but NOT 'unsafe-inline'."""
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        csp = response.headers["Content-Security-Policy"]
+        # Extract the style-src-elem directive value
+        elem_part = [d.strip() for d in csp.split(";") if "style-src-elem" in d][0]
+        assert "'self'" in elem_part
+        assert "'unsafe-inline'" not in elem_part
+
+    @pytest.mark.asyncio
+    async def test_csp_style_src_attr_allows_unsafe_inline(self, middleware, call_next):
+        """style-src-attr must contain 'unsafe-inline' for Radix UI Popper."""
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        csp = response.headers["Content-Security-Policy"]
+        assert "style-src-attr 'unsafe-inline'" in csp
+
+    @pytest.mark.asyncio
+    async def test_csp_hardening_directives_present(self, middleware, call_next):
+        """object-src, base-uri, frame-ancestors must all be present."""
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        csp = response.headers["Content-Security-Policy"]
+        assert "object-src 'none'" in csp
+        assert "base-uri 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
+
+    @pytest.mark.asyncio
+    async def test_csp_style_src_fallback_absent(self, middleware, call_next):
+        """Bare style-src (without -elem or -attr suffix) must NOT be present."""
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        csp = response.headers["Content-Security-Policy"]
+        import re
+        assert not re.search(r"\bstyle-src\s", csp)
