@@ -185,6 +185,81 @@ class TestWebSocketRedisSessionException:
         assert mock_log.call_args[0][0] == "Redis session lookup failed for WS"
 
 
+    @pytest.mark.asyncio
+    async def test_rate_limit_creates_security_event_log(self, db_session, _engine):
+        """Issue #62: rate limit rejection logs a SecurityEventLog row."""
+        from app.models.log import SecurityEventLog
+        from app.models.tool_module import ToolModule
+        from sqlalchemy import delete, select as sa_select
+
+        get_rate_limiter()._db_fallback.clear()
+
+        # Clean up any leftover data from previous tests
+        from app.models.tool_module import RateLimitConfig, RoleToolPermission
+        await db_session.execute(delete(SecurityEventLog))
+        await db_session.execute(delete(RateLimitConfig).where(RateLimitConfig.role == "authenticated"))
+        await db_session.execute(delete(ToolModule).where(ToolModule.name == "ping"))
+
+        user = await create_user(db_session, email="ws62@example.com")
+        tool = await create_tool_module(db_session, name="ping", enabled=True)
+        await create_role_permission(
+            db_session, role="authenticated", tool_id=tool.id, allowed=True
+        )
+
+        raw_token = generate_token()
+        await create_session(
+            db_session, user_id=user.id, token_hash=hash_token(raw_token)
+        )
+        await create_rate_limit_config(
+            db_session,
+            role="authenticated",
+            tool_id=None,
+            soft_limit=1,
+            hard_limit=1,
+        )
+        await db_session.commit()
+
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+        test_factory = async_sessionmaker(
+            _engine, class_=AsyncSession, expire_on_commit=False
+        )
+        original_factory = db_module.async_session_factory
+        original_tools_factory = tools_mod.async_session_factory
+        db_module.async_session_factory = test_factory
+        tools_mod.async_session_factory = test_factory
+
+        try:
+            cookies = f"sakn_session={raw_token}"
+
+            # Burn the one allowed request
+            ws1 = _make_mock_ws(cookies=cookies)
+            await tools_mod.tool_stream(ws1, "ping")
+
+            # This call triggers rate limit → should create SecurityEventLog
+            ws2 = _make_mock_ws(cookies=cookies)
+            await tools_mod.tool_stream(ws2, "ping")
+            assert ws2.close.call_args[1]["code"] == WS_CLOSE_RATE_LIMITED
+
+            # Verify SecurityEventLog row was created
+            from app.models.log import SecurityEventLog
+            from sqlalchemy import select
+
+            async with test_factory() as check_db:
+                row = await check_db.execute(
+                    select(SecurityEventLog).where(
+                        SecurityEventLog.event_type == "ws_rate_limit_exceeded"
+                    ).order_by(SecurityEventLog.created_at.desc()).limit(1)
+                )
+                entry = row.scalar_one_or_none()
+                assert entry is not None, "Expected SecurityEventLog row for rate limit"
+                assert entry.source_ip == "127.0.0.1"
+        finally:
+            db_module.async_session_factory = original_factory
+            tools_mod.async_session_factory = original_tools_factory
+            get_rate_limiter()._db_fallback.clear()
+
+
 class TestWebSocketOriginValidation:
     """Issue #46: Origin validation with WS_REQUIRE_ORIGIN flag (ADR-009)."""
 
