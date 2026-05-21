@@ -224,3 +224,60 @@ class TestAdminLikeEscape:
         emails = [u["email"] for u in users]
         assert "bslash\\user@example.com" in emails
         assert "bslashZuser@example.com" not in emails
+
+
+class TestAdminDnsServers:
+    """Issue #59: Admin /dns-servers endpoint requires admin auth."""
+
+    @pytest.mark.asyncio
+    async def test_non_admin_returns_403(self, client: AsyncClient):
+        """Unauthenticated request to admin DNS servers returns 401/403."""
+        response = await client.get("/api/v1/admin/modules/ping/dns-servers")
+        assert response.status_code in (401, 403)
+
+    @pytest.mark.asyncio
+    async def test_admin_gets_dns_servers(self, client: AsyncClient, db_session):
+        """Admin can list DNS server presets for a tool."""
+        from tests.factories import (
+            create_tool_module,
+            create_dns_server_preset,
+        )
+
+        # Create test data before _create_admin_session (which commits)
+        tool = await create_tool_module(
+            db_session, name="dns_admin_tool", enabled=True
+        )
+        await create_dns_server_preset(
+            db_session,
+            tool_module_id=tool.id,
+            ip_address="8.8.8.8",
+            description="Google DNS",
+            sort_order=0,
+        )
+
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.get(
+            "/api/v1/admin/modules/dns_admin_tool/dns-servers",
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tool"] == "dns_admin_tool"
+        assert "presets" in data
+        presets = data["presets"]
+        assert len(presets) >= 1
+        assert presets[0]["ip_address"] == "8.8.8.8"
+        assert "id" in presets[0]
+        assert "sort_order" in presets[0]
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_tool_returns_404(self, client: AsyncClient, db_session):
+        """Admin query for a non-existent tool returns 404."""
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.get(
+            "/api/v1/admin/modules/nonexistent/dns-servers",
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 404

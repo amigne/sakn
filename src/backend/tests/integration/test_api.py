@@ -207,3 +207,115 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
                 delete(User).where(User.email == "ratelimit-test@example.com")
             )
             await db.commit()
+
+
+class TestPublicDnsServers:
+    """Issue #59: Public /dns-servers endpoint with enabled filter + role perm."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_rate_limiter(self):
+        from app.redis.rate_limit_store import get_rate_limiter
+        get_rate_limiter()._db_fallback.clear()
+
+    @pytest.mark.asyncio
+    async def test_disabled_tool_returns_empty(self, client: AsyncClient, db_session):
+        """Disabled tool returns empty servers list."""
+        from tests.factories import (
+            create_tool_module,
+            create_role_permission,
+            create_dns_server_preset,
+        )
+
+        tool = await create_tool_module(db_session, name="dns_disabled", enabled=False)
+        await create_role_permission(
+            db_session, role="visitor", tool_id=tool.id, allowed=True
+        )
+        await create_dns_server_preset(
+            db_session, tool_module_id=tool.id, ip_address="1.2.3.4"
+        )
+        await db_session.commit()
+
+        resp = await client.get("/api/v1/tools/dns_disabled/dns-servers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"tool": "dns_disabled", "servers": []}
+
+    @pytest.mark.asyncio
+    async def test_enabled_tool_visitor_allowed_returns_presets(
+        self, client: AsyncClient, db_session,
+    ):
+        """Enabled tool with visitor allowed returns DNS presets."""
+        from tests.factories import (
+            create_tool_module,
+            create_role_permission,
+            create_dns_server_preset,
+        )
+
+        tool = await create_tool_module(
+            db_session, name="dns_enabled", enabled=True
+        )
+        await create_role_permission(
+            db_session, role="visitor", tool_id=tool.id, allowed=True
+        )
+        await create_dns_server_preset(
+            db_session,
+            tool_module_id=tool.id,
+            ip_address="8.8.8.8",
+            description="Google",
+        )
+        await db_session.commit()
+
+        resp = await client.get("/api/v1/tools/dns_enabled/dns-servers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["tool"] == "dns_enabled"
+        assert len(data["servers"]) == 1
+        assert data["servers"][0]["value"] == "8.8.8.8"
+        assert data["servers"][0]["label"] == "Google"
+
+    @pytest.mark.asyncio
+    async def test_visitor_not_allowed_returns_empty(
+        self, client: AsyncClient, db_session,
+    ):
+        """Enabled tool where visitor is not allowed returns empty."""
+        from tests.factories import (
+            create_tool_module,
+            create_role_permission,
+            create_dns_server_preset,
+        )
+
+        tool = await create_tool_module(
+            db_session, name="dns_visitor_denied", enabled=True
+        )
+        await create_role_permission(
+            db_session, role="visitor", tool_id=tool.id, allowed=False
+        )
+        await create_dns_server_preset(
+            db_session, tool_module_id=tool.id, ip_address="1.2.3.4"
+        )
+        await db_session.commit()
+
+        resp = await client.get("/api/v1/tools/dns_visitor_denied/dns-servers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"tool": "dns_visitor_denied", "servers": []}
+
+    @pytest.mark.asyncio
+    async def test_no_role_permission_returns_empty(
+        self, client: AsyncClient, db_session,
+    ):
+        """Enabled tool with no role permission row at all returns empty."""
+        from tests.factories import create_tool_module, create_dns_server_preset
+
+        tool = await create_tool_module(
+            db_session, name="dns_no_perm", enabled=True
+        )
+        await create_dns_server_preset(
+            db_session, tool_module_id=tool.id, ip_address="1.2.3.4"
+        )
+        await db_session.commit()
+
+        resp = await client.get("/api/v1/tools/dns_no_perm/dns-servers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"tool": "dns_no_perm", "servers": []}
