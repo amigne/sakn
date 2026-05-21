@@ -38,6 +38,17 @@ WebSocket-based continuous tools. Load with `spec-common.md`, `spec-backend.md`,
 
 Client connects → authenticated via session cookie → sends `start` → server streams `result`/`notice` → optional client `cancel` → server sends `complete` → client closes. Server treats disconnect as implicit cancel.
 
+### 1.4.1 Fail-Mode Policy
+
+The WebSocket endpoint depends on two external services during authorization: Redis (session cache, rate-limit counters) and the database (tool config, user/session tables, permissions, rate-limit config). Their failure modes are intentionally asymmetric:
+
+| Service | Failure mode | Rationale |
+|---|---|---|
+| **Redis** | **Fail-open** | Counting loss is acceptable. Rate-limit counters fall back to in-memory store (`rate_limit_store.py`). Session cache miss falls through to database lookup. Neither path blocks a legitimate request when Redis is degraded. |
+| **Database** | **Fail-closed** | Integrity risk. All authorization checks (tool enabled, session validation, user role, permissions, rate-limit config) require the database. Without it, the server cannot distinguish authorized from unauthorized — the safe default is to reject with close code `4503` (`WS_CLOSE_DB_UNAVAILABLE`). |
+
+**HTTP counterpart:** The HTTP rate-limit middleware (`middleware/rate_limit.py`) is fail-open on database unavailability because authentication is handled by a separate middleware layer. The WebSocket path bundles authentication and rate-limiting in a single database-dependent code path, making fail-closed the correct choice.
+
 ### 1.5 Connection Rejection Codes
 
 The server may close the WebSocket before accepting the handshake. The following close codes (RFC 6455 §7.4.2, application range 4000–4999) are defined in `src/backend/app/api/v1/endpoints/ws_codes.py`:
