@@ -1,6 +1,65 @@
+from unittest.mock import MagicMock, patch
+
+import dns.name
+import dns.resolver
 import pytest
 
-from app.security.address_filter import is_ip_blocked, filter_target, BLOCKED_NETWORKS
+from app.security.address_filter import (
+    is_ip_blocked,
+    filter_target,
+    resolve_hostname,
+    BLOCKED_NETWORKS,
+    CNAME_MAX_HOPS,
+)
+
+# ── Mock helpers for DNS resolver ────────────────────────────────────────────
+
+
+def _make_answer(rrset_items):
+    """Build a mock dns.resolver.Answer with an rrset of records."""
+    answer = MagicMock()
+    answer.rrset = rrset_items if rrset_items else None
+    return answer
+
+
+def _a_record(ip):
+    """A mock A/AAAA record that stringifies to the given IP."""
+    r = MagicMock()
+    r.__str__ = MagicMock(return_value=ip)
+    return r
+
+
+def _cname_record(target):
+    """A mock CNAME record whose .target stringifies to `target`."""
+    r = MagicMock()
+    name = dns.name.from_text(target)
+    r.target = name
+    return r
+
+
+def _empty_answer():
+    """A mock answer with no rrset (NXDOMAIN-like but not raised)."""
+    return _make_answer(None)
+
+
+def _resolver_from_map(response_map):
+    """Return a mock resolver whose .resolve(name, rdtype, **kw) looks up
+    (name, rdtype) in *response_map*.  Keys are ``(name.lower(), rdtype)``.
+    Values can be a mock answer, an exception to raise, or ``None`` for an
+    empty rrset.
+    """
+    def _resolve(name, rdtype, raise_on_no_answer=False):
+        key = (str(name).lower(), rdtype)
+        value = response_map.get(key)
+        if isinstance(value, Exception):
+            raise value
+        if value is None:
+            return _empty_answer()
+        return value
+
+    resolver = MagicMock()
+    resolver.resolve = _resolve
+    return resolver
 
 
 class TestIsIPBlocked:
@@ -77,3 +136,114 @@ async def test_filter_target_invalid():
 
 def test_blocked_networks_count():
     assert len(BLOCKED_NETWORKS) > 15
+
+
+class TestResolveHostname:
+    """Issue #66: CNAME chain walking with blocklist enforcement per hop."""
+
+    @pytest.mark.asyncio
+    async def test_cname_chain_to_public_ip_returns_ips(self):
+        """CNAME alias → public IP: the resolved IPs are returned."""
+        response_map = {
+            ("alias.example.com", "A"): _empty_answer(),
+            ("alias.example.com", "AAAA"): _empty_answer(),
+            ("alias.example.com", "CNAME"): _make_answer(
+                [_cname_record("real.example.com")]
+            ),
+            ("real.example.com", "A"): _make_answer([_a_record("8.8.8.8")]),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("alias.example.com")
+            assert result == ["8.8.8.8"]
+
+    @pytest.mark.asyncio
+    async def test_cname_chain_to_private_ip_returns_empty(self):
+        """CNAME alias → RFC1918 IP: blocked → returns empty list."""
+        response_map = {
+            ("alias.example.com", "A"): _empty_answer(),
+            ("alias.example.com", "AAAA"): _empty_answer(),
+            ("alias.example.com", "CNAME"): _make_answer(
+                [_cname_record("internal.example.com")]
+            ),
+            ("internal.example.com", "A"): _make_answer(
+                [_a_record("192.168.1.1")]
+            ),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("alias.example.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_cname_loop_detection_returns_empty(self):
+        """a → b → a returns empty list when a CNAME loop is detected."""
+        response_map = {
+            ("a.example.com", "A"): _empty_answer(),
+            ("a.example.com", "AAAA"): _empty_answer(),
+            ("a.example.com", "CNAME"): _make_answer(
+                [_cname_record("b.example.com")]
+            ),
+            ("b.example.com", "A"): _empty_answer(),
+            ("b.example.com", "AAAA"): _empty_answer(),
+            ("b.example.com", "CNAME"): _make_answer(
+                [_cname_record("a.example.com")]
+            ),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("a.example.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_nxdomain_mid_chain_returns_empty(self):
+        """NXDOMAIN at any hop returns empty."""
+        response_map = {
+            ("alias.example.com", "A"): _empty_answer(),
+            ("alias.example.com", "AAAA"): _empty_answer(),
+            ("alias.example.com", "CNAME"): _make_answer(
+                [_cname_record("missing.example.com")]
+            ),
+            ("missing.example.com", "A"): dns.resolver.NXDOMAIN(),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("alias.example.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_max_hops_exceeded_returns_empty(self):
+        """Chain longer than CNAME_MAX_HOPS returns empty."""
+        # Build a chain: hop0 → hop1 → hop2 → ... → hop{CNAME_MAX_HOPS}
+        response_map = {}
+        for i in range(CNAME_MAX_HOPS):
+            current = f"hop{i}.example.com"
+            next_hop = f"hop{i + 1}.example.com"
+            response_map[(current, "A")] = _empty_answer()
+            response_map[(current, "AAAA")] = _empty_answer()
+            response_map[(current, "CNAME")] = _make_answer(
+                [_cname_record(next_hop)]
+            )
+        # The last hop has no records → unresolvable (returns [] before max hops check)
+        # So we need one more hop with a CNAME to actually exceed max
+        last = f"hop{CNAME_MAX_HOPS}.example.com"
+        response_map[(last, "A")] = _empty_answer()
+        response_map[(last, "AAAA")] = _empty_answer()
+        response_map[(last, "CNAME")] = _make_answer(
+            [_cname_record(f"hop{CNAME_MAX_HOPS + 1}.example.com")]
+        )
+
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("hop0.example.com")
+            assert result == []
