@@ -21,6 +21,9 @@ async def test_health_endpoint_minimal(client):
     assert "object-src 'none'" in csp
     assert "base-uri 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+    assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert response.headers["Cross-Origin-Embedder-Policy"] == "unsafe-none"
 
 
 @pytest.mark.asyncio
