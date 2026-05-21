@@ -1,4 +1,6 @@
 """Test silent upgrade of legacy SHA-256 session hashes to HMAC (ADR-007)."""
+from datetime import timedelta
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -39,7 +41,7 @@ async def test_legacy_session_authenticates_and_upgrades(
         user_id=user.id,
         token_hash=legacy_hash,  # <-- stored as legacy SHA-256
         ip_address="127.0.0.1",
-        expires_at=utcnow().replace(hour=23),
+        expires_at=utcnow() + timedelta(hours=23),
         last_activity_at=utcnow(),
         created_at=utcnow(),
     )
@@ -93,7 +95,7 @@ async def test_hmac_session_works_directly(
         user_id=user.id,
         token_hash=hmac_hash,
         ip_address="127.0.0.1",
-        expires_at=utcnow().replace(hour=23),
+        expires_at=utcnow() + timedelta(hours=23),
         last_activity_at=utcnow(),
         created_at=utcnow(),
     )
