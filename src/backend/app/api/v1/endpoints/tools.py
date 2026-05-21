@@ -258,6 +258,23 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                     tool_id=tool_mod.id,
                 )
                 if not rate_result.allowed:
+                    try:
+                        from app.services.log_service import create_security_event_log
+                        await create_security_event_log(
+                            db,
+                            event_type="ws_rate_limit_exceeded",
+                            source_ip=source_ip,
+                            user_id=user_id,
+                            details={
+                                "tool": tool_name,
+                                "limit_type": rate_result.limit_type,
+                                "soft_count": rate_result.soft_count,
+                                "hard_count": rate_result.hard_count,
+                            },
+                        )
+                        await db.commit()
+                    except Exception:
+                        logger.exception("Failed to log WS rate limit security event")
                     await websocket.close(code=WS_CLOSE_RATE_LIMITED)
                     return
         else:
