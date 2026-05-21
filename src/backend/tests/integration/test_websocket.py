@@ -12,6 +12,10 @@ import pytest
 
 import app.api.v1.endpoints.tools as tools_mod
 import app.database as db_module
+from app.api.v1.endpoints.ws_codes import (
+    WS_CLOSE_DB_UNAVAILABLE,
+    WS_CLOSE_RATE_LIMITED,
+)
 from app.security.tokens import generate_token, hash_token
 from app.redis.rate_limit_store import get_rate_limiter
 from tests.factories import (
@@ -32,11 +36,11 @@ def _make_mock_ws(origin="http://localhost:5173", cookies=""):
 
 
 class TestWebSocketExceptionFailClosed:
-    """Issue #43: WebSocket closes with 4503 when DB raises during pre-accept."""
+    """Issue #43: WebSocket closes with WS_CLOSE_DB_UNAVAILABLE when DB raises during pre-accept."""
 
     @pytest.mark.asyncio
-    async def test_db_exception_during_init_closes_4503_and_logs(self):
-        """If async_session_factory raises, the WS closes with 4503."""
+    async def test_db_exception_during_init_closes_WS_CLOSE_DB_UNAVAILABLE_and_logs(self):
+        """If async_session_factory raises, the WS closes with WS_CLOSE_DB_UNAVAILABLE."""
         ws = _make_mock_ws()
         original = db_module.async_session_factory
 
@@ -51,15 +55,15 @@ class TestWebSocketExceptionFailClosed:
                 await tools_mod.tool_stream(ws, "ping")
 
             ws.close.assert_called_once()
-            assert ws.close.call_args[1]["code"] == 4503
+            assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
             mock_log.assert_called_once()
             assert "DB error" in mock_log.call_args[0][0]
         finally:
             db_module.async_session_factory = original
 
     @pytest.mark.asyncio
-    async def test_db_session_aenter_failure_closes_4503(self):
-        """If the DB session context manager raises on __aenter__, close 4503."""
+    async def test_db_session_aenter_failure_closes_WS_CLOSE_DB_UNAVAILABLE(self):
+        """If the DB session context manager raises on __aenter__, close WS_CLOSE_DB_UNAVAILABLE."""
 
         class _FailingCtx:
             async def __aenter__(self):
@@ -74,33 +78,33 @@ class TestWebSocketExceptionFailClosed:
         try:
             await tools_mod.tool_stream(ws, "ping")
             ws.close.assert_called_once()
-            assert ws.close.call_args[1]["code"] == 4503
+            assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
         finally:
             db_module.async_session_factory = original
 
 
 class TestWebSocketDBUnavailable:
-    """Issue #60: WebSocket closes with 4503 when is_db_available() returns False."""
+    """Issue #60: WebSocket closes with WS_CLOSE_DB_UNAVAILABLE when is_db_available() returns False."""
 
     @pytest.mark.asyncio
-    async def test_db_unavailable_closes_4503(self):
-        """When is_db_available() is False, close immediately with 4503."""
+    async def test_db_unavailable_closes_WS_CLOSE_DB_UNAVAILABLE(self):
+        """When is_db_available() is False, close immediately with WS_CLOSE_DB_UNAVAILABLE."""
         ws = _make_mock_ws()
         with patch.object(db_module, "is_db_available", return_value=False):
             await tools_mod.tool_stream(ws, "traceroute")
 
         ws.close.assert_called_once()
-        assert ws.close.call_args[1]["code"] == 4503
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
         # Accept must NOT have been called
         ws.accept.assert_not_called()
 
 
 class TestWebSocketRateLimit:
-    """Issue #61: WebSocket closes with 4029 when rate limit is exceeded."""
+    """Issue #61: WebSocket closes with WS_CLOSE_RATE_LIMITED when rate limit is exceeded."""
 
     @pytest.mark.asyncio
-    async def test_rate_limit_rejected_with_4029(self, db_session, _engine):
-        """Second connection attempt should be rate-limited with code 4029."""
+    async def test_rate_limit_rejected_with_WS_CLOSE_RATE_LIMITED(self, db_session, _engine):
+        """Second connection attempt should be rate-limited with code WS_CLOSE_RATE_LIMITED."""
         get_rate_limiter()._db_fallback.clear()
 
         # Seed test data
@@ -142,7 +146,7 @@ class TestWebSocketRateLimit:
 
             # First call should NOT be rate-limited
             await tools_mod.tool_stream(ws1, "ping")
-            assert ws1.close.call_args is None or ws1.close.call_args[1]["code"] != 4029, (
+            assert ws1.close.call_args is None or ws1.close.call_args[1]["code"] != WS_CLOSE_RATE_LIMITED, (
                 f"First connection should not be rate-limited"
             )
 
@@ -150,8 +154,8 @@ class TestWebSocketRateLimit:
             ws2 = _make_mock_ws(cookies=cookies)
             await tools_mod.tool_stream(ws2, "ping")
             ws2.close.assert_called_once()
-            assert ws2.close.call_args[1]["code"] == 4029, (
-                f"Expected 4029, got {ws2.close.call_args}"
+            assert ws2.close.call_args[1]["code"] == WS_CLOSE_RATE_LIMITED, (
+                f"Expected WS_CLOSE_RATE_LIMITED, got {ws2.close.call_args}"
             )
         finally:
             db_module.async_session_factory = original_factory

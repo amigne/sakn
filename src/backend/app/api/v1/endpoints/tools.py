@@ -9,6 +9,13 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import get_session, async_session_factory
 from app.tools.registry import ToolRegistry
+from app.api.v1.endpoints.ws_codes import (
+    WS_CLOSE_DB_UNAVAILABLE,
+    WS_CLOSE_INVALID_ORIGIN,
+    WS_CLOSE_PERMISSION_DENIED,
+    WS_CLOSE_RATE_LIMITED,
+    WS_CLOSE_UNKNOWN_TOOL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,14 +163,14 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     from app.websocket.handlers.traceroute_ws import handle_traceroute_stream
 
     if tool_name not in ("ping", "traceroute"):
-        await websocket.close(code=4004)
+        await websocket.close(code=WS_CLOSE_UNKNOWN_TOOL)
         return
 
     # CSWSH protection: validate Origin BEFORE any DB/Redis query
     origin = websocket.headers.get("origin")
     if not _is_allowed_origin(origin):
         logger.warning("WebSocket origin rejected: tool=%s origin=%s", tool_name, origin)
-        await websocket.close(code=4003)
+        await websocket.close(code=WS_CLOSE_INVALID_ORIGIN)
         return
 
     # Resolve session and check access BEFORE accepting
@@ -185,7 +192,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 )
                 tool_mod = row.scalar_one_or_none()
                 if tool_mod is None or not tool_mod.enabled:
-                    await websocket.close(code=4003)
+                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED)
                     return
 
                 # Resolve user from session
@@ -224,7 +231,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                 )
                 perm = perm_row.scalar_one_or_none()
                 if perm is None or not perm.allowed:
-                    await websocket.close(code=4003)
+                    await websocket.close(code=WS_CLOSE_PERMISSION_DENIED)
                     return
 
                 # Check rate limit (WebSocket bypasses BaseHTTPMiddleware)
@@ -239,14 +246,14 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
                     tool_id=tool_mod.id,
                 )
                 if not rate_result.allowed:
-                    await websocket.close(code=4029)
+                    await websocket.close(code=WS_CLOSE_RATE_LIMITED)
                     return
         else:
-            await websocket.close(code=4503)
+            await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE)
             return
     except Exception:
         logger.exception("DB error during WebSocket authorization check for tool=%s", tool_name)
-        await websocket.close(code=4503)
+        await websocket.close(code=WS_CLOSE_DB_UNAVAILABLE)
         return
 
     manager = _get_ws_manager(websocket.app)
