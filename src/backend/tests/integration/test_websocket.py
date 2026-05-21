@@ -14,6 +14,7 @@ import app.api.v1.endpoints.tools as tools_mod
 import app.database as db_module
 from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_DB_UNAVAILABLE,
+    WS_CLOSE_INVALID_ORIGIN,
     WS_CLOSE_RATE_LIMITED,
 )
 from app.security.tokens import generate_token, hash_token
@@ -182,3 +183,43 @@ class TestWebSocketRedisSessionException:
 
         mock_log.assert_called()
         assert mock_log.call_args[0][0] == "Redis session lookup failed for WS"
+
+
+class TestWebSocketOriginValidation:
+    """Issue #46: Origin validation with WS_REQUIRE_ORIGIN flag (ADR-009)."""
+
+    @pytest.mark.asyncio
+    async def test_origin_absent_allowed_when_flag_false(self):
+        """Default: absent Origin → allow (non-browser clients pass)."""
+        ws = _make_mock_ws(origin=None)
+        # Remove origin from headers entirely to simulate absent Origin
+        del ws.headers["origin"]
+
+        with patch.object(db_module, "is_db_available", return_value=False):
+            await tools_mod.tool_stream(ws, "ping")
+
+        # Should close with DB_UNAVAILABLE (4503), meaning origin check passed
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_origin_absent_rejected_when_flag_true(self):
+        """WS_REQUIRE_ORIGIN=True: absent Origin → reject with 4003."""
+        ws = _make_mock_ws(origin=None)
+        del ws.headers["origin"]
+
+        with patch.object(tools_mod.settings, "WS_REQUIRE_ORIGIN", True):
+            await tools_mod.tool_stream(ws, "ping")
+
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_INVALID_ORIGIN
+
+    @pytest.mark.asyncio
+    async def test_origin_not_in_allowlist_rejected(self):
+        """Bad Origin → reject regardless of flag."""
+        ws = _make_mock_ws(origin="https://evil.com")
+
+        await tools_mod.tool_stream(ws, "ping")
+
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_INVALID_ORIGIN

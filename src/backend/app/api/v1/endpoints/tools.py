@@ -156,9 +156,14 @@ def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
 
 
 def _is_allowed_origin(origin: str | None) -> bool:
-    """Check Origin header against CORS_ORIGINS allowlist (CSWSH protection for WebSockets)."""
+    """Check Origin header against CORS_ORIGINS allowlist (CSWSH protection for WebSockets).
+
+    When WS_REQUIRE_ORIGIN is True (production), requests without an Origin
+    header are rejected — this prevents non-browser tools (curl, wget) from
+    being exploited as attack proxies. See ADR-009.
+    """
     if not origin:
-        return True  # non-browser clients don't send Origin
+        return not settings.WS_REQUIRE_ORIGIN
     allowed = [o.strip() for o in settings.CORS_ORIGINS.split(",")]
     return origin in allowed
 
