@@ -156,7 +156,7 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 | Non-TLS traffic in production | I | Critical | **Fixed** (audit C-2). Caddy provides ACME auto-TLS with HTTP→HTTPS redirect; HSTS with `includeSubDomains` and `preload`; `__Host-` cookie prefix active. | Audit C-2; `config/Caddyfile` |
 | Proxy header spoofing | S | High | `TrustedProxyMiddleware` replaces Uvicorn's built-in proxy handling; configurable `TRUSTED_PROXY_HOPS` (default 0 = off); rightmost-N `X-Forwarded-For` extraction | ADR-003; `src/backend/app/middleware/proxy_trust.py` |
 | Container breakout via network | E | High | `sakn-internal` Docker network marked `internal: true` — no external ingress to PostgreSQL or Redis; only backend bridges both networks | `docker-compose.yml` |
-| Security headers missing on non-API paths | I | Low | **Acknowledged limitation** (audit M-1). CSP, X-Frame-Options, and HSTS headers are only applied to `/api/*` paths, not to `/health`. The health endpoint exposes minimal data (status string only). | Audit M-1; `src/backend/app/middleware/security_headers.py` |
+| Security headers missing on non-API paths | I | Low | **Fixed** (audit M-1, issue #21). Security headers now apply to ALL responses except `/docs`, `/redoc`, `/openapi.json`. | `src/backend/app/middleware/security_headers.py` |
 | Silently falling back to SQLite in production | I | High | **Fixed** (audit H-8). `DATABASE_URL` assembly logic properly detects missing PostgreSQL variables and raises a clear error in production mode. | Audit H-8; `src/backend/app/config.py` |
 
 ## 6. Key Audit Findings Cross-Reference
@@ -177,7 +177,7 @@ to their current status:
 | H-6 | High | Frontend nginx no security headers | Fixed |
 | H-7 | High | Default SECRET_KEY in docker-compose.dev.yml | Fixed |
 | H-8 | High | Silent SQLite fallback in production | Fixed |
-| M-1 | Medium | Security headers scoped to /api/* only | Known, documented |
+| M-1 | Medium | Security headers scoped to /api/* only | Fixed (issue #21) |
 | M-3 | Medium | Session token SHA-256 without HMAC pepper | Known, documented |
 | M-4 | Medium | Available tools endpoint accepts arbitrary roles | Fixed |
 

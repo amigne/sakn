@@ -9,6 +9,11 @@ async def test_health_endpoint(client):
     assert data["status"] == "ok"
     assert "database" in data["checks"]
     assert "redis" in data["checks"]
+    # Security headers must be present on /health (issue #21 — M-1 fix)
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert "Content-Security-Policy" in response.headers
 
 
 @pytest.mark.asyncio
