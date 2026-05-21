@@ -1,6 +1,10 @@
 import asyncio
+import os
 from collections.abc import AsyncGenerator
 from typing import Any
+
+# Set ENVIRONMENT before any app import — config.py has no default (#55)
+os.environ.setdefault("ENVIRONMENT", "development")
 
 import pytest
 import pytest_asyncio

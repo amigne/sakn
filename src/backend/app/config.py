@@ -1,7 +1,7 @@
 from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -56,9 +56,17 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    # Environment
-    ENVIRONMENT: str = "development"
+    # Environment (required — no default; set explicitly to development, staging, or production)
+    ENVIRONMENT: str
     LOG_LEVEL: str = "INFO"
+
+    @field_validator("ENVIRONMENT", mode="after")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
+        allowed = {"development", "staging", "production"}
+        if v not in allowed:
+            raise ValueError(f"ENVIRONMENT must be one of {allowed}, got '{v}'")
+        return v
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:8000"
