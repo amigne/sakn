@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -326,9 +326,29 @@ register_error_handlers(app)
 
 @app.get("/health")
 async def health():
+    """Minimal liveness probe — no infrastructure checks, no auth required."""
+    return {"status": "ok"}
+
+
+@app.get("/health/full")
+async def health_full(request: Request):
+    """Full health check with database and Redis checks.
+
+    Protected by X-Health-Token header matching HEALTH_FULL_TOKEN env var.
+    Returns 401 if the token is missing or incorrect.
+    """
+    token = request.headers.get("X-Health-Token", "")
+    if not settings.HEALTH_FULL_TOKEN or token != settings.HEALTH_FULL_TOKEN:
+        raise AppError(
+            status_code=401,
+            code="UNAUTHORIZED",
+            message_key="errors.unauthorized",
+            message="Missing or invalid health check token.",
+        )
+
     checks = {}
 
-    # Database check (uses live engine, which may have been swapped by fallback)
+    # Database check
     try:
         from app.database import engine as live_engine
 

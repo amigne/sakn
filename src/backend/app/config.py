@@ -80,5 +80,8 @@ class Settings(BaseSettings):
     BRUTEFORCE_IP_MAX_ATTEMPTS: int = 20  # failed logins per IP before 429
     BRUTEFORCE_IP_WINDOW_SECONDS: int = 900  # 15 minutes sliding window
 
+    # Health check token for /health/full (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+    HEALTH_FULL_TOKEN: str = ""
+
 
 settings = Settings()

@@ -2,18 +2,53 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint(client):
+async def test_health_endpoint_minimal(client):
+    """/health returns minimal liveness probe — no checks key, no auth."""
     response = await client.get("/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
-    assert "database" in data["checks"]
-    assert "redis" in data["checks"]
+    assert data == {"status": "ok"}
+    assert "checks" not in data
     # Security headers must be present on /health (issue #21 — M-1 fix)
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert "Content-Security-Policy" in response.headers
+
+
+@pytest.mark.asyncio
+async def test_health_full_missing_token(client):
+    """/health/full returns 401 when token is missing."""
+    response = await client.get("/health/full")
+    assert response.status_code == 401
+    data = response.json()
+    assert data["error"]["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_health_full_bad_token(client):
+    """/health/full returns 401 when token is wrong."""
+    response = await client.get("/health/full", headers={"X-Health-Token": "wrong"})
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_health_full_correct_token(client):
+    """/health/full returns checks when token is correct."""
+    from app.config import settings as app_settings
+
+    original = app_settings.HEALTH_FULL_TOKEN
+    app_settings.HEALTH_FULL_TOKEN = "test-health-token"
+    try:
+        response = await client.get("/health/full", headers={"X-Health-Token": "test-health-token"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert "checks" in data
+        assert data["checks"]["database"] in ("ok", "unavailable")
+        assert data["checks"]["redis"] in ("ok", "unavailable")
+    finally:
+        app_settings.HEALTH_FULL_TOKEN = original
 
 
 @pytest.mark.asyncio
@@ -64,9 +99,11 @@ async def test_execute_unknown_tool(client):
 
 @pytest.mark.asyncio
 async def test_health_database_check(client):
+    """/health/minimal does NOT return checks — moved to /health/full."""
     response = await client.get("/health")
     data = response.json()
-    assert data["checks"]["database"] in ("ok", "unavailable")
+    assert "checks" not in data
+    assert data == {"status": "ok"}
 
 
 @pytest.mark.asyncio

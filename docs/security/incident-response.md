@@ -147,7 +147,7 @@ Use when: SECRET_KEY suspected compromised, or as part of session invalidation.
 - [ ] **Step 5**: Verify the service is healthy.
   ```bash
   curl -s http://localhost:8000/health
-  # Expected: {"status":"healthy"}
+  # Expected: {"status":"ok"}
   ```
 
 - [ ] **Step 6**: Note that email hashes in existing `SecurityEventLog` rows are

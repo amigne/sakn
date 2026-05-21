@@ -159,6 +159,7 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 | Proxy header spoofing | S | High | `TrustedProxyMiddleware` replaces Uvicorn's built-in proxy handling; configurable `TRUSTED_PROXY_HOPS` (default 0 = off); rightmost-N `X-Forwarded-For` extraction | ADR-003; `src/backend/app/middleware/proxy_trust.py` |
 | Container breakout via network | E | High | `sakn-internal` Docker network marked `internal: true` — no external ingress to PostgreSQL or Redis; only backend bridges both networks | `docker-compose.yml` |
 | Security headers missing on non-API paths | I | Low | **Fixed** (audit M-1, issue #21). Security headers now apply to ALL responses except `/docs`, `/redoc`, `/openapi.json`. | `src/backend/app/middleware/security_headers.py` |
+| Health endpoint discloses infrastructure state | I | Medium | **Fixed** (issue #25). `/health` now returns only `{"status":"ok"}` (no DB/Redis checks). Detailed checks moved to `/health/full`, protected by `X-Health-Token` header authenticated against `HEALTH_FULL_TOKEN` env var. See ADR-004. | ADR-004; `src/backend/app/main.py` |
 | Silently falling back to SQLite in production | I | High | **Fixed** (audit H-8). `DATABASE_URL` assembly logic properly detects missing PostgreSQL variables and raises a clear error in production mode. | Audit H-8; `src/backend/app/config.py` |
 
 ## 6. Key Audit Findings Cross-Reference

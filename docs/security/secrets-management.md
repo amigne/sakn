@@ -114,7 +114,7 @@ postgresql+asyncpg://sakn:<url-encoded-password>@postgres:5432/sakn
 5. **Verify** the backend connects successfully:
    ```bash
    curl -s http://localhost:8000/health
-   # Expected: {"status":"healthy"}
+   # Expected: {"status":"ok"}
    ```
 6. **Securely delete** the old password from any backups or password managers.
 
