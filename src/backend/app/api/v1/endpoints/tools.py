@@ -138,14 +138,20 @@ def _get_ws_manager(app) -> "ConnectionManager":
 
 def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
     """Read session token from WebSocket cookies (BaseHTTPMiddleware skips WS)."""
+    from http.cookies import SimpleCookie
     from app.models.base import new_uuid7
+    from app.security.cookies import SESSION_COOKIE_NAMES
 
-    cookies = websocket.headers.get("cookie", "")
-    # Parse session token from cookie header
-    for part in cookies.split(";"):
-        part = part.strip()
-        if part.startswith("__Host-sakn_session=") or part.startswith("sakn_session="):
-            return part.split("=", 1)[1], None
+    header = websocket.headers.get("cookie", "")
+    if not header:
+        return f"anon_{new_uuid7()}", None
+
+    cookies = SimpleCookie()
+    cookies.load(header)
+    for name in SESSION_COOKIE_NAMES:
+        token = cookies.get(name)
+        if token:
+            return token.value, None
     return f"anon_{new_uuid7()}", None
 
 
