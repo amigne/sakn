@@ -130,3 +130,38 @@ class TestSecurityHeaders:
         csp = response.headers["Content-Security-Policy"]
         import re
         assert not re.search(r"\bstyle-src\s", csp)
+
+    @pytest.mark.asyncio
+    async def test_permissions_policy_present(self, middleware, call_next):
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+
+    @pytest.mark.asyncio
+    async def test_coop_present(self, middleware, call_next):
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+
+    @pytest.mark.asyncio
+    async def test_coep_present(self, middleware, call_next):
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/health", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        assert response.headers["Cross-Origin-Embedder-Policy"] == "unsafe-none"
+
+    @pytest.mark.asyncio
+    async def test_docs_path_skips_new_headers(self, middleware, call_next):
+        """Exempt paths must not receive Permissions-Policy, COOP, or COEP."""
+        from starlette.requests import Request
+        scope = {"type": "http", "method": "GET", "path": "/docs", "headers": []}
+        request = Request(scope)
+        response = await middleware.dispatch(request, call_next)
+        assert "Permissions-Policy" not in response.headers
+        assert "Cross-Origin-Opener-Policy" not in response.headers
+        assert "Cross-Origin-Embedder-Policy" not in response.headers

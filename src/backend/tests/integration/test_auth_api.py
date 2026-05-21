@@ -327,6 +327,9 @@ class TestSecurityHeaders:
         assert "object-src 'none'" in csp
         assert "base-uri 'self'" in csp
         assert "frame-ancestors 'none'" in csp
+        assert resp.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+        assert resp.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+        assert resp.headers["Cross-Origin-Embedder-Policy"] == "unsafe-none"
 
 
 class TestIPBruteForce:
