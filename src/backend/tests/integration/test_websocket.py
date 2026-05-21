@@ -161,3 +161,24 @@ class TestWebSocketRateLimit:
             db_module.async_session_factory = original_factory
             tools_mod.async_session_factory = original_tools_factory
             get_rate_limiter()._db_fallback.clear()
+
+
+class TestWebSocketRedisSessionException:
+    """Issue #42: Redis session lookup failure logs the exception instead of silent pass."""
+
+    @pytest.mark.asyncio
+    async def test_redis_session_exception_is_logged(self):
+        """When Redis session lookup raises, logger.exception is called and flow continues."""
+        ws = _make_mock_ws(cookies="sakn_session=some-token-value")
+        logger = logging.getLogger("app.api.v1.endpoints.tools")
+
+        with patch.object(logger, "exception") as mock_log:
+            # Patch redis_get to raise BEFORE it's imported inside tool_stream
+            with patch(
+                "app.redis.session_store.get_session",
+                side_effect=Exception("Redis connection refused"),
+            ):
+                await tools_mod.tool_stream(ws, "ping")
+
+        mock_log.assert_called()
+        assert mock_log.call_args[0][0] == "Redis session lookup failed for WS"
