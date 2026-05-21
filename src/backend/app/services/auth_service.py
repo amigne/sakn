@@ -187,6 +187,37 @@ async def verify_email(db: AsyncSession, *, token: str) -> tuple[bool, str, str]
     return True, "auth.email_verified", "Email verified. You can now log in."
 
 
+# IP-based brute-force counters (Redis-backed, see ADR-005)
+
+async def _check_ip_bruteforce(source_ip: str) -> bool:
+    """Return True if the IP has exceeded the brute-force threshold."""
+    try:
+        from app.redis.connection import get_redis
+        redis = await get_redis()
+        key = f"bruteforce:ip:{source_ip}"
+        count = await redis.get(key)
+        if count is None:
+            return False
+        return int(count) >= settings.BRUTEFORCE_IP_MAX_ATTEMPTS
+    except Exception:
+        logger.warning("IP brute-force check failed for ip=%s, failing open", source_ip)
+        return False
+
+
+async def _record_ip_bruteforce(source_ip: str) -> None:
+    """Increment the IP brute-force counter with a sliding TTL."""
+    try:
+        from app.redis.connection import get_redis
+        redis = await get_redis()
+        key = f"bruteforce:ip:{source_ip}"
+        pipe = redis.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, settings.BRUTEFORCE_IP_WINDOW_SECONDS)
+        await pipe.execute()
+    except Exception:
+        logger.warning("IP brute-force record failed for ip=%s", source_ip)
+
+
 async def login(
     db: AsyncSession,
     *,
@@ -205,11 +236,22 @@ async def login(
     """
     email = email.lower().strip()
 
+    # Check IP brute-force protection BEFORE user lookup (enumeration-safe per ADR-002)
+    if await _check_ip_bruteforce(source_ip):
+        return {
+            "success": False,
+            "message_key": "errors.rate_limited",
+            "message": "Too many login attempts from this IP. Try again later.",
+        }
+
     # Find user (constant-time-ish — don't early return vs nonexistent email)
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if user is None:
+        # Record IP-level failure for credential-stuffing detection (ADR-005)
+        await _record_ip_bruteforce(source_ip)
+
         # Enumeration-safe: identical response
         await _log_security_event(db, "login_failed_no_user", source_ip, details={"email_hash": _hash_email_for_log(email)})
         # Commit before AppError rollback
@@ -225,6 +267,9 @@ async def login(
 
     # Verify password
     if not verify_password(password, user.password_hash):
+        # Record IP-level failure for credential-stuffing detection (ADR-005)
+        await _record_ip_bruteforce(source_ip)
+
         # Increment failed attempts
         user.failed_login_attempts += 1
         duration = _brute_force_duration(user.failed_login_attempts)

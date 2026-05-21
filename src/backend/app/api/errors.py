@@ -3,12 +3,13 @@ from fastapi.responses import JSONResponse
 
 
 class AppError(Exception):
-    def __init__(self, status_code: int, code: str, message_key: str, message: str, details: dict | None = None):
+    def __init__(self, status_code: int, code: str, message_key: str, message: str, details: dict | None = None, headers: dict | None = None):
         self.status_code = status_code
         self.code = code
         self.message_key = message_key
         self.message = message
         self.details = details
+        self.headers = headers
 
 
 class ValidationError(AppError):
@@ -47,6 +48,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
                 "details": exc.details,
             }
         },
+        headers=exc.headers,
     )
 
 

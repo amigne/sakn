@@ -317,3 +317,65 @@ class TestSecurityHeaders:
         assert resp.headers.get("X-Frame-Options") == "DENY"
         assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
         assert "Content-Security-Policy" in resp.headers
+
+
+class TestIPBruteForce:
+    """Credential stuffing scenario: 2 users x 2 failures = 4 → 5th attempt gets 429."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_counter(self):
+        from app.services import auth_service
+        # Use an in-memory counter to simulate Redis (tests have no Redis)
+        self._ip_counts: dict[str, int] = {}
+        original_check = auth_service._check_ip_bruteforce
+        original_record = auth_service._record_ip_bruteforce
+
+        async def _fake_check(ip: str) -> bool:
+            return self._ip_counts.get(ip, 0) >= 4  # threshold for test
+
+        async def _fake_record(ip: str) -> None:
+            self._ip_counts[ip] = self._ip_counts.get(ip, 0) + 1
+
+        auth_service._check_ip_bruteforce = _fake_check
+        auth_service._record_ip_bruteforce = _fake_record
+        yield
+        auth_service._check_ip_bruteforce = original_check
+        auth_service._record_ip_bruteforce = original_record
+
+    @pytest.mark.asyncio
+    async def test_credential_stuffing_blocked(self, client: AsyncClient, db_session: AsyncSession):
+        # Register 2 users (stay within the 3 req/h registration rate limit)
+        users = []
+        for i in range(2):
+            email = f"stuff{i}@example.com"
+            await client.post("/api/v1/auth/register", json={
+                "email": email,
+                "password": STRONG_PW,
+                "password_confirm": STRONG_PW,
+                **REGISTER_BODY,
+            })
+            result = await db_session.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
+            user.status = "active"
+            user.email_verified_at = utcnow()
+            users.append(user)
+        await db_session.commit()
+
+        # 2 failed logins per user = 4 failed attempts (count → 4, threshold = 4)
+        for user in users:
+            for _ in range(2):
+                resp = await client.post("/api/v1/auth/login", json={
+                    "email": user.email,
+                    "password": "wrong-password-for-sure",
+                })
+                assert resp.status_code == 401
+
+        # 5th attempt → 429 (count = 4 >= threshold 4)
+        resp = await client.post("/api/v1/auth/login", json={
+            "email": users[0].email,
+            "password": "wrong-password-for-sure",
+        })
+        assert resp.status_code == 429
+        data = resp.json()
+        assert data["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+        assert "Retry-After" in resp.headers

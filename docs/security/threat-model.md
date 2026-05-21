@@ -77,7 +77,8 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 
 | Threat | STRIDE | Severity | Mitigation | Reference |
 |--------|--------|----------|------------|-----------|
-| Credential brute-force (online) | S | High | Argon2id (time_cost=3, memory_cost=65536, parallelism=4); escalating lockout: 5 failures → 5 min, 10 → 15 min, 15 → 45 min, 20+ → 90 min or permanent block | `src/backend/app/services/auth_service.py` |
+| Credential brute-force (online, per-user) | S | High | Argon2id (time_cost=3, memory_cost=65536, parallelism=4); escalating per-user lockout: 5 failures → 5 min, 10 → 15 min, 15 → 45 min, 20+ → 90 min | `src/backend/app/services/auth_service.py` |
+| Credential stuffing (cross-user, per-IP) | D | High | **Fixed** (issue #28, ADR-005). Redis-backed IP counter: `INCR` + `EXPIRE` with configurable threshold (default 20 failed attempts / 15 min). Returns 429 with `Retry-After` when exceeded. Checked BEFORE user lookup (enumeration-safe). | ADR-005; `auth_service.py:_check_ip_bruteforce()` |
 | Email enumeration via registration | I | Medium | Uniform response: duplicate email returns HTTP 200 with identical message and timing; email HMAC-hashed in security event logs | ADR-002; `auth_service.py:_hash_email_for_log()` |
 | Email enumeration via login | I | Medium | All login failures return identical `errors.invalid_credentials`; timing is independent of whether the email exists | ADR-002; `auth_service.py` |
 | Email enumeration via password reset | I | Medium | Password reset always returns the same message regardless of email existence; rate-limited at 3 req/day | ADR-002; `auth_service.py` |
@@ -144,7 +145,8 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 | Resource exhaustion via tool execution | D | High | Redis-backed sliding window counters with atomic Lua scripts; dual soft/hard limits; visitors enforced by session **and** IP; authenticated users by user ID; administrators have high limits | `src/backend/app/middleware/rate_limit.py`; `src/backend/app/redis/rate_limit_store.py` |
 | Rate limit store unavailable | D | Medium | Middleware handles Redis connection failures gracefully: logs warning, falls back to in-memory counters if Redis is down | `rate_limit.py` |
 | Auth endpoint brute-force | D | High | Hardcoded limits: login 10/min, register 3/hour, password reset 3/day, resend verification 5/day. Keyed by IP for public endpoints, by user_id for authenticated ones. | `src/backend/app/api/v1/endpoints/auth.py` |
-| Auth rate limits are in-memory only | D | Low | **Acknowledged limitation**. Auth rate limits reset on backend restart and are not shared across instances. The primary defence against brute-force is Argon2id + account lockout, not rate limiting alone. | `auth.py` |
+| Credential stuffing (cross-user attack) | D | High | **Fixed** (issue #28, ADR-005). Redis-backed IP counter with sliding TTL: 20 failed logins per IP / 15 min → 429. Checked BEFORE user lookup (enumeration-safe per ADR-002). Configurable via `BRUTEFORCE_IP_MAX_ATTEMPTS` and `BRUTEFORCE_IP_WINDOW_SECONDS`. | ADR-005; `src/backend/app/services/auth_service.py:_check_ip_bruteforce()` |
+| Auth rate limits are in-memory only | D | Low | **Acknowledged limitation**. Auth rate limits reset on backend restart and are not shared across instances. The primary defence against brute-force is Argon2id + account lockout + IP-based credential-stuffing detection. | `auth.py` |
 | Distributed DoS | D | Medium | No built-in CDN/WAF integration. Mitigation at infrastructure level: Caddy rate limiting, external WAF, or CDN. | — |
 
 ### 5.8 Infrastructure

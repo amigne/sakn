@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
+from app.config import settings
 from app.database import get_session
 from app.services import auth_service
 from app.services.rate_limit_service import auth_check as rl_check, auth_record as rl_record
@@ -119,6 +120,10 @@ async def login(
         user_agent=_get_user_agent(request),
     )
     if not result["success"]:
+        if result.get("message_key") == "errors.rate_limited":
+            retry_after = str(settings.BRUTEFORCE_IP_WINDOW_SECONDS)
+            raise AppError(429, "RATE_LIMIT_EXCEEDED", "errors.rate_limited", result["message"],
+                           headers={"Retry-After": retry_after})
         raise AppError(401, "INVALID_CREDENTIALS", result["message_key"], result["message"])
 
     # Set session cookie

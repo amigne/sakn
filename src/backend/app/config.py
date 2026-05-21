@@ -76,5 +76,9 @@ class Settings(BaseSettings):
     # Email verification
     EMAIL_VERIFICATION_REQUIRED: bool = True
 
+    # IP-based brute-force protection (see ADR-005)
+    BRUTEFORCE_IP_MAX_ATTEMPTS: int = 20  # failed logins per IP before 429
+    BRUTEFORCE_IP_WINDOW_SECONDS: int = 900  # 15 minutes sliding window
+
 
 settings = Settings()
