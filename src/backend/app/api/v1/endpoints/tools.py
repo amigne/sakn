@@ -159,6 +159,13 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
         await websocket.close(code=4004)
         return
 
+    # CSWSH protection: validate Origin BEFORE any DB/Redis query
+    origin = websocket.headers.get("origin")
+    if not _is_allowed_origin(origin):
+        logger.warning("WebSocket origin rejected: tool=%s origin=%s", tool_name, origin)
+        await websocket.close(code=4003)
+        return
+
     # Resolve session and check access BEFORE accepting
     session_token, _ = _read_session_from_ws(websocket)
     user_id = None
@@ -240,13 +247,6 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     except Exception:
         logger.exception("DB error during WebSocket authorization check for tool=%s", tool_name)
         await websocket.close(code=4503)
-        return
-
-    # CSWSH protection: validate Origin header (CORSMiddleware does not cover WebSockets)
-    origin = websocket.headers.get("origin")
-    if not _is_allowed_origin(origin):
-        logger.warning("WebSocket origin rejected: tool=%s origin=%s", tool_name, origin)
-        await websocket.close(code=4003)
         return
 
     manager = _get_ws_manager(websocket.app)

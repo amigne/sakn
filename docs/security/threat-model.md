@@ -100,7 +100,7 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 
 | Threat | STRIDE | Severity | Mitigation | Reference |
 |--------|--------|----------|------------|-----------|
-| Cross-Site WebSocket Hijacking (CSWSH) | S | High | `Origin` header validated against `CORS_ORIGINS` allowlist before `websocket.accept()` | `src/backend/app/api/v1/endpoints/tools.py` (WS handler) |
+| Cross-Site WebSocket Hijacking (CSWSH) | S | High | **Fixed** (issue #45). `Origin` header validated against `CORS_ORIGINS` allowlist BEFORE any DB/Redis queries — rejected connections incur zero backend load. | `src/backend/app/api/v1/endpoints/tools.py` (WS handler) |
 | Unauthenticated WebSocket access | S | High | Session token parsed from Cookie header before accept; Redis then DB lookup; connection closed (code 4501) if invalid | `tools.py` WS handler |
 | Unauthorized tool execution via WS | E | High | `RoleToolPermission` checked for resolved role + tool before accept | `tools.py` WS handler |
 | WebSocket fail-open on DB error | E | High | **Fixed** (audit H-2). Previously `try/except: pass` allowed execution on DB errors. Now fail-closed: connection terminated with code 4503. | Audit H-2; `tools.py` |
