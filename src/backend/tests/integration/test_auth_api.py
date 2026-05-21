@@ -1,4 +1,6 @@
 """Integration tests for auth endpoints: register → verify → login → preferences → sessions → logout."""
+import json
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,8 +8,10 @@ from sqlalchemy import select
 
 from app.models import User, EmailVerification
 from app.models.base import utcnow
+from app.models.log import SecurityEventLog
 from app.security.password import hash_password
 from app.security.tokens import generate_token, hash_token
+from app.services.auth_service import _hash_email_for_log
 from app.services.rate_limit_service import _auth_counters
 
 STRONG_PW = "MyC0rrectHorseBatteryStaple!"
@@ -379,3 +383,92 @@ class TestIPBruteForce:
         data = resp.json()
         assert data["error"]["code"] == "RATE_LIMIT_EXCEEDED"
         assert "Retry-After" in resp.headers
+
+
+class TestEmailHashLogging:
+    """Issue #70: SecurityEventLog.details must never contain raw email."""
+
+    @pytest.mark.asyncio
+    async def test_registration_duplicate_logs_email_hash(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ):
+        """Duplicate registration logs email_hash, not raw email."""
+        email = "hashreg@example.com"
+        # First registration succeeds
+        await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+
+        # Second registration triggers registration_duplicate
+        await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+
+        expected_hash = _hash_email_for_log(email)
+        row = await db_session.execute(
+            select(SecurityEventLog).where(
+                SecurityEventLog.event_type == "registration_duplicate",
+                SecurityEventLog.details.contains(expected_hash),
+            )
+        )
+        event = row.scalar_one_or_none()
+        assert event is not None, "Expected a registration_duplicate security event"
+        details = json.loads(event.details)
+        assert "email_hash" in details
+        assert details["email_hash"] == expected_hash
+        assert email not in event.details
+
+    @pytest.mark.asyncio
+    async def test_login_failed_no_user_logs_email_hash(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ):
+        """Login attempt with nonexistent email logs email_hash, not raw email."""
+        email = "hashlogin@example.com"
+        await client.post("/api/v1/auth/login", json={
+            "email": email,
+            "password": STRONG_PW,
+        })
+
+        expected_hash = _hash_email_for_log(email)
+        row = await db_session.execute(
+            select(SecurityEventLog).where(
+                SecurityEventLog.event_type == "login_failed_no_user",
+                SecurityEventLog.details.contains(expected_hash),
+            )
+        )
+        event = row.scalar_one_or_none()
+        assert event is not None, "Expected a login_failed_no_user security event"
+        details = json.loads(event.details)
+        assert "email_hash" in details
+        assert details["email_hash"] == expected_hash
+        assert email not in event.details
+
+    @pytest.mark.asyncio
+    async def test_password_reset_no_user_logs_email_hash(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ):
+        """Password reset for nonexistent email logs email_hash, not raw email."""
+        email = "hashreset@example.com"
+        await client.post("/api/v1/auth/request-password-reset", json={
+            "email": email,
+        })
+
+        expected_hash = _hash_email_for_log(email)
+        row = await db_session.execute(
+            select(SecurityEventLog).where(
+                SecurityEventLog.event_type == "password_reset_request_no_user",
+                SecurityEventLog.details.contains(expected_hash),
+            )
+        )
+        event = row.scalar_one_or_none()
+        assert event is not None, "Expected a password_reset_request_no_user event"
+        details = json.loads(event.details)
+        assert "email_hash" in details
+        assert details["email_hash"] == expected_hash
+        assert email not in event.details
