@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:8000"
 
+    # WebSocket origin validation (see ADR-009)
+    WS_REQUIRE_ORIGIN: bool = False  # set true in production for CSWSH protection
+
     # SMTP
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
