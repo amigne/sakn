@@ -15,7 +15,7 @@ from app.redis.session_store import (
     enforce_concurrent_limit,
     _get_max_sessions,
 )
-from app.security.tokens import generate_token, hash_token
+from app.security.tokens import generate_token, hash_token, hash_token_legacy
 
 SESSION_DURATION_HOURS = 24
 
@@ -78,10 +78,31 @@ async def create(db: AsyncSession, *, user_id: str | None, ip_address: str, user
 
 
 async def get(db: AsyncSession, session_token: str) -> Session | None:
-    """Resolve a session from its raw cookie token."""
+    """Resolve a session from its raw cookie token.
+
+    Tries HMAC first, legacy SHA-256 as fallback (ADR-007).
+    """
     token_hash = hash_token(session_token)
+    legacy_hash = hash_token_legacy(session_token)
     now = _now_naive()
 
+    # Try HMAC first
+    session = await _lookup_session(db, token_hash, now)
+    if session:
+        return session
+
+    # Fallback to legacy SHA-256
+    session = await _lookup_session(db, legacy_hash, now)
+    if session and session.expires_at > now:
+        # Silent upgrade: update DB + Redis to HMAC hash
+        await _upgrade_session_hash_values(legacy_hash, token_hash, session.user_id, session.id)
+        return session
+
+    return None
+
+
+async def _lookup_session(db: AsyncSession, token_hash: str, now: datetime) -> Session | None:
+    """Internal: look up session by hash in Redis then DB."""
     redis_data = await redis_get_session(token_hash)
     if redis_data:
         result = await db.execute(select(Session).where(Session.token_hash == token_hash))
@@ -95,6 +116,17 @@ async def get(db: AsyncSession, session_token: str) -> Session | None:
     if session and session.expires_at > now:
         return session
     return None
+
+
+async def _upgrade_session_hash_values(legacy_hash: str, hmac_hash: str, user_id: str | None, session_id: str) -> None:
+    """Silently upgrade a session from legacy SHA-256 to HMAC (ADR-007)."""
+    import logging
+    _log = logging.getLogger(__name__)
+    try:
+        from app.redis.session_store import migrate_session_hash
+        await migrate_session_hash(legacy_hash, hmac_hash, {"user_id": user_id, "session_id": session_id})
+    except Exception:
+        _log.warning("Failed to migrate session hash in Redis during get()")
 
 
 async def touch(token_hash: str) -> None:

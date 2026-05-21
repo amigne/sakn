@@ -91,7 +91,7 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 |--------|--------|----------|------------|-----------|
 | Session token prediction | S | High | 256-bit CSPRNG tokens via `secrets.token_urlsafe(32)` | `src/backend/app/security/tokens.py:5-7` |
 | Token DB theft enables impersonation | I | High | SHA-256 hashing before storage; constant-time comparison via `secrets.compare_digest()` | `src/backend/app/security/tokens.py:10-17` |
-| Session token lacks HMAC pepper | I | Medium | **Acknowledged limitation** (audit finding M-3). Token entropy (256 bits) makes brute-force impractical with current compute, but an HMAC pepper would add defence-in-depth if both DB and Redis are simultaneously compromised. | Audit M-3 |
+| Session token lacks HMAC pepper | I | Medium | **Fixed** (issue #23, ADR-007). `hash_token()` now uses HMAC-SHA256(SECRET_KEY, token). Legacy SHA-256 sessions are silently upgraded on next request. See ADR-007 for migration strategy. | `src/backend/app/security/tokens.py` |
 | Session fixation | S | Medium | New session token generated on login; old token invalidated | `auth_service.py:login()` |
 | Cookie theft / XSS | I | High | HttpOnly + SameSite=Lax cookies; `__Host-` prefix when HTTPS active (browser-enforced Secure + Path=/); 24h expiry with activity-based extension | `src/backend/app/security/cookies.py` |
 | CSRF on state-changing endpoints | T | High | Double-submit cookie pattern: `sakn_csrf` cookie (readable by JS) + `X-CSRF-Token` header validated per mutation; auto-retry on 403 with fresh token | `src/backend/app/security/csrf.py` |
@@ -181,7 +181,7 @@ to their current status:
 | H-7 | High | Default SECRET_KEY in docker-compose.dev.yml | Fixed |
 | H-8 | High | Silent SQLite fallback in production | Fixed |
 | M-1 | Medium | Security headers scoped to /api/* only | Fixed (issue #21) |
-| M-3 | Medium | Session token SHA-256 without HMAC pepper | Known, documented |
+| M-3 | Medium | Session token SHA-256 without HMAC pepper | Fixed (issue #23, ADR-007) |
 | M-4 | Medium | Available tools endpoint accepts arbitrary roles | Fixed |
 
 ## 7. Assumptions and Residual Risks

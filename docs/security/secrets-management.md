@@ -24,10 +24,13 @@
 ## 2. SECRET_KEY
 
 ### Purpose
-- Primary use: HMAC-SHA256 key for hashing email addresses in `SecurityEventLog`
-  entries (prevents plaintext email storage in logs).
-- Future use: HMAC pepper for session token hashing (see audit finding M-3).
-- Code reference: `src/backend/app/services/auth_service.py:_hash_email_for_log()`.
+- HMAC-SHA256 key for session token hashing (`security/tokens.py:hash_token()`),
+  preventing token forgery if both DB and Redis are compromised (ADR-007, fixes
+  audit finding M-3).
+- HMAC-SHA256 key for hashing email addresses in `SecurityEventLog` entries
+  (prevents plaintext email storage in logs).
+- Code references: `src/backend/app/security/tokens.py:hash_token()`,
+  `src/backend/app/services/auth_service.py:_hash_email_for_log()`.
 
 ### Generation
 ```bash

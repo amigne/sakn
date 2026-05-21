@@ -132,3 +132,32 @@ async def enforce_concurrent_limit(user_id: str, max_sessions: int = MAX_CONCURR
     except Exception:
         logger.warning("Redis unavailable, concurrent limit not enforced")
         return None
+
+
+async def migrate_session_hash(legacy_hash: str, hmac_hash: str, session_data: dict) -> None:
+    """Migrate a session from legacy SHA-256 to HMAC hash in Redis (ADR-007).
+
+    Renames the session key and updates the user_sessions set entry.
+    No-op if the legacy key doesn't exist.
+    """
+    try:
+        redis = await get_redis()
+    except Exception:
+        logger.warning("Redis unavailable, skipping session hash migration")
+        return
+
+    try:
+        # RENAME session:{legacy} → session:{hmac}
+        await redis.rename(_session_key(legacy_hash), _session_key(hmac_hash))
+
+        # Update user_sessions set: remove legacy, add hmac
+        user_id = session_data.get("user_id")
+        if user_id:
+            user_key = _user_sessions_key(user_id)
+            pipe = redis.pipeline()
+            pipe.srem(user_key, legacy_hash)
+            pipe.sadd(user_key, hmac_hash)
+            await pipe.execute()
+    except Exception:
+        logger.exception("Failed to migrate session hash from legacy=%s to hmac=%s",
+                         legacy_hash[:16], hmac_hash[:16])
