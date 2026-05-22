@@ -57,6 +57,11 @@ class Settings(BaseSettings):
                 f"SECRET_KEY must be at least 32 characters (got {len(self.SECRET_KEY)}). "
                 "Generate a real key and set it via the SECRET_KEY environment variable."
             )
+        if len(set(self.SECRET_KEY)) < 20:
+            raise ValueError(
+                f"SECRET_KEY has insufficient entropy ({len(set(self.SECRET_KEY))} distinct characters, "
+                "minimum 20 required). Generate a real key and set it via the SECRET_KEY environment variable."
+            )
         return self
 
     # Redis

@@ -37,7 +37,7 @@ class TestValidateSecretKey:
         s = Settings(
             _env_file=None,
             ENVIRONMENT="staging",
-            SECRET_KEY="v" * 32,
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",  # 32 chars, 32 distinct
         )
         assert len(s.SECRET_KEY) == 32
 
@@ -99,19 +99,49 @@ class TestValidateSecretKey:
         s = Settings(
             _env_file=None,
             ENVIRONMENT="production",
-            SECRET_KEY="b" * 32,
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",  # 32 chars, 32 distinct
         )
         assert len(s.SECRET_KEY) == 32
 
     def test_production_with_64_char_key_passes(self):
         """A long random key is accepted."""
-        key = "x" * 64
+        key = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+        assert len(key) == 64 and len(set(key)) == 64
         s = Settings(
             _env_file=None,
             ENVIRONMENT="production",
             SECRET_KEY=key,
         )
         assert s.SECRET_KEY == key
+
+    def test_production_with_low_entropy_key_raises(self):
+        """A key with only 1 distinct character must be rejected."""
+        with pytest.raises(ValueError, match="insufficient entropy"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY="a" * 32,
+            )
+
+    def test_production_with_exactly_20_distinct_chars_passes(self):
+        """A 32-char key with exactly 20 distinct characters is accepted."""
+        key = "abcdefghij0123456789" + "a" * 12  # 20 distinct chars, 32 total
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="production",
+            SECRET_KEY=key,
+        )
+        assert len(set(s.SECRET_KEY)) == 20
+
+    def test_production_with_19_distinct_chars_raises(self):
+        """A 32-char key with only 19 distinct characters is rejected."""
+        key = "abcdefghi0123456789" + "a" * 13  # 19 distinct chars, 32 total
+        with pytest.raises(ValueError, match="insufficient entropy"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY=key,
+            )
 
 
 class TestValidateEnvironment:
@@ -125,7 +155,7 @@ class TestValidateEnvironment:
         s = Settings(
             _env_file=None,
             ENVIRONMENT="staging",
-            SECRET_KEY="s" * 32,
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
         )
         assert s.ENVIRONMENT == "staging"
 
@@ -133,7 +163,7 @@ class TestValidateEnvironment:
         s = Settings(
             _env_file=None,
             ENVIRONMENT="production",
-            SECRET_KEY="p" * 32,
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
         )
         assert s.ENVIRONMENT == "production"
 
