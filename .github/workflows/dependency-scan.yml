@@ -22,9 +22,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
       - name: Install pip-audit
-        run: pip install pip-audit
+        run: uv pip install pip-audit
       - name: Run pip-audit
-        run: pip-audit --desc on
+        run: uv run pip-audit --desc on
 
   frontend-npm-audit:
     name: Frontend (npm audit)
