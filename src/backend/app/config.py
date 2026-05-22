@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
-        if self.ENVIRONMENT != "production":
+        if self.ENVIRONMENT == "development":
             return self
         if self.SECRET_KEY == "change-me-in-production-use-at-least-32-bytes-base64":
             raise ValueError(
