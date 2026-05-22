@@ -5,7 +5,7 @@ from app.config import Settings
 
 
 class TestValidateSecretKey:
-    """ADR-007: SECRET_KEY must be non-default and >= 32 chars in production."""
+    """ADR-007: SECRET_KEY must be non-default and >= 32 chars in non-development environments."""
 
     def test_development_skips_secret_key_validation(self):
         """Non-production environments accept the default placeholder key."""
@@ -15,13 +15,31 @@ class TestValidateSecretKey:
         )
         assert s.SECRET_KEY == "change-me-in-production-use-at-least-32-bytes-base64"
 
-    def test_staging_skips_secret_key_validation(self):
-        """Staging environment also skips key validation."""
+    def test_staging_default_key_raises(self):
+        """Staging environment must reject the default placeholder key."""
+        with pytest.raises(ValueError, match="default value"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="staging",
+            )
+
+    def test_staging_with_short_key_raises(self):
+        """Staging key must be at least 32 characters."""
+        with pytest.raises(ValueError, match="at least 32"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="staging",
+                SECRET_KEY="tooshort",
+            )
+
+    def test_staging_with_valid_key_passes(self):
+        """A valid 32-char key is accepted in staging."""
         s = Settings(
             _env_file=None,
             ENVIRONMENT="staging",
+            SECRET_KEY="v" * 32,
         )
-        assert s.SECRET_KEY
+        assert len(s.SECRET_KEY) == 32
 
     def test_production_with_default_key_raises(self):
         """Production must not use the default placeholder key."""
@@ -77,7 +95,11 @@ class TestValidateEnvironment:
         assert s.ENVIRONMENT == "development"
 
     def test_accepts_staging(self):
-        s = Settings(_env_file=None, ENVIRONMENT="staging")
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="staging",
+            SECRET_KEY="s" * 32,
+        )
         assert s.ENVIRONMENT == "staging"
 
     def test_accepts_production(self):
