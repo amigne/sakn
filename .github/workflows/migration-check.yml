@@ -1,0 +1,55 @@
+name: Migration Check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - 'src/backend/alembic/**'
+      - 'src/backend/app/models/**'
+
+jobs:
+  migration-test:
+    name: Alembic upgrade/downgrade/upgrade
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: sakn
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: sakn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sakn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: src/backend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run migrations (upgrade -> downgrade -> upgrade)
+        env:
+          DATABASE_URL: postgresql+asyncpg://sakn:testpass@localhost:5432/sakn_test
+          ENVIRONMENT: development
+        run: |
+          set -e
+          echo "=== alembic upgrade head ==="
+          alembic upgrade head
+          echo "=== alembic downgrade base ==="
+          alembic downgrade base
+          echo "=== alembic upgrade head (re-apply) ==="
+          alembic upgrade head
+          echo "=== All migrations are reversible ==="
