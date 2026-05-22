@@ -29,17 +29,17 @@ class Settings(BaseSettings):
         return self
 
     # Security
-    SECRET_KEY: str = "change-me-in-production-use-at-least-32-bytes-base64"
+    SECRET_KEY: str = "change-me-in-production-use-at-least-32-characters"
     SECURITY_DNS_RESOLVER: str = "1.1.1.1"
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
         if self.ENVIRONMENT == "development":
             return self
-        if self.SECRET_KEY == "change-me-in-production-use-at-least-32-bytes-base64":
+        if self.SECRET_KEY == "change-me-in-production-use-at-least-32-characters":
             raise ValueError(
                 "SECRET_KEY is still set to the default value. "
-                "Generate a real key (at least 32 bytes base64) and set it via the SECRET_KEY environment variable."
+                "Generate a real key (at least 32 characters) and set it via the SECRET_KEY environment variable."
             )
         if len(self.SECRET_KEY) < 32:
             raise ValueError(
