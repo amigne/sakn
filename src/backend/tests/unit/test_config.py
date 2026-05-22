@@ -17,7 +17,7 @@ class TestValidateSecretKey:
 
     def test_staging_default_key_raises(self):
         """Staging environment must reject the default placeholder key."""
-        with pytest.raises(ValueError, match="default value"):
+        with pytest.raises(ValueError, match="known default"):
             Settings(
                 _env_file=None,
                 ENVIRONMENT="staging",
@@ -43,10 +43,37 @@ class TestValidateSecretKey:
 
     def test_production_with_default_key_raises(self):
         """Production must not use the default placeholder key."""
-        with pytest.raises(ValueError, match="default value"):
+        with pytest.raises(ValueError, match="known default"):
             Settings(
                 _env_file=None,
                 ENVIRONMENT="production",
+            )
+
+    def test_production_with_uppercase_change_me_raises(self):
+        """Uppercase CHANGE-ME variant is detected as a placeholder."""
+        with pytest.raises(ValueError, match="known default"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY="CHANGE-ME",
+            )
+
+    def test_production_with_lowercase_change_me_raises(self):
+        """Lowercase change-me variant is detected as a placeholder."""
+        with pytest.raises(ValueError, match="known default"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY="change-me",
+            )
+
+    def test_production_with_no_dash_changeme_raises(self):
+        """No-dash changeme variant is detected as a placeholder."""
+        with pytest.raises(ValueError, match="known default"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY="changeme",
             )
 
     def test_production_with_short_key_raises(self):

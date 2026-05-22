@@ -1,7 +1,17 @@
+import hashlib
 from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
+
+_KNOWN_DEFAULT_KEY_HASHES: frozenset[str] = frozenset({
+    "f1b26d32000838014dae4c8fd56073c2e9de9ba0f4d7c6190097feb2171ac5f1",  # change-me-in-production-use-at-least-32-characters
+    "19cd1e7f65109ed570df433a76166522c7d03377a1fcc6f3153f28085d90efe5",  # change-me-in-production-use-at-least-32-bytes-base64
+    "a268e47c2aabfd8c9e6eac615564d426d33f08bcd7fd2789315517676987a97f",  # CHANGE-ME
+    "e2186dbdb1bb4193608605e84f33208765b5693b55edd4f730a719a100eeea6f",  # change-me
+    "057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86",  # changeme
+    "ba01338ba5fa0c1584a6d41f93fe550b1d715a8de2da10d6c673131a85658394",  # CHANGEME
+})
 
 
 class Settings(BaseSettings):
@@ -36,9 +46,10 @@ class Settings(BaseSettings):
     def validate_secret_key(self) -> "Settings":
         if self.ENVIRONMENT == "development":
             return self
-        if self.SECRET_KEY == "change-me-in-production-use-at-least-32-characters":
+        key_hash = hashlib.sha256(self.SECRET_KEY.encode()).hexdigest()
+        if key_hash in _KNOWN_DEFAULT_KEY_HASHES:
             raise ValueError(
-                "SECRET_KEY is still set to the default value. "
+                "SECRET_KEY is still set to a known default or placeholder value. "
                 "Generate a real key (at least 32 characters) and set it via the SECRET_KEY environment variable."
             )
         if len(self.SECRET_KEY) < 32:
