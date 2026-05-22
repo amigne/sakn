@@ -13,7 +13,7 @@ class TestValidateSecretKey:
             _env_file=None,
             ENVIRONMENT="development",
         )
-        assert s.SECRET_KEY == "change-me-in-production-use-at-least-32-bytes-base64"
+        assert s.SECRET_KEY == "change-me-in-production-use-at-least-32-characters"
 
     def test_staging_default_key_raises(self):
         """Staging environment must reject the default placeholder key."""
