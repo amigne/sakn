@@ -144,6 +144,63 @@ class TestValidateSecretKey:
             )
 
 
+class TestValidateHealthToken:
+    """HEALTH_FULL_TOKEN must be >= 32 chars when set in non-development environments."""
+
+    def test_development_skips_health_token_validation(self):
+        """Development accepts empty or short health tokens."""
+        s = Settings(_env_file=None, ENVIRONMENT="development")
+        assert s.HEALTH_FULL_TOKEN == ""
+
+    def test_production_empty_token_is_ok(self):
+        """Empty token in production means /health/full is disabled, which is fine."""
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="production",
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
+        )
+        assert s.HEALTH_FULL_TOKEN == ""
+
+    def test_production_short_token_raises(self):
+        """Production with a short health token must raise."""
+        with pytest.raises(ValueError, match="HEALTH_FULL_TOKEN must be at least 32"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="production",
+                SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
+                HEALTH_FULL_TOKEN="short",
+            )
+
+    def test_production_valid_token_passes(self):
+        """A 32-char health token is accepted in production."""
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="production",
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
+            HEALTH_FULL_TOKEN="h" * 32,
+        )
+        assert s.HEALTH_FULL_TOKEN == "h" * 32
+
+    def test_staging_short_token_raises(self):
+        """Staging with a short health token must also raise."""
+        with pytest.raises(ValueError, match="HEALTH_FULL_TOKEN must be at least 32"):
+            Settings(
+                _env_file=None,
+                ENVIRONMENT="staging",
+                SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
+                HEALTH_FULL_TOKEN="short",
+            )
+
+    def test_staging_empty_token_is_ok(self):
+        """Empty health token in staging is accepted."""
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="staging",
+            SECRET_KEY="abcdefghijklmnopqrstuvwxyz012345",
+        )
+        assert s.HEALTH_FULL_TOKEN == ""
+
+
 class TestValidateEnvironment:
     """ENVIRONMENT is required and must be one of {development, staging, production}."""
 

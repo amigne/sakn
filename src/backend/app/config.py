@@ -64,6 +64,20 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def validate_health_token(self) -> "Settings":
+        if self.ENVIRONMENT == "development":
+            return self
+        if self.HEALTH_FULL_TOKEN == "":
+            return self
+        if len(self.HEALTH_FULL_TOKEN) < 32:
+            raise ValueError(
+                f"HEALTH_FULL_TOKEN must be at least 32 characters when set in "
+                f"{self.ENVIRONMENT} (got {len(self.HEALTH_FULL_TOKEN)}). "
+                'Generate a token with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+            )
+        return self
+
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
     RATE_LIMIT_STORAGE: str = "redis"
