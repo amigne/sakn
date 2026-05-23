@@ -44,3 +44,15 @@ class TestDatabaseUrlAssembly:
         s = Settings(_env_file=None, POSTGRES_PASSWORD="pass word")
         assert "pass%20word" in s.DATABASE_URL
         assert "pass+word" not in s.DATABASE_URL
+
+    def test_postgres_host_special_chars_quoted(self):
+        s = Settings(_env_file=None, POSTGRES_PASSWORD="secret", POSTGRES_HOST="host@name")
+        assert "host%40name" in s.DATABASE_URL
+        parsed = urlparse(s.DATABASE_URL)
+        assert parsed.hostname == "host%40name"
+
+    def test_postgres_db_special_chars_quoted(self):
+        s = Settings(_env_file=None, POSTGRES_PASSWORD="secret", POSTGRES_DB="db/name")
+        assert "db%2Fname" in s.DATABASE_URL
+        parsed = urlparse(s.DATABASE_URL)
+        assert parsed.path == "/db%2Fname"
