@@ -157,6 +157,11 @@ async def _change_user_status(
         raise HTTPException(status_code=404, detail="User not found")
 
     admin_id = getattr(request.state, "user_id", None)
+    if admin_id and admin_id == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"message_key": "admin.cannot_target_self", "action": action},
+        )
     old_status = user.status
 
     if new_status:
