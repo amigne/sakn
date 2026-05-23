@@ -25,7 +25,7 @@ async def check():
     except Exception:
         return False
 asyncio.run(check()) or sys.exit(1)
-" 2>/dev/null; do
+"; do
   echo "PostgreSQL not ready — retrying in 2s..."
   sleep 2
 done
