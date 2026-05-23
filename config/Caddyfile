@@ -17,12 +17,6 @@ http://{$DOMAIN} {
 		-Server
 	}
 
-	handle /api/v1/tools/*/stream {
-		reverse_proxy backend:8000 {
-			header_up X-Forwarded-Proto https
-		}
-	}
-
 	handle /api/* {
 		reverse_proxy backend:8000 {
 			header_up X-Forwarded-Proto https
