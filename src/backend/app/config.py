@@ -34,7 +34,7 @@ class Settings(BaseSettings):
             self.DATABASE_URL = (
                 f"postgresql+asyncpg://{quote(self.POSTGRES_USER, safe='')}"
                 f":{quote(self.POSTGRES_PASSWORD, safe='')}"
-                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+                f"@{quote(self.POSTGRES_HOST, safe='')}:{self.POSTGRES_PORT}/{quote(self.POSTGRES_DB, safe='')}"
             )
         return self
 
