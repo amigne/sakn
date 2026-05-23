@@ -72,12 +72,12 @@ class TestAdminUserActions:
     @pytest.mark.asyncio
     async def test_block_user(self, client: AsyncClient, db_session):
         """Admin can block a user."""
-        admin_id, token = await _create_admin_session(client, db_session)
-
-        # Create a regular user to block
+        # Create a regular user to block BEFORE _create_admin_session (which commits)
         user = await create_user(db_session, email="target@test.com")
 
-        response = await client.post(
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.put(
             f"/api/v1/admin/users/{user.id}/block",
             cookies={"sakn_session": token},
         )
@@ -88,12 +88,13 @@ class TestAdminUserActions:
     @pytest.mark.asyncio
     async def test_unblock_user(self, client: AsyncClient, db_session):
         """Admin can unblock a user."""
-        admin_id, token = await _create_admin_session(client, db_session)
         user = await create_user(
             db_session, email="blocked@test.com", status="blocked"
         )
 
-        response = await client.post(
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.put(
             f"/api/v1/admin/users/{user.id}/unblock",
             cookies={"sakn_session": token},
         )
@@ -105,7 +106,7 @@ class TestAdminUserActions:
         """Admin cannot block their own account."""
         admin_id, token = await _create_admin_session(client, db_session)
 
-        response = await client.post(
+        response = await client.put(
             f"/api/v1/admin/users/{admin_id}/block",
             cookies={"sakn_session": token},
         )
@@ -114,7 +115,10 @@ class TestAdminUserActions:
     @pytest.mark.asyncio
     async def test_non_admin_cannot_block(self, client: AsyncClient, db_session):
         """Regular user cannot use admin endpoints."""
+        from datetime import timedelta
+
         from app.models import Session
+        from app.models.base import utcnow
 
         user = await create_user(
             db_session, email="regular@test.com", role="authenticated"
@@ -125,13 +129,14 @@ class TestAdminUserActions:
             user_id=user.id,
             token_hash=hash_token(reg_token),
             ip_address="127.0.0.1",
+            expires_at=utcnow() + timedelta(hours=24),
         )
         db_session.add(session)
         await db_session.flush()
 
         target = await create_user(db_session, email="target2@test.com")
 
-        response = await client.post(
+        response = await client.put(
             f"/api/v1/admin/users/{target.id}/block",
             cookies={"sakn_session": reg_token},
         )
