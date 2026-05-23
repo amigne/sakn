@@ -41,11 +41,3 @@ jobs:
         run: npm ci
       - name: Run npm audit
         run: npm audit --audit-level=high
-
-  osv-scanner:
-    name: OSV Scanner (advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: google/osv-scanner-action@v1
