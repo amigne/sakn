@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-05-22
+Accepted — 2026-05-22 (amended 2026-05-23 to remove OSV-Scanner)
 
 ## Context
 
@@ -46,11 +46,10 @@ Built into GitHub, files dependency update PRs.
 
 ## Decision
 
-**Option (a): pip-audit + npm audit + OSV-Scanner (advisory).**
+**Option (a) — amended: pip-audit + npm audit only.**
 
 - **pip-audit**: Audits the installed virtual environment after `uv sync --frozen`. Fails the CI job on any vulnerability (default behavior).
 - **npm audit**: Runs with `--audit-level=high`, failing only on high and critical severity findings.
-- **OSV-Scanner**: Runs as an advisory check (`continue-on-error: true`) against all lockfiles in the repository. Findings are visible in CI logs but do not block merges.
 
 **Triggers:**
 - On push to `master`
@@ -60,7 +59,18 @@ Built into GitHub, files dependency update PRs.
 **Failure policy:**
 - Backend (`pip-audit`): fail on any vulnerability. If a CVE has no fix available, it can be temporarily ignored via `pip-audit --ignore-vuln PYSEC-YYYY-NNNN` with a documented expiry date in `docs/qa/dependency-scanning.md`.
 - Frontend (`npm audit`): fail on high and critical. Medium and low are informational only.
-- OSV-Scanner: advisory only. Does not block CI.
+
+### Amendment 2026-05-23 — OSV-Scanner removed
+
+The initial decision included `google/osv-scanner-action@v1` as a third advisory-only job. **It never functioned**: from its introduction in PR #146 (2026-05-22) until PR #161 (2026-05-23), every run failed with `Unable to resolve action 'google/osv-scanner-action@v1'`. The `continue-on-error: true` flag masked the failure on the merge gate, so the gap was only discovered during sprint 8 review (issue #151).
+
+Rather than pinning a different tag or migrating to the reusable workflow, the OSV-Scanner job is **removed** because:
+
+- **SAKN has only two dependency ecosystems** (Python via `uv.lock`, JavaScript via `package-lock.json`). OSV-Scanner is designed for projects spanning many ecosystems (Go binaries, Rust crates, Maven, NuGet, …) where ecosystem-native scanners are unavailable.
+- **`pip-audit` and `npm audit` consume the same upstream advisory data** as OSV-Scanner (PYSEC, GHSA, OSV.dev). A vulnerability missed by both would almost certainly be missed by OSV as well.
+- **The fictive coverage is worse than the honest gap**: a perpetually-red advisory check that everyone learns to ignore degrades trust in the CI signal.
+
+Should SAKN add a new dependency ecosystem (Go, Rust, etc.), this decision must be revisited.
 
 ## Consequences
 
