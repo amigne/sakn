@@ -106,10 +106,10 @@ async def test_list_tools(client):
 @pytest.mark.asyncio
 async def test_execute_unknown_tool(client):
     response = await client.post("/api/v1/tools/nonexistent/execute", json={})
-    assert response.status_code == 200
+    assert response.status_code == 404
     data = response.json()
-    assert "error" in data
-    assert data["error"]["code"] == "NOT_FOUND"
+    # FastAPI HTTPException(detail=...) puts the structured error under "detail"
+    assert data["detail"]["error"]["code"] == "NOT_FOUND"
 
 
 @pytest.mark.asyncio
