@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.models.base import new_uuid7
 from app.security.tokens import hash_token, hash_token_legacy
 from app.security.csrf import generate_csrf_token, set_csrf_cookie
-from app.security.cookies import get_session_token
+from app.security.cookies import get_session_token, session_cookie_name
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,29 @@ async def _upgrade_session_hash(legacy_hash: str, hmac_hash: str, session_data: 
         logger.exception("Failed to upgrade session hash in Redis for legacy=%s", legacy_hash[:16])
 
 
+async def _create_anonymous_session(request: Request) -> dict | None:
+    """Persist an anonymous session. Returns dict with token, session_id or None on failure."""
+    try:
+        from app.database import async_session_factory, is_db_available
+        from app.services import session_service
+
+        if not is_db_available():
+            return None
+
+        async with async_session_factory() as db:
+            token, session = await session_service.create(
+                db,
+                user_id=None,
+                ip_address=request.client.host if request.client else "unknown",
+                user_agent=request.headers.get("user-agent"),
+            )
+            await db.commit()
+            return {"token": token, "session_id": session.id}
+    except Exception:
+        logger.exception("Failed to create anonymous session")
+        return None
+
+
 class SessionMiddleware(BaseHTTPMiddleware):
     """Resolve session from cookie, attach user/session to request state.
 
@@ -138,6 +161,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         session_token = get_session_token(request)
+        created_session_token: str | None = None
 
         if session_token:
             token_hash = hash_token(session_token)
@@ -154,17 +178,50 @@ class SessionMiddleware(BaseHTTPMiddleware):
                     await _upgrade_session_hash(legacy_hash, token_hash, session)
                     request.state.session_token_hash = token_hash
             else:
-                request.state.session_id = f"anon_{new_uuid7()}"
+                # Session cookie exists but session not found (expired/revoked).
+                # Create a persisted anonymous session; fall back to ephemeral if DB is down.
+                anon = await _create_anonymous_session(request)
+                if anon:
+                    created_session_token = anon["token"]
+                    request.state.session_token = anon["token"]
+                    request.state.session_token_hash = hash_token(anon["token"])
+                    request.state.session_id = anon["session_id"]
+                    request.state.user_id = None
+                    request.state.role = "visitor"
+                else:
+                    request.state.session_id = f"anon_{new_uuid7()}"
+                    request.state.user_id = None
+                    request.state.role = "visitor"
+        else:
+            # No session cookie — create a persisted anonymous session.
+            anon = await _create_anonymous_session(request)
+            if anon:
+                created_session_token = anon["token"]
+                request.state.session_token = anon["token"]
+                request.state.session_token_hash = hash_token(anon["token"])
+                request.state.session_id = anon["session_id"]
                 request.state.user_id = None
                 request.state.role = "visitor"
-        else:
-            # Anonymous
-            anon_id = new_uuid7()
-            request.state.session_id = f"anon_{anon_id}"
-            request.state.user_id = None
-            request.state.role = "visitor"
+            else:
+                anon_id = new_uuid7()
+                request.state.session_id = f"anon_{anon_id}"
+                request.state.user_id = None
+                request.state.role = "visitor"
 
         response = await call_next(request)
+
+        # Set session cookie for newly created anonymous sessions
+        if created_session_token:
+            is_secure = request.url.scheme == "https"
+            response.set_cookie(
+                key=session_cookie_name(is_secure),
+                value=created_session_token,
+                httponly=True,
+                samesite="lax",
+                secure=is_secure,
+                path="/",
+                max_age=86400,
+            )
 
         # Set CSRF cookie for visitors if not present
         if not request.cookies.get("sakn_csrf"):
