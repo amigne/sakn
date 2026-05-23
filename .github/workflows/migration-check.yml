@@ -47,9 +47,9 @@ jobs:
         run: |
           set -e
           echo "=== alembic upgrade head ==="
-          alembic upgrade head
+          uv run alembic upgrade head
           echo "=== alembic downgrade base ==="
-          alembic downgrade base
+          uv run alembic downgrade base
           echo "=== alembic upgrade head (re-apply) ==="
-          alembic upgrade head
+          uv run alembic upgrade head
           echo "=== All migrations are reversible ==="
