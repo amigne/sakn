@@ -197,20 +197,60 @@ class TestWebSocketRedisSessionException:
     """Issue #42: Redis session lookup failure logs the exception instead of silent pass."""
 
     @pytest.mark.asyncio
-    async def test_redis_session_exception_is_logged(self):
+    async def test_redis_session_exception_is_logged(self, _engine):
         """When Redis session lookup raises, logger.exception is called and flow continues."""
-        ws = _make_mock_ws(cookies="sakn_session=some-token-value")
-        logger = logging.getLogger("app.api.v1.endpoints.tools")
+        from sqlalchemy import delete
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+        from app.models import ToolModule
+        from app.models.base import new_uuid7
+        from app.models.tool_module import RoleToolPermission
 
-        with patch.object(logger, "exception") as mock_log:
-            # Patch redis_get to raise BEFORE it's imported inside tool_stream
-            with patch(
-                "app.redis.session_store.get_session",
-                side_effect=Exception("Redis connection refused"),
-            ):
-                await tools_mod.tool_stream(ws, "ping")
+        # Seed a deterministic DB so tool_stream finds ToolModule(name="ping")
+        # regardless of CWD or the state of the production sakn.db.
+        test_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+        tool_id = new_uuid7()
 
-        mock_log.assert_any_call("Redis session lookup failed for WS")
+        async with test_factory() as seed_db:
+            seed_db.add(ToolModule(
+                id=tool_id, name="ping", display_name_key="t.ping",
+                description_key="d.ping", enabled=True, version="1.0",
+            ))
+            await seed_db.flush()
+            seed_db.add(RoleToolPermission(
+                id=new_uuid7(), role="visitor", tool_id=tool_id, allowed=True,
+            ))
+            await seed_db.commit()
+
+        original_factory = db_module.async_session_factory
+        original_tools_factory = tools_mod.async_session_factory
+        db_module.async_session_factory = test_factory
+        tools_mod.async_session_factory = test_factory
+
+        try:
+            ws = _make_mock_ws(cookies="sakn_session=some-token-value")
+            logger = logging.getLogger("app.api.v1.endpoints.tools")
+
+            with patch.object(logger, "exception") as mock_log:
+                with patch(
+                    "app.redis.session_store.get_session",
+                    side_effect=Exception("Redis connection refused"),
+                ):
+                    await tools_mod.tool_stream(ws, "ping")
+
+            mock_log.assert_any_call("Redis session lookup failed for WS")
+        finally:
+            # Clean up seeded data so we don't pollute other tests
+            async with test_factory() as cleanup_db:
+                await cleanup_db.execute(
+                    delete(RoleToolPermission).where(RoleToolPermission.tool_id == tool_id)
+                )
+                await cleanup_db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool_id)
+                )
+                await cleanup_db.commit()
+
+            db_module.async_session_factory = original_factory
+            tools_mod.async_session_factory = original_tools_factory
 
 
     @pytest.mark.asyncio
