@@ -1,5 +1,6 @@
 from ipaddress import ip_address, ip_network
 import logging
+import dns.exception
 import dns.name
 import dns.resolver
 from app.config import settings
@@ -64,6 +65,12 @@ def _check_ips(ips: list[str], context: str) -> list[str] | None:
     return ips
 
 
+def _canonical_name(name: str) -> str:
+    """Normalize a DNS name to its canonical wire-format representation, then
+    back to lowercase text without the trailing dot (RFC 4343 case-insensitivity)."""
+    return dns.name.from_text(name).to_text(omit_final_dot=True).lower()
+
+
 async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> list[str]:
     """Resolve hostname to IPs, walking the CNAME chain and checking each hop.
 
@@ -74,8 +81,12 @@ async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> lis
     """
     resolver_ip = resolver_ip or settings.SECURITY_DNS_RESOLVER
     resolver = _make_resolver(resolver_ip)
-    current = hostname
-    seen = {hostname}
+    try:
+        current = _canonical_name(hostname)
+    except dns.exception.DNSException:
+        logger.warning("Malformed hostname rejected: %s", hostname)
+        return []
+    seen = {current}
 
     for _ in range(CNAME_MAX_HOPS):
         # ── A records ──────────────────────────────────────────
@@ -106,12 +117,12 @@ async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> lis
         try:
             answer = resolver.resolve(current, "CNAME", raise_on_no_answer=False)
             if answer.rrset:
-                target = str(answer.rrset[0].target).rstrip(".")
-                if target in seen:
-                    logger.warning("CNAME loop detected: %s → %s", current, target)
+                target_canonical = _canonical_name(str(answer.rrset[0].target))
+                if target_canonical in seen:
+                    logger.warning("CNAME loop detected: %s → %s", current, target_canonical)
                     return []
-                seen.add(target)
-                current = target
+                seen.add(target_canonical)
+                current = target_canonical
                 continue
         except dns.resolver.NXDOMAIN:
             return []

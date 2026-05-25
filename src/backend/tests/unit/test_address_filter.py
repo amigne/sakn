@@ -247,3 +247,64 @@ class TestResolveHostname:
         ):
             result = await resolve_hostname("hop0.example.com")
             assert result == []
+
+    @pytest.mark.asyncio
+    async def test_cname_loop_case_insensitive_two_hops(self):
+        """evil.com → Evil.com → detected at hop 2, not hop 3 (issue #68)."""
+        response_map = {
+            ("evil.com", "A"): _empty_answer(),
+            ("evil.com", "AAAA"): _empty_answer(),
+            ("evil.com", "CNAME"): _make_answer(
+                [_cname_record("Evil.com")]  # different case
+            ),
+            # Evil.com canonicalizes to evil.com which is already in seen
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("evil.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_cname_loop_case_insensitive_multi_case(self):
+        """Chain with 3+ case variants of the same name → detected."""
+        response_map = {
+            ("evil.com", "A"): _empty_answer(),
+            ("evil.com", "AAAA"): _empty_answer(),
+            ("evil.com", "CNAME"): _make_answer(
+                [_cname_record("EVIL.com")]  # first variant
+            ),
+            # EVIL.com normalizes to evil.com → loop detected at hop 1
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("evil.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_cname_normal_resolution_unaffected_by_canonicalization(self):
+        """foo.com → bar.com → 1.2.3.4 continues without being flagged as loop."""
+        response_map = {
+            ("foo.com", "A"): _empty_answer(),
+            ("foo.com", "AAAA"): _empty_answer(),
+            ("foo.com", "CNAME"): _make_answer(
+                [_cname_record("bar.com")]
+            ),
+            ("bar.com", "A"): _make_answer([_a_record("1.2.3.4")]),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("foo.com")
+            assert result == ["1.2.3.4"]
+
+    @pytest.mark.asyncio
+    async def test_malformed_hostname_returns_empty(self):
+        """Malformed inputs (.., .foo, oversized labels) must not crash — return []."""
+        for bad in ["..", ".foo", "foo..bar", "a" * 64 + ".com"]:
+            result = await resolve_hostname(bad)
+            assert result == [], f"expected [] for {bad!r}, got {result!r}"
