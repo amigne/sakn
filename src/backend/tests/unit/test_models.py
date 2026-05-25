@@ -66,16 +66,16 @@ async def test_session_visitor(db_session):
 
 @pytest.mark.asyncio
 async def test_create_tool_module(db_session):
-    tool = await create_tool_module(db_session, name="ping")
-    assert tool.name == "ping"
+    tool = await create_tool_module(db_session, name="test_models_create")
+    assert tool.name == "test_models_create"
     assert tool.enabled is True
     assert tool.version == "1.0.0"
 
 
 @pytest.mark.asyncio
 async def test_tool_module_unique_name(db_session):
-    await create_tool_module(db_session, name="ping")
-    tool2 = ToolModule(name="ping", display_name_key="k", description_key="d", version="1.0.0")
+    await create_tool_module(db_session, name="test_models_unique")
+    tool2 = ToolModule(name="test_models_unique", display_name_key="k", description_key="d", version="1.0.0")
     db_session.add(tool2)
     with pytest.raises(Exception):
         await db_session.flush()
@@ -83,7 +83,7 @@ async def test_tool_module_unique_name(db_session):
 
 @pytest.mark.asyncio
 async def test_create_role_permission(db_session):
-    tool = await create_tool_module(db_session)
+    tool = await create_tool_module(db_session, name="test_models_perm")
     perm = await create_role_permission(db_session, role="visitor", tool_id=tool.id)
     assert perm.role == "visitor"
     assert perm.tool_id == tool.id
