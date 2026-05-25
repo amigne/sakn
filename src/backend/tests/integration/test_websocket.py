@@ -109,7 +109,7 @@ class TestWebSocketRateLimit:
     @pytest.mark.asyncio
     async def test_rate_limit_rejected_with_WS_CLOSE_RATE_LIMITED(self, db_session, _engine):
         """Second connection attempt should be rate-limited with code WS_CLOSE_RATE_LIMITED."""
-        get_rate_limiter()._db_fallback.clear()
+        get_rate_limiter().clear_for_tests()
 
         # Seed test data
         user = await create_user(db_session, email="wsratelimit@example.com")
@@ -190,7 +190,7 @@ class TestWebSocketRateLimit:
 
             db_module.async_session_factory = original_factory
             tools_mod.async_session_factory = original_tools_factory
-            get_rate_limiter()._db_fallback.clear()
+            get_rate_limiter().clear_for_tests()
 
 
 class TestWebSocketRedisSessionException:
@@ -260,7 +260,7 @@ class TestWebSocketRedisSessionException:
         from app.models.tool_module import ToolModule
         from sqlalchemy import delete, select as sa_select
 
-        get_rate_limiter()._db_fallback.clear()
+        get_rate_limiter().clear_for_tests()
 
         # Clean up any leftover data from previous tests
         from app.models.tool_module import RateLimitConfig, RoleToolPermission
@@ -326,7 +326,7 @@ class TestWebSocketRedisSessionException:
         finally:
             db_module.async_session_factory = original_factory
             tools_mod.async_session_factory = original_tools_factory
-            get_rate_limiter()._db_fallback.clear()
+            get_rate_limiter().clear_for_tests()
 
 
 class TestWebSocketOriginValidation:

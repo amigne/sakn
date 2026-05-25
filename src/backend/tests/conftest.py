@@ -15,6 +15,7 @@ from app.database import get_session
 from app.main import app
 from app.models import Base
 import app.database as db_module
+import app.middleware.rate_limit as rl_module
 import app.middleware.session as mw_module
 
 TEST_DATABASE_URL = "sqlite+aiosqlite://"
@@ -64,8 +65,10 @@ async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
 
     # Monkey-patch the global async_session_factory so middleware also uses test DB
     original_factory = db_module.async_session_factory
+    original_rl_factory = rl_module.async_session_factory
     db_module.async_session_factory = session_factory
     mw_module.async_session_factory = session_factory
+    rl_module.async_session_factory = session_factory
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -74,5 +77,6 @@ async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
     # Restore
     app.dependency_overrides.clear()
     db_module.async_session_factory = original_factory
+    rl_module.async_session_factory = original_rl_factory
     if hasattr(mw_module, "async_session_factory"):
         del mw_module.async_session_factory

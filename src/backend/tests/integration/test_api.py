@@ -118,7 +118,7 @@ async def test_list_tools_for_role_validation(client):
     from app.redis.rate_limit_store import get_rate_limiter
 
     # Clear before first request to avoid pollution from prior tests
-    get_rate_limiter()._db_fallback.clear()
+    get_rate_limiter().clear_for_tests()
 
     # Valid role
     response = await client.get("/api/v1/tools/available-for/administrator")
@@ -128,7 +128,7 @@ async def test_list_tools_for_role_validation(client):
     assert isinstance(data["tools"], list)
 
     # Clear in-memory rate limiter so the next request isn't blocked
-    get_rate_limiter()._db_fallback.clear()
+    get_rate_limiter().clear_for_tests()
 
     # Unknown role — FastAPI returns 422 before the endpoint logic runs
     response = await client.get("/api/v1/tools/available-for/superadmin")
@@ -159,15 +159,9 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
     from app.models.tool_module import RateLimitConfig
     from app.security.tokens import generate_token, hash_token
     from app.redis.rate_limit_store import get_rate_limiter
-    import app.middleware.rate_limit as rl_module
-
-    # Monkey-patch the rate-limit middleware's module-level reference so it
-    # uses the test DB (the mw_module patch in conftest.py doesn't cover it).
-    original_rl_factory = rl_module.async_session_factory
-    rl_module.async_session_factory = test_factory
 
     # Clear the in-memory rate limit store between tests
-    get_rate_limiter()._db_fallback.clear()
+    get_rate_limiter().clear_for_tests()
 
     raw_token = generate_token()
     token_hash = hash_token(raw_token)
@@ -184,6 +178,7 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
             )
             db.add(user)
             await db.flush()
+            user_id = user.id
 
             session_obj = Session(
                 id=new_uuid7(),
@@ -196,13 +191,16 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
             await db.flush()
 
             # Low hard limit so the test doesn't need 500 requests
-            db.add(RateLimitConfig(
+            rlc = RateLimitConfig(
                 role="authenticated",
                 tool_id=None,
                 soft_limit=5,
                 hard_limit=3,
                 window_seconds=3600,
-            ))
+            )
+            db.add(rlc)
+            await db.flush()
+            rlc_id = rlc.id
             await db.commit()
 
         cookies = {"sakn_session": raw_token}
@@ -226,18 +224,16 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
         assert data["error"]["details"]["limit_type"] == "hard"
 
     finally:
-        rl_module.async_session_factory = original_rl_factory
-
-        # Clean up DB rows
+        # Clean up only the rows this test created, scoped by ID
         async with test_factory() as db:
             await db.execute(
                 delete(Session).where(Session.token_hash == token_hash)
             )
             await db.execute(
-                delete(RateLimitConfig).where(RateLimitConfig.role == "authenticated")
+                delete(RateLimitConfig).where(RateLimitConfig.id == rlc_id)
             )
             await db.execute(
-                delete(User).where(User.email == "ratelimit-test@example.com")
+                delete(User).where(User.id == user_id)
             )
             await db.commit()
 
@@ -248,7 +244,7 @@ class TestPublicDnsServers:
     @pytest.fixture(autouse=True)
     def _clear_rate_limiter(self):
         from app.redis.rate_limit_store import get_rate_limiter
-        get_rate_limiter()._db_fallback.clear()
+        get_rate_limiter().clear_for_tests()
 
     @pytest.mark.asyncio
     async def test_disabled_tool_returns_empty(self, client: AsyncClient, db_session):

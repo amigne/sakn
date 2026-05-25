@@ -56,3 +56,23 @@ class TestDatabaseUrlAssembly:
         assert "db%2Fname" in s.DATABASE_URL
         parsed = urlparse(s.DATABASE_URL)
         assert parsed.path == "/db%2Fname"
+
+    def test_database_url_env_var_override_bypasses_assembly(self, monkeypatch):
+        """When DATABASE_URL is set via env var, assembly is skipped."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://env:override@host/db")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "should-be-ignored")
+        s = Settings(_env_file=None)
+        assert s.DATABASE_URL == "postgresql+asyncpg://env:override@host/db"
+
+    def test_database_url_assembled_when_only_postgres_password_in_env(self, monkeypatch):
+        """Env var POSTGRES_PASSWORD alone triggers DATABASE_URL assembly."""
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setenv("POSTGRES_PASSWORD", "envpass")
+        s = Settings(_env_file=None)
+        assert s.DATABASE_URL.startswith("postgresql+asyncpg://sakn:envpass@")
+
+    def test_database_url_env_var_override_no_pg_vars(self, monkeypatch):
+        """Env var DATABASE_URL is preserved even without PG component vars."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://standalone:url@host/db")
+        s = Settings(_env_file=None)
+        assert s.DATABASE_URL == "postgresql+asyncpg://standalone:url@host/db"
