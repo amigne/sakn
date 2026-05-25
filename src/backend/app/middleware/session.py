@@ -4,7 +4,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.models.base import new_uuid7
-from app.security.tokens import hash_token, hash_token_legacy
+from app.security.tokens import hash_token
 from app.security.csrf import generate_csrf_token, set_csrf_cookie
 from app.security.cookies import get_session_token, session_cookie_name
 
@@ -33,35 +33,14 @@ async def _resolve_role(user_id: str | None) -> str:
     return "authenticated"
 
 
-async def _resolve_session(token_hash: str, legacy_hash: str) -> dict | None:
-    """Try HMAC hash first, fall back to legacy SHA-256 (ADR-007).
-
-    Returns a dict with keys: session_id, user_id, is_legacy (bool).
-    """
-    # Try HMAC first
-    session = await _lookup_session(token_hash)
-    if session:
-        session["is_legacy"] = False
-        return session
-
-    # Fallback to legacy SHA-256
-    session = await _lookup_session(legacy_hash)
-    if session:
-        session["is_legacy"] = True
-        return session
-
-    return None
-
-
-async def _lookup_session(token_hash: str) -> dict | None:
-    """Look up session by token_hash in Redis then DB."""
+async def _resolve_session(token_hash: str) -> dict | None:
+    """Look up session by HMAC token_hash in Redis then DB."""
     # Redis first
     try:
         from app.redis.session_store import get_session as redis_get_session
 
         redis_data = await redis_get_session(token_hash)
         if redis_data:
-            # Update sliding expiration
             try:
                 from app.redis.session_store import update_activity
                 await update_activity(token_hash)
@@ -98,36 +77,6 @@ async def _lookup_session(token_hash: str) -> dict | None:
     return None
 
 
-async def _upgrade_session_hash(legacy_hash: str, hmac_hash: str, session_data: dict) -> None:
-    """Silently upgrade a legacy SHA-256 session to HMAC (ADR-007).
-
-    Updates DB token_hash and migrates Redis key.
-    """
-    try:
-        # Update DB
-        from app.database import async_session_factory, is_db_available
-        from sqlalchemy import update
-        from app.models import Session
-
-        if is_db_available():
-            async with async_session_factory() as db:
-                await db.execute(
-                    update(Session)
-                    .where(Session.token_hash == legacy_hash)
-                    .values(token_hash=hmac_hash)
-                )
-                await db.commit()
-    except Exception:
-        logger.exception("Failed to upgrade session hash in DB for legacy=%s", legacy_hash[:16])
-
-    # Migrate Redis key
-    try:
-        from app.redis.session_store import migrate_session_hash
-        await migrate_session_hash(legacy_hash, hmac_hash, session_data)
-    except Exception:
-        logger.exception("Failed to upgrade session hash in Redis for legacy=%s", legacy_hash[:16])
-
-
 async def _create_anonymous_session(request: Request) -> dict | None:
     """Persist an anonymous session. Returns dict with token, session_id or None on failure."""
     try:
@@ -155,7 +104,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
     """Resolve session from cookie, attach user/session to request state.
 
     For authenticated users: reads sakn_session cookie, resolves from Redis/DB
-    with dual lookup (HMAC → legacy SHA-256 fallback, per ADR-007).
+    (HMAC-SHA256 only — ADR-007 migration completed).
     For visitors: creates anonymous session identifiers.
     """
 
@@ -165,18 +114,14 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
         if session_token:
             token_hash = hash_token(session_token)
-            legacy_hash = hash_token_legacy(session_token)
             request.state.session_token_hash = token_hash
             request.state.session_token = session_token
 
-            session = await _resolve_session(token_hash, legacy_hash)
+            session = await _resolve_session(token_hash)
             if session:
                 request.state.session_id = session["session_id"]
                 request.state.user_id = session["user_id"]
                 request.state.role = await _resolve_role(session["user_id"])
-                if session.get("is_legacy"):
-                    await _upgrade_session_hash(legacy_hash, token_hash, session)
-                    request.state.session_token_hash = token_hash
             else:
                 # Session cookie exists but session not found (expired/revoked).
                 # Create a persisted anonymous session; fall back to ephemeral if DB is down.

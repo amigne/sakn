@@ -91,7 +91,7 @@ Disclosure, **D**enial of Service, **E**levation of Privilege.
 |--------|--------|----------|------------|-----------|
 | Session token prediction | S | High | 256-bit CSPRNG tokens via `secrets.token_urlsafe(32)` | `src/backend/app/security/tokens.py:5-7` |
 | Token DB theft enables impersonation | I | High | SHA-256 hashing before storage; constant-time comparison via `secrets.compare_digest()` | `src/backend/app/security/tokens.py:10-17` |
-| Session token lacks HMAC pepper | I | Medium | **Fixed** (issue #23, ADR-007). `hash_token()` now uses HMAC-SHA256(SECRET_KEY, token). Legacy SHA-256 sessions are silently upgraded on next request. See ADR-007 for migration strategy. | `src/backend/app/security/tokens.py` |
+| Session token lacks HMAC pepper | I | Medium | **Fixed** (issue #23, ADR-007). `hash_token()` uses HMAC-SHA256(SECRET_KEY, token). Migration completed 2026-05-25 — legacy SHA-256 fallback removed. | `src/backend/app/security/tokens.py` |
 | Session fixation | S | Medium | New session token generated on login; old token invalidated | `auth_service.py:login()` |
 | Cookie theft / XSS | I | High | HttpOnly + SameSite=Lax cookies; `__Host-` prefix when HTTPS active (browser-enforced Secure + Path=/); 24h expiry with activity-based extension | `src/backend/app/security/cookies.py` |
 | CSRF on state-changing endpoints | T | High | Double-submit cookie pattern: `sakn_csrf` cookie (readable by JS) + `X-CSRF-Token` header validated per mutation; auto-retry on 403 with fresh token | `src/backend/app/security/csrf.py` |
