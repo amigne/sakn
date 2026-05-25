@@ -117,6 +117,9 @@ async def test_list_tools_for_role_validation(client):
     """GET /tools/available-for/{role}: valid roles return 200, unknown roles return 422."""
     from app.redis.rate_limit_store import get_rate_limiter
 
+    # Clear before first request to avoid pollution from prior tests
+    get_rate_limiter()._db_fallback.clear()
+
     # Valid role
     response = await client.get("/api/v1/tools/available-for/administrator")
     assert response.status_code == 200
