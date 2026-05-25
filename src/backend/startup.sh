@@ -6,6 +6,12 @@ echo "SAKN backend startup..."
 # Wait for PostgreSQL (poll until we can connect with python)
 # NOTE: config.py MUST remain importable without database or network access.
 # The inline python import below is the single source of truth for DATABASE_URL assembly.
+echo "Validating configuration..."
+python -c "from app.config import settings" || {
+  echo "FATAL: Cannot load configuration. Check required environment variables (ENVIRONMENT, etc.)." >&2
+  exit 1
+}
+
 echo "Waiting for PostgreSQL..."
 until python -c "
 import asyncio, asyncpg, sys
