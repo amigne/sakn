@@ -102,15 +102,16 @@ class TestAnonymousSessionTransition:
 
 
 class TestAnonymousSessionCleanup:
-    """Tests for the cleanup_expired_anonymous_sessions scheduled job."""
+    """Tests for cleanup_expired_anonymous_sessions in session_cleanup_service."""
 
     @pytest.mark.asyncio
     async def test_deletes_expired_anonymous_session(self, db_session):
         """Expired anonymous sessions (user_id IS NULL) are deleted."""
         from datetime import datetime, timedelta, timezone
-        from sqlalchemy import delete, select
+        from sqlalchemy import select
         from app.models import Session
         from app.models.base import new_uuid7
+        from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
 
         old_date = datetime.now(timezone.utc) - timedelta(hours=48)
         sess = Session(
@@ -123,14 +124,10 @@ class TestAnonymousSessionCleanup:
         db_session.add(sess)
         await db_session.flush()
 
-        await db_session.execute(
-            delete(Session).where(
-                Session.user_id.is_(None),
-                Session.expires_at < datetime.now(timezone.utc),
-            )
-        )
+        count = await cleanup_expired_anonymous_sessions(db_session)
         await db_session.flush()
 
+        assert count == 1
         result = await db_session.execute(select(Session).where(Session.id == sess.id))
         assert result.scalar_one_or_none() is None
 
@@ -138,9 +135,10 @@ class TestAnonymousSessionCleanup:
     async def test_keeps_non_expired_anonymous_session(self, db_session):
         """Anonymous sessions that are not yet expired are kept."""
         from datetime import datetime, timedelta, timezone
-        from sqlalchemy import delete, select
+        from sqlalchemy import select
         from app.models import Session
         from app.models.base import new_uuid7
+        from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
 
         future_date = datetime.now(timezone.utc) + timedelta(hours=24)
         sess = Session(
@@ -153,14 +151,10 @@ class TestAnonymousSessionCleanup:
         db_session.add(sess)
         await db_session.flush()
 
-        await db_session.execute(
-            delete(Session).where(
-                Session.user_id.is_(None),
-                Session.expires_at < datetime.now(timezone.utc),
-            )
-        )
+        count = await cleanup_expired_anonymous_sessions(db_session)
         await db_session.flush()
 
+        assert count == 0
         result = await db_session.execute(select(Session).where(Session.id == sess.id))
         assert result.scalar_one_or_none() is not None
 
@@ -168,10 +162,11 @@ class TestAnonymousSessionCleanup:
     async def test_keeps_expired_authenticated_session(self, db_session):
         """Authenticated sessions (even expired) are never deleted by this job."""
         from datetime import datetime, timedelta, timezone
-        from sqlalchemy import delete, select
+        from sqlalchemy import select
         from app.models import Session
         from app.models.base import new_uuid7
         from tests.factories import create_user
+        from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
 
         user = await create_user(db_session, email="keep-auth@example.com")
         old_date = datetime.now(timezone.utc) - timedelta(hours=48)
@@ -185,13 +180,9 @@ class TestAnonymousSessionCleanup:
         db_session.add(sess)
         await db_session.flush()
 
-        await db_session.execute(
-            delete(Session).where(
-                Session.user_id.is_(None),
-                Session.expires_at < datetime.now(timezone.utc),
-            )
-        )
+        count = await cleanup_expired_anonymous_sessions(db_session)
         await db_session.flush()
 
+        assert count == 0
         result = await db_session.execute(select(Session).where(Session.id == sess.id))
         assert result.scalar_one_or_none() is not None

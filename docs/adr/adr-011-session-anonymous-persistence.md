@@ -48,7 +48,7 @@ session duration (default 24 hours).
 - **Positive:** Enables future features such as anonymous preferences and
   visitor-to-user conversion tracking.
 - **Negative:** Increased session table volume. Addressed by a daily cleanup
-  job (`cleanup_expired_anonymous_sessions`, cron at 03:30 UTC) that deletes
+  job (`cleanup_expired_anonymous_sessions`, cron at 03:35 UTC) that deletes
   anonymous sessions (`user_id IS NULL`) past their `expires_at`.
 - **Negative:** GDPR considerations — anonymous session cookies must be
   disclosed in the privacy policy. Retention is the same as authenticated
