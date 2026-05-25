@@ -1,3 +1,4 @@
+import asyncio
 from ipaddress import ip_address, ip_network
 import logging
 import dns.exception
@@ -52,7 +53,7 @@ def _make_resolver(resolver_ip: str) -> dns.resolver.Resolver:
     r = dns.resolver.Resolver()
     r.nameservers = [resolver_ip]
     r.timeout = 3
-    r.lifetime = 5
+    r.lifetime = 2
     return r
 
 
@@ -71,14 +72,9 @@ def _canonical_name(name: str) -> str:
     return dns.name.from_text(name).to_text(omit_final_dot=True).lower()
 
 
-async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> list[str]:
-    """Resolve hostname to IPs, walking the CNAME chain and checking each hop.
-
-    Walks CNAME intermediates manually to detect chains that pass through
-    internal hostnames.  At each hop we resolve A (then AAAA) records and
-    verify every IP against the blocklist, continuing to the next hop when
-    the current name is an alias.
-    """
+async def _resolve_hostname_inner(hostname: str, resolver_ip: str | None = None) -> list[str]:
+    """Core resolution logic.  Separated so the public entry-point can wrap it
+    in a global timeout."""
     resolver_ip = resolver_ip or settings.SECURITY_DNS_RESOLVER
     resolver = _make_resolver(resolver_ip)
     try:
@@ -133,6 +129,23 @@ async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> lis
 
     logger.warning("CNAME chain exceeded max hops (%d) for %s", CNAME_MAX_HOPS, hostname)
     return []
+
+
+async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> list[str]:
+    """Resolve hostname to IPs with a global timeout (defense-in-depth #69).
+
+    Wraps the per-hop CNAME-walking resolver in a hard deadline so a chain
+    of slow or non-responsive authoritative servers cannot occupy a worker
+    beyond GLOBAL_DNS_TIMEOUT seconds.
+    """
+    GLOBAL_DNS_TIMEOUT = 10
+    try:
+        return await asyncio.wait_for(
+            _resolve_hostname_inner(hostname, resolver_ip), timeout=GLOBAL_DNS_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.warning("DNS resolution global timeout for %s", hostname)
+        return []
 
 
 async def filter_target(target: str) -> tuple[str, str | None]:

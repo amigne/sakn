@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import asyncio
 import dns.name
 import dns.resolver
 import pytest
@@ -8,6 +9,7 @@ from app.security.address_filter import (
     is_ip_blocked,
     filter_target,
     resolve_hostname,
+    _make_resolver,
     BLOCKED_NETWORKS,
     CNAME_MAX_HOPS,
 )
@@ -308,3 +310,37 @@ class TestResolveHostname:
         for bad in ["..", ".foo", "foo..bar", "a" * 64 + ".com"]:
             result = await resolve_hostname(bad)
             assert result == [], f"expected [] for {bad!r}, got {result!r}"
+
+
+class TestResolveHostnameTimeout:
+    """Issue #69: global timeout and reduced per-query lifetime."""
+
+    def test_make_resolver_lifetime_is_2(self):
+        """Per-query lifetime reduced from 5s to 2s."""
+        r = _make_resolver("1.1.1.1")
+        assert r.lifetime == 2
+
+    @pytest.mark.asyncio
+    async def test_global_timeout_returns_empty(self):
+        """asyncio.TimeoutError → empty list with a warning log."""
+        with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+            result = await resolve_hostname("slow.example.com")
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_normal_resolution_unaffected_by_timeout_wrapper(self):
+        """A fast CNAME chain is not affected by the global timeout wrapper."""
+        response_map = {
+            ("foo.com", "A"): _empty_answer(),
+            ("foo.com", "AAAA"): _empty_answer(),
+            ("foo.com", "CNAME"): _make_answer(
+                [_cname_record("bar.com")]
+            ),
+            ("bar.com", "A"): _make_answer([_a_record("8.8.8.8")]),
+        }
+        with patch(
+            "app.security.address_filter._make_resolver",
+            return_value=_resolver_from_map(response_map),
+        ):
+            result = await resolve_hostname("foo.com")
+            assert result == ["8.8.8.8"]
