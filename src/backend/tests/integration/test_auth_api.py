@@ -481,3 +481,15 @@ class TestEmailHashLogging:
         assert "email_hash" in details
         assert details["email_hash"] == expected_hash
         assert email not in event.details
+
+    def test_hash_email_for_log_case_insensitive(self):
+        """Same email with different casing produces the same hash."""
+        assert _hash_email_for_log("Foo@Bar.com") == _hash_email_for_log("foo@bar.com")
+
+    def test_hash_email_for_log_strips_whitespace(self):
+        """Leading/trailing whitespace is stripped before hashing."""
+        assert _hash_email_for_log("  user@example.com  ") == _hash_email_for_log("user@example.com")
+
+    def test_hash_email_for_log_different_emails_different_hash(self):
+        """Different emails always produce different hashes."""
+        assert _hash_email_for_log("user@example.com") != _hash_email_for_log("user@other.com")
