@@ -6,7 +6,7 @@ services:
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/sakn.db
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-dev-redis-password}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
       - HOST=0.0.0.0
       - PORT=8000
       - ENVIRONMENT=development
@@ -32,9 +32,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dev-redis-password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     networks:
