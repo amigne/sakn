@@ -33,13 +33,24 @@ echo "PostgreSQL is ready."
 
 # Wait for Redis
 echo "Waiting for Redis..."
-REDIS_HOST=$(echo "$REDIS_URL" | sed -n 's|^redis://[^@]*@\([^:/]*\).*|\1|p')
-if [ -z "$REDIS_HOST" ]; then
-  REDIS_HOST=$(echo "$REDIS_URL" | sed -n 's|^redis://\([^:/]*\).*|\1|p')
+# Parse REDIS_URL with Python urlparse (handles ACL format + special chars in password)
+eval "$(python <<'PYEOF'
+import os, urllib.parse, shlex
+u = urllib.parse.urlparse(os.environ.get("REDIS_URL", "redis://redis:6379/0"))
+print(f"REDIS_HOST={shlex.quote(u.hostname or 'redis')}")
+print(f"REDIS_PORT={u.port or 6379}")
+print(f"REDIS_PASS={shlex.quote(urllib.parse.unquote(u.password or ''))}")
+print(f"REDIS_USER={shlex.quote(urllib.parse.unquote(u.username or ''))}")
+PYEOF
+)"
+
+if [ -n "$REDIS_USER" ]; then
+  REDIS_AUTH="--user $REDIS_USER -a $REDIS_PASS --no-auth-warning"
+elif [ -n "$REDIS_PASS" ]; then
+  REDIS_AUTH="-a $REDIS_PASS --no-auth-warning"
+else
+  REDIS_AUTH=""
 fi
-REDIS_PASS=$(echo "$REDIS_URL" | sed -n 's|^redis://:\([^@]*\)@.*|\1|p')
-REDIS_AUTH=""
-[ -n "$REDIS_PASS" ] && REDIS_AUTH="-a $REDIS_PASS --no-auth-warning"
 while ! redis-cli $REDIS_AUTH -h "${REDIS_HOST:-redis}" ping 2>/dev/null | grep -q PONG; do
   echo "Redis not ready — retrying in 2s..."
   sleep 2
