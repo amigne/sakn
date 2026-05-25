@@ -40,31 +40,28 @@ class TestWebSocketExceptionFailClosed:
     """Issue #43: WebSocket closes with WS_CLOSE_DB_UNAVAILABLE when DB raises during pre-accept."""
 
     @pytest.mark.asyncio
-    async def test_db_exception_during_init_closes_WS_CLOSE_DB_UNAVAILABLE_and_logs(self):
+    async def test_db_exception_during_init_closes_WS_CLOSE_DB_UNAVAILABLE_and_logs(self, monkeypatch):
         """If async_session_factory raises, the WS closes with WS_CLOSE_DB_UNAVAILABLE."""
         ws = _make_mock_ws()
-        original = db_module.async_session_factory
 
         def raising_factory():
             raise Exception("DB connection failed")
 
-        db_module.async_session_factory = raising_factory
-        try:
-            with patch.object(
-                logging.getLogger("app.api.v1.endpoints.tools"), "exception"
-            ) as mock_log:
-                await tools_mod.tool_stream(ws, "ping")
+        monkeypatch.setattr(db_module, "async_session_factory", raising_factory)
+        monkeypatch.setattr(db_module, "is_db_available", lambda: True)
+        with patch.object(
+            logging.getLogger("app.api.v1.endpoints.tools"), "exception"
+        ) as mock_log:
+            await tools_mod.tool_stream(ws, "ping")
 
-            ws.close.assert_called_once()
-            assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
-            assert ws.close.call_args[1]["reason"] == "db_unavailable"
-            mock_log.assert_called_once()
-            assert "DB error" in mock_log.call_args[0][0]
-        finally:
-            db_module.async_session_factory = original
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+        assert ws.close.call_args[1]["reason"] == "db_unavailable"
+        mock_log.assert_called_once()
+        assert "DB error" in mock_log.call_args[0][0]
 
     @pytest.mark.asyncio
-    async def test_db_session_aenter_failure_closes_WS_CLOSE_DB_UNAVAILABLE(self):
+    async def test_db_session_aenter_failure_closes_WS_CLOSE_DB_UNAVAILABLE(self, monkeypatch):
         """If the DB session context manager raises on __aenter__, close WS_CLOSE_DB_UNAVAILABLE."""
 
         class _FailingCtx:
@@ -75,15 +72,12 @@ class TestWebSocketExceptionFailClosed:
                 pass
 
         ws = _make_mock_ws()
-        original = db_module.async_session_factory
-        db_module.async_session_factory = lambda: _FailingCtx()
-        try:
-            await tools_mod.tool_stream(ws, "ping")
-            ws.close.assert_called_once()
-            assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
-            assert ws.close.call_args[1]["reason"] == "db_unavailable"
-        finally:
-            db_module.async_session_factory = original
+        monkeypatch.setattr(db_module, "async_session_factory", lambda: _FailingCtx())
+        monkeypatch.setattr(db_module, "is_db_available", lambda: True)
+        await tools_mod.tool_stream(ws, "ping")
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == WS_CLOSE_DB_UNAVAILABLE
+        assert ws.close.call_args[1]["reason"] == "db_unavailable"
 
 
 class TestWebSocketDBUnavailable:
@@ -107,7 +101,7 @@ class TestWebSocketRateLimit:
     """Issue #61: WebSocket closes with WS_CLOSE_RATE_LIMITED when rate limit is exceeded."""
 
     @pytest.mark.asyncio
-    async def test_rate_limit_rejected_with_WS_CLOSE_RATE_LIMITED(self, db_session, _engine):
+    async def test_rate_limit_rejected_with_WS_CLOSE_RATE_LIMITED(self, db_session, _engine, monkeypatch):
         """Second connection attempt should be rate-limited with code WS_CLOSE_RATE_LIMITED."""
         get_rate_limiter().clear_for_tests()
 
@@ -137,12 +131,9 @@ class TestWebSocketRateLimit:
         test_factory = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
         )
-        original_factory = db_module.async_session_factory
-
-        # Also patch the module-level reference in tools_mod
-        original_tools_factory = tools_mod.async_session_factory
-        db_module.async_session_factory = test_factory
-        tools_mod.async_session_factory = test_factory
+        monkeypatch.setattr(db_module, "async_session_factory", test_factory)
+        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
+        monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
             cookies = f"sakn_session={raw_token}"
@@ -188,8 +179,6 @@ class TestWebSocketRateLimit:
                 )
                 await cleanup_db.commit()
 
-            db_module.async_session_factory = original_factory
-            tools_mod.async_session_factory = original_tools_factory
             get_rate_limiter().clear_for_tests()
 
 
@@ -197,7 +186,7 @@ class TestWebSocketRedisSessionException:
     """Issue #42: Redis session lookup failure logs the exception instead of silent pass."""
 
     @pytest.mark.asyncio
-    async def test_redis_session_exception_is_logged(self, _engine):
+    async def test_redis_session_exception_is_logged(self, _engine, monkeypatch):
         """When Redis session lookup raises, logger.exception is called and flow continues."""
         from sqlalchemy import delete
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -221,10 +210,9 @@ class TestWebSocketRedisSessionException:
             ))
             await seed_db.commit()
 
-        original_factory = db_module.async_session_factory
-        original_tools_factory = tools_mod.async_session_factory
-        db_module.async_session_factory = test_factory
-        tools_mod.async_session_factory = test_factory
+        monkeypatch.setattr(db_module, "async_session_factory", test_factory)
+        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
+        monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
             ws = _make_mock_ws(cookies="sakn_session=some-token-value")
@@ -249,12 +237,9 @@ class TestWebSocketRedisSessionException:
                 )
                 await cleanup_db.commit()
 
-            db_module.async_session_factory = original_factory
-            tools_mod.async_session_factory = original_tools_factory
-
 
     @pytest.mark.asyncio
-    async def test_rate_limit_creates_security_event_log(self, db_session, _engine):
+    async def test_rate_limit_creates_security_event_log(self, db_session, _engine, monkeypatch):
         """Issue #62: rate limit rejection logs a SecurityEventLog row."""
         from app.models.log import SecurityEventLog
         from app.models.tool_module import ToolModule
@@ -292,10 +277,9 @@ class TestWebSocketRedisSessionException:
         test_factory = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
         )
-        original_factory = db_module.async_session_factory
-        original_tools_factory = tools_mod.async_session_factory
-        db_module.async_session_factory = test_factory
-        tools_mod.async_session_factory = test_factory
+        monkeypatch.setattr(db_module, "async_session_factory", test_factory)
+        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
+        monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
             cookies = f"sakn_session={raw_token}"
@@ -324,8 +308,6 @@ class TestWebSocketRedisSessionException:
                 assert entry is not None, "Expected SecurityEventLog row for rate limit"
                 assert entry.source_ip == "127.0.0.1"
         finally:
-            db_module.async_session_factory = original_factory
-            tools_mod.async_session_factory = original_tools_factory
             get_rate_limiter().clear_for_tests()
 
 
