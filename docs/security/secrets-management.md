@@ -52,22 +52,19 @@ Produces a 43-character base64url string with 256 bits of entropy.
 
 ### Rotation Procedure
 
-1. **Generate** a new key:
-   ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-2. **Update** `SECRET_KEY` in the `.env` file.
-3. **Restart** the backend:
-   ```bash
-   docker compose restart backend
-   ```
-4. **Invalidate all sessions** (old CSRF tokens were generated under the old
-   key context): follow the procedure in
-   [Incident Response — Invalidate All Sessions](./incident-response.md#41-invalidate-all-sessions).
-5. **Note**: email hashes in existing `SecurityEventLog` rows are permanently
-   bound to the old key. Queries that hash an email with the new key will not
-   match old log entries. Accept this as archival data; old logs expire after
-   the configured retention period (default 90 days).
+See the dedicated [SECRET_KEY Rotation](./secret-key-rotation.md) guide for
+comprehensive procedures covering:
+
+- **Hard rotation** (emergency / full session invalidation) — for suspected
+  compromise or audit-mandated rotation.
+- **Double-key rotation** (planned / zero-downtime) — migrates sessions
+  transparently over a configurable window.
+- Impact analysis on session HMAC tokens and `SecurityEventLog` email hash
+  correlation.
+- Operational checklists (pre-flight and post-rotation verification).
+
+For emergency response, use the [Incident Response §4.3](./incident-response.md#43-force-secret_key-rotation)
+checklist which integrates rotation with session invalidation.
 
 ## 3. POSTGRES_PASSWORD
 

@@ -154,6 +154,9 @@ Use when: SECRET_KEY suspected compromised, or as part of session invalidation.
   permanently bound to the old key. Old log entries expire after the configured
   retention period (default 90 days).
 
+For planned (non-emergency) rotation with zero downtime, see
+[SECRET_KEY Rotation](./secret-key-rotation.md#4-double-key-rotation-planned--zero-downtime).
+
 ### 4.4 Data Breach (User Data Exposure)
 
 Use when: unauthorized access to user data confirmed or strongly suspected.
