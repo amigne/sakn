@@ -34,6 +34,7 @@ test.describe("Tool Execution", () => {
   });
 
   test("executes ping and displays results in table", async ({ page }) => {
+    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
 
@@ -49,6 +50,7 @@ test.describe("Tool Execution", () => {
   });
 
   test("text view toggle shows raw output", async ({ page }) => {
+    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
 
