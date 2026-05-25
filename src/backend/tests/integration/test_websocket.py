@@ -210,8 +210,7 @@ class TestWebSocketRedisSessionException:
             ):
                 await tools_mod.tool_stream(ws, "ping")
 
-        mock_log.assert_called()
-        assert mock_log.call_args[0][0] == "Redis session lookup failed for WS"
+        mock_log.assert_any_call("Redis session lookup failed for WS")
 
 
     @pytest.mark.asyncio
