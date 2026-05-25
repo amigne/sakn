@@ -118,7 +118,7 @@ async def test_list_tools_for_role_validation(client):
     from app.redis.rate_limit_store import get_rate_limiter
 
     # Clear before first request to avoid pollution from prior tests
-    get_rate_limiter().reset()
+    get_rate_limiter().clear_for_tests()
 
     # Valid role
     response = await client.get("/api/v1/tools/available-for/administrator")
@@ -128,7 +128,7 @@ async def test_list_tools_for_role_validation(client):
     assert isinstance(data["tools"], list)
 
     # Clear in-memory rate limiter so the next request isn't blocked
-    get_rate_limiter().reset()
+    get_rate_limiter().clear_for_tests()
 
     # Unknown role — FastAPI returns 422 before the endpoint logic runs
     response = await client.get("/api/v1/tools/available-for/superadmin")
@@ -161,7 +161,7 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
     from app.redis.rate_limit_store import get_rate_limiter
 
     # Clear the in-memory rate limit store between tests
-    get_rate_limiter().reset()
+    get_rate_limiter().clear_for_tests()
 
     raw_token = generate_token()
     token_hash = hash_token(raw_token)
@@ -244,7 +244,7 @@ class TestPublicDnsServers:
     @pytest.fixture(autouse=True)
     def _clear_rate_limiter(self):
         from app.redis.rate_limit_store import get_rate_limiter
-        get_rate_limiter().reset()
+        get_rate_limiter().clear_for_tests()
 
     @pytest.mark.asyncio
     async def test_disabled_tool_returns_empty(self, client: AsyncClient, db_session):

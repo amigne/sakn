@@ -87,7 +87,7 @@ class SlidingWindowRateLimiter:
         self._lua_sha: str | None = None
         self._db_fallback: dict[str, dict[str, Any]] = {}
 
-    def reset(self) -> None:
+    def clear_for_tests(self) -> None:
         """Clear the in-memory fallback store — testing only, do not call in prod."""
         self._db_fallback.clear()
 

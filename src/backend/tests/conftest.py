@@ -65,6 +65,7 @@ async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
 
     # Monkey-patch the global async_session_factory so middleware also uses test DB
     original_factory = db_module.async_session_factory
+    original_rl_factory = rl_module.async_session_factory
     db_module.async_session_factory = session_factory
     mw_module.async_session_factory = session_factory
     rl_module.async_session_factory = session_factory
@@ -76,7 +77,6 @@ async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
     # Restore
     app.dependency_overrides.clear()
     db_module.async_session_factory = original_factory
+    rl_module.async_session_factory = original_rl_factory
     if hasattr(mw_module, "async_session_factory"):
         del mw_module.async_session_factory
-    if hasattr(rl_module, "async_session_factory"):
-        del rl_module.async_session_factory
