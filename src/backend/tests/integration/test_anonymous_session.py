@@ -99,3 +99,99 @@ class TestAnonymousSessionTransition:
         assert response2.status_code == 200
         # No new cookie set since session already exists
         assert "sakn_session" not in response2.cookies
+
+
+class TestAnonymousSessionCleanup:
+    """Tests for the cleanup_expired_anonymous_sessions scheduled job."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_expired_anonymous_session(self, db_session):
+        """Expired anonymous sessions (user_id IS NULL) are deleted."""
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import delete, select
+        from app.models import Session
+        from app.models.base import new_uuid7
+
+        old_date = datetime.now(timezone.utc) - timedelta(hours=48)
+        sess = Session(
+            id=new_uuid7(),
+            user_id=None,
+            token_hash=f"hash_expired_{new_uuid7()}",
+            ip_address="127.0.0.1",
+            expires_at=old_date,
+        )
+        db_session.add(sess)
+        await db_session.flush()
+
+        await db_session.execute(
+            delete(Session).where(
+                Session.user_id.is_(None),
+                Session.expires_at < datetime.now(timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        result = await db_session.execute(select(Session).where(Session.id == sess.id))
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.asyncio
+    async def test_keeps_non_expired_anonymous_session(self, db_session):
+        """Anonymous sessions that are not yet expired are kept."""
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import delete, select
+        from app.models import Session
+        from app.models.base import new_uuid7
+
+        future_date = datetime.now(timezone.utc) + timedelta(hours=24)
+        sess = Session(
+            id=new_uuid7(),
+            user_id=None,
+            token_hash=f"hash_valid_{new_uuid7()}",
+            ip_address="127.0.0.1",
+            expires_at=future_date,
+        )
+        db_session.add(sess)
+        await db_session.flush()
+
+        await db_session.execute(
+            delete(Session).where(
+                Session.user_id.is_(None),
+                Session.expires_at < datetime.now(timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        result = await db_session.execute(select(Session).where(Session.id == sess.id))
+        assert result.scalar_one_or_none() is not None
+
+    @pytest.mark.asyncio
+    async def test_keeps_expired_authenticated_session(self, db_session):
+        """Authenticated sessions (even expired) are never deleted by this job."""
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import delete, select
+        from app.models import Session
+        from app.models.base import new_uuid7
+        from tests.factories import create_user
+
+        user = await create_user(db_session, email="keep-auth@example.com")
+        old_date = datetime.now(timezone.utc) - timedelta(hours=48)
+        sess = Session(
+            id=new_uuid7(),
+            user_id=user.id,
+            token_hash=f"hash_auth_exp_{new_uuid7()}",
+            ip_address="127.0.0.1",
+            expires_at=old_date,
+        )
+        db_session.add(sess)
+        await db_session.flush()
+
+        await db_session.execute(
+            delete(Session).where(
+                Session.user_id.is_(None),
+                Session.expires_at < datetime.now(timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        result = await db_session.execute(select(Session).where(Session.id == sess.id))
+        assert result.scalar_one_or_none() is not None

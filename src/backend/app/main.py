@@ -248,6 +248,29 @@ async def lifespan(app: FastAPI) -> Any:
             except Exception:
                 logger.exception("Unverified account cleanup failed")
 
+        @scheduler.scheduled_job("cron", hour=3, minute=30)
+        async def cleanup_expired_anonymous_sessions():
+            """Delete anonymous sessions (user_id IS NULL) past their expiration."""
+            try:
+                from datetime import datetime, timezone
+                from sqlalchemy import delete
+                from app.models import Session
+
+                async with async_session_factory() as db:
+                    result = await db.execute(
+                        delete(Session).where(
+                            Session.user_id.is_(None),
+                            Session.expires_at < datetime.now(timezone.utc),
+                        )
+                    )
+                    await db.commit()
+                    logger.info(
+                        "Cleaned up %d expired anonymous sessions",
+                        result.rowcount,
+                    )
+            except Exception:
+                logger.exception("Anonymous session cleanup failed")
+
         scheduler.start()
     except Exception:
         logger.exception("Scheduler initialization failed")
