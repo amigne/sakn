@@ -301,3 +301,10 @@ class TestResolveHostname:
         ):
             result = await resolve_hostname("foo.com")
             assert result == ["1.2.3.4"]
+
+    @pytest.mark.asyncio
+    async def test_malformed_hostname_returns_empty(self):
+        """Malformed inputs (.., .foo, oversized labels) must not crash — return []."""
+        for bad in ["..", ".foo", "foo..bar", "a" * 64 + ".com"]:
+            result = await resolve_hostname(bad)
+            assert result == [], f"expected [] for {bad!r}, got {result!r}"

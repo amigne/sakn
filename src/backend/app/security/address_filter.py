@@ -1,5 +1,6 @@
 from ipaddress import ip_address, ip_network
 import logging
+import dns.exception
 import dns.name
 import dns.resolver
 from app.config import settings
@@ -80,7 +81,11 @@ async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> lis
     """
     resolver_ip = resolver_ip or settings.SECURITY_DNS_RESOLVER
     resolver = _make_resolver(resolver_ip)
-    current = _canonical_name(hostname)
+    try:
+        current = _canonical_name(hostname)
+    except dns.exception.DNSException:
+        logger.warning("Malformed hostname rejected: %s", hostname)
+        return []
     seen = {current}
 
     for _ in range(CNAME_MAX_HOPS):
