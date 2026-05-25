@@ -11,10 +11,7 @@ until python -c "
 import asyncio, asyncpg, sys
 from app.config import settings
 async def check():
-    dsn = settings.DATABASE_URL
-    if not dsn:
-        sys.exit(1)
-    dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://', 1)
+    dsn = settings.DATABASE_URL.replace('postgresql+asyncpg://', 'postgresql://', 1)
     try:
         conn = await asyncio.wait_for(
             asyncpg.connect(dsn),
