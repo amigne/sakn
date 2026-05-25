@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
@@ -36,7 +36,7 @@ def get_registry(request: Request) -> ToolRegistry:
 
 @router.get("/available-for/{role}")
 async def list_tools_for_role(
-    role: str,
+    role: Literal["visitor", "authenticated", "administrator"],
     session=Depends(get_session),
 ):
     """Public: list tools available to a given role (for the no-tools page)."""

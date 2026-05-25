@@ -113,6 +113,26 @@ async def test_execute_unknown_tool(client):
 
 
 @pytest.mark.asyncio
+async def test_list_tools_for_role_validation(client):
+    """GET /tools/available-for/{role}: valid roles return 200, unknown roles return 422."""
+    from app.redis.rate_limit_store import get_rate_limiter
+
+    # Valid role
+    response = await client.get("/api/v1/tools/available-for/administrator")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["role"] == "administrator"
+    assert isinstance(data["tools"], list)
+
+    # Clear in-memory rate limiter so the next request isn't blocked
+    get_rate_limiter()._db_fallback.clear()
+
+    # Unknown role — FastAPI returns 422 before the endpoint logic runs
+    response = await client.get("/api/v1/tools/available-for/superadmin")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_health_database_check(client):
     """/health/minimal does NOT return checks — moved to /health/full."""
     response = await client.get("/health")
