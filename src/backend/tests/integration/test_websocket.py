@@ -163,6 +163,31 @@ class TestWebSocketRateLimit:
             )
             assert ws2.close.call_args[1]["reason"] == "rate_limit_exceeded"
         finally:
+            # Clean up committed DB rows (db_session rollback won't cover the commit above)
+            from sqlalchemy import delete
+            from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+            from app.models.tool_module import RoleToolPermission, RateLimitConfig
+            from app.models.tool_module import ToolModule
+
+            cleanup_factory = async_sessionmaker(
+                _engine, class_=AsyncSession, expire_on_commit=False
+            )
+            async with cleanup_factory() as cleanup_db:
+                await cleanup_db.execute(
+                    delete(RateLimitConfig).where(
+                        RateLimitConfig.role == "authenticated"
+                    )
+                )
+                await cleanup_db.execute(
+                    delete(RoleToolPermission).where(
+                        RoleToolPermission.tool_id == tool.id
+                    )
+                )
+                await cleanup_db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool.id)
+                )
+                await cleanup_db.commit()
+
             db_module.async_session_factory = original_factory
             tools_mod.async_session_factory = original_tools_factory
             get_rate_limiter()._db_fallback.clear()
