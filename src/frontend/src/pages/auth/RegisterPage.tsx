@@ -6,7 +6,7 @@ export default function RegisterPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
         <RegisterForm />
 
@@ -14,6 +14,6 @@ export default function RegisterPage() {
           {t("auth.has_account")} <Link to="/login" className="text-primary-600 hover:text-primary-700">{t("auth.sign_in")}</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
