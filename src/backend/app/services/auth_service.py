@@ -28,9 +28,10 @@ def _now_naive() -> datetime:
 
 def _hash_email_for_log(email: str) -> str:
     """HMAC-SHA256 the email for safe storage in security event logs."""
+    normalized = email.strip().lower()
     return hmac.new(
         settings.SECRET_KEY.encode(),
-        email.encode(),
+        normalized.encode(),
         hashlib.sha256,
     ).hexdigest()
 
