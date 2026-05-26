@@ -23,6 +23,39 @@ logger = logging.getLogger(__name__)
 PER_HOP_MAX_WAIT_FACTOR = 2.0
 
 
+def mask_private_hops(data: dict[str, Any], show_private: bool) -> dict[str, Any]:
+    """Mask private IP addresses in a traceroute hop, respecting the show_private setting.
+
+    When show_private is False and all paths in a multipath hop are private,
+    the hop is collapsed to a regular hop and probes from all paths are merged
+    into a single top-level probes array.
+    """
+    if show_private:
+        return data
+
+    if data.get("multipath"):
+        masked_paths = []
+        for path in data.get("paths", []):
+            pip = path.get("ip")
+            if pip and is_ip_blocked(pip):
+                masked_paths.append({**path, "ip": "[hidden]", "hostname": None})
+            else:
+                masked_paths.append(path)
+        data["paths"] = masked_paths
+        if all(p["ip"] == "[hidden]" for p in masked_paths):
+            data["multipath"] = False
+            data["ip"] = "[hidden]"
+            data["hostname"] = None
+            data["probes"] = [probe for path in masked_paths for probe in path.get("probes", [])]
+            data.pop("paths", None)
+        return data
+
+    if data.get("ip") and is_ip_blocked(data["ip"]):
+        data["ip"] = "[hidden]"
+        data["hostname"] = None
+    return data
+
+
 async def _log_tool_exec(
     tool_name: str, params: dict, result: str, duration_ms: int,
     error_msg: str | None, user_id: str | None, session_id: str, source_ip: str,
@@ -96,29 +129,7 @@ async def handle_traceroute_stream(
             pass
 
         def _mask_private(data: dict[str, Any]) -> dict[str, Any]:
-            if show_private:
-                return data
-
-            if data.get("multipath"):
-                masked_paths = []
-                for path in data.get("paths", []):
-                    pip = path.get("ip")
-                    if pip and is_ip_blocked(pip):
-                        masked_paths.append({**path, "ip": "[hidden]", "hostname": None})
-                    else:
-                        masked_paths.append(path)
-                data["paths"] = masked_paths
-                if all(p["ip"] == "[hidden]" for p in masked_paths):
-                    data["multipath"] = False
-                    data["ip"] = "[hidden]"
-                    data["hostname"] = None
-                    data.pop("paths", None)
-                return data
-
-            if data.get("ip") and is_ip_blocked(data["ip"]):
-                data["ip"] = "[hidden]"
-                data["hostname"] = None
-            return data
+            return mask_private_hops(data, show_private)
 
         args = TracerouteTool._build_args(resolved_ip, validated)
         max_distance = validated.get("max_distance", 30)

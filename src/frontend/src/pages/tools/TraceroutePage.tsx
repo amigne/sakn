@@ -106,7 +106,7 @@ export default function TraceroutePage() {
           hop,
           h.ip ?? "*",
           h.hostname || "",
-          ...h.probes.map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*"),
+          ...(h.probes || []).map((pr) => pr.rtt_ms ? `${pr.rtt_ms}ms` : "*"),
         ];
         return `| ${cells.join(" | ")} |`;
       });
@@ -126,7 +126,7 @@ export default function TraceroutePage() {
           }).join("\n");
         }
         if (!h.ip) return `${idx + 1}  * * *`;
-        const probeStr = h.probes.map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
+        const probeStr = (h.probes || []).map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
         const label = h.ip === "[hidden]" ? "[hidden]" : `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}`;
         return `${idx + 1}  ${label}  ${probeStr}${h.reached ? "  <- Destination" : ""}`;
       }).join("\n");
@@ -245,7 +245,7 @@ export default function TraceroutePage() {
                           {h.hostname ?? ((h.ip && h.ip !== '[hidden]') ? "*" : "")}
                           {h.reached && <Badge variant="success" className="ms-2">{t("tools.traceroute.destination_badge")}</Badge>}
                         </td>
-                        {h.probes.map((p, pi) => (
+                        {(h.probes || []).map((p, pi) => (
                           <td key={pi} className="px-3 py-1 font-mono text-[var(--color-text)]">
                             {p.status === "ok" ? `${p.rtt_ms} ms` : <span className="text-[var(--color-text-secondary)]">*</span>}
                           </td>
@@ -264,7 +264,7 @@ export default function TraceroutePage() {
                       return `${idx + 1}  ${p.ip}${p.hostname ? ` (${p.hostname})` : ""}  ${probeStr}`;
                     }).join("\n");
                   }
-                  const probeStr = h.probes.map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
+                  const probeStr = (h.probes || []).map((p) => p.rtt_ms ? `${p.rtt_ms}ms` : "*").join("  ");
                   const label = h.ip
                     ? `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}`
                     : "*";
