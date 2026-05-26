@@ -4,6 +4,11 @@ The starlette TestClient accepts WebSocket connections regardless of server
 behavior, making it unsuitable for testing close-before-accept scenarios.
 Instead, we call tool_stream directly with a mock WebSocket, which correctly
 exercises the authorization/rate-limit logic in isolation.
+
+NOTE: Starlette TestClient does not expose the pre-accept close code sent
+by the server — it always reports 1000 regardless of the actual code.
+The mock-based approach below records the real close code via
+AsyncMock.close.call_args. See docs/qa/websocket-testing.md.
 """
 import logging
 from unittest.mock import AsyncMock, patch
