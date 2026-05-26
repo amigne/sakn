@@ -1,4 +1,4 @@
-"""Test migration f1a2b3c4d5e6: hash cleartext emails in SecurityEventLog."""
+"""Test migration 8a2a49d76d6a: hash cleartext emails in SecurityEventLog."""
 import hashlib
 import hmac
 import json
