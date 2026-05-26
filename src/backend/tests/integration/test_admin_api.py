@@ -231,6 +231,34 @@ class TestAdminLikeEscape:
         assert "bslashZuser@example.com" not in emails
 
 
+class TestAdminSearchMaxLength:
+    """Issue #51: search query param must enforce max_length=128."""
+
+    @pytest.mark.asyncio
+    async def test_search_max_length_ok(self, client: AsyncClient, db_session):
+        """search=128 chars is accepted."""
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        resp = await client.get(
+            "/api/v1/admin/users",
+            params={"search": "x" * 128},
+            cookies={"sakn_session": token},
+        )
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_search_max_length_exceeded(self, client: AsyncClient, db_session):
+        """search=129 chars returns 422."""
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        resp = await client.get(
+            "/api/v1/admin/users",
+            params={"search": "x" * 129},
+            cookies={"sakn_session": token},
+        )
+        assert resp.status_code == 422
+
+
 class TestAdminDnsServers:
     """Issue #59: Admin /dns-servers endpoint requires admin auth."""
 

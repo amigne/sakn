@@ -23,7 +23,7 @@ async def list_users(
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: str | None = Query(None),
-    search: str | None = Query(None),
+    search: str | None = Query(None, max_length=128),
     sort: str | None = Query(None),
     order: str | None = Query("asc"),
     session: AsyncSession = Depends(get_session),
