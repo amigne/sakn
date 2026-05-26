@@ -26,7 +26,7 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
     setError(null);
     setFieldErrors({});
     if (!email || !password) {
-      setError(t("errors.email_password_required"));
+      setError(t("errors:email_password_required"));
       return;
     }
     setLoading(true);
@@ -41,7 +41,7 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
         }
         setFieldErrors(mapped);
       } else {
-        setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+        setError(err instanceof ApiError ? err.message : t("errors:unexpected_error"));
       }
     } finally {
       setLoading(false);
