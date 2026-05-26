@@ -79,19 +79,30 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
   return response.json();
 }
 
+export interface FieldError {
+  message_key: string;
+  message: string;
+}
+
+export interface ErrorFields {
+  [field: string]: FieldError;
+}
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
   code: string;
   messageKey: string | null;
+  fields: ErrorFields | null;
 
   constructor(status: number, data: unknown) {
-    const err = (data as { error?: { code?: string; message?: string; message_key?: string } })?.error;
+    const err = (data as { error?: { code?: string; message?: string; message_key?: string; details?: { fields?: ErrorFields } } })?.error;
     const msg = err?.message ?? `API Error ${status}`;
     super(msg);
     this.status = status;
     this.data = data;
     this.code = err?.code ?? "UNKNOWN";
     this.messageKey = err?.message_key ?? null;
+    this.fields = err?.details?.fields ?? null;
   }
 }

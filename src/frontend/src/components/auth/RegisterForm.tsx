@@ -21,11 +21,13 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
     if (!email || !firstName || !lastName || !password || !passwordConfirm) {
       setError(t("errors.all_fields_required"));
       return;
@@ -39,7 +41,15 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
       await register(email, password, passwordConfirm, firstName, lastName);
       navigate("/verify-email-sent", { state: { email } });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+      if (err instanceof ApiError && err.fields) {
+        const mapped: Record<string, string> = {};
+        for (const [field, info] of Object.entries(err.fields)) {
+          mapped[field] = info.message;
+        }
+        setFieldErrors(mapped);
+      } else {
+        setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+      }
     } finally {
       setLoading(false);
     }
@@ -54,17 +64,17 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
-          <TextInput type="email" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <TextInput type="email" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" error={fieldErrors.email} />
         </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.first_name")} *</span>
-            <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />
+            <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required error={fieldErrors.first_name} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.last_name")} *</span>
-            <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />
+            <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required error={fieldErrors.last_name} />
           </label>
         </div>
 
@@ -77,6 +87,7 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
+              error={fieldErrors.password}
             />
             <button
               type="button"
@@ -101,7 +112,7 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
 
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.confirm_password")}</span>
-          <TextInput type="password" placeholder="••••••••" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} autoComplete="new-password" />
+          <TextInput type="password" placeholder="••••••••" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} autoComplete="new-password" error={fieldErrors.password_confirm} />
         </label>
 
         <Button type="submit" className="w-full" loading={loading}>{t("auth.create_account")}</Button>

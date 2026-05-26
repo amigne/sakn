@@ -493,3 +493,65 @@ class TestEmailHashLogging:
     def test_hash_email_for_log_different_emails_different_hash(self):
         """Different emails always produce different hashes."""
         assert _hash_email_for_log("user@example.com") != _hash_email_for_log("user@other.com")
+
+
+class TestFieldLevelValidation:
+    """Issue #2: Pydantic validation errors return details.fields with per-field messages."""
+
+    @pytest.mark.asyncio
+    async def test_register_missing_fields(self, client: AsyncClient):
+        resp = await client.post("/api/v1/auth/register", json={})
+        assert resp.status_code == 422
+        data = resp.json()
+        error = data["error"]
+        assert error["code"] == "VALIDATION_ERROR"
+        assert error["message_key"] == "errors.validation"
+        fields = error["details"]["fields"]
+        assert "email" in fields
+        assert fields["email"]["message_key"] == "errors.field_required"
+        assert "password" in fields
+        assert "password_confirm" in fields
+        assert "first_name" in fields
+        assert "last_name" in fields
+
+    @pytest.mark.asyncio
+    async def test_register_wrong_type(self, client: AsyncClient):
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": ["not", "a", "string"],
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            "first_name": "Test",
+            "last_name": "User",
+        })
+        assert resp.status_code == 422
+        data = resp.json()
+        fields = data["error"]["details"]["fields"]
+        assert "email" in fields
+        assert fields["email"]["message_key"] == "errors.invalid_type"
+
+    @pytest.mark.asyncio
+    async def test_login_missing_fields(self, client: AsyncClient):
+        resp = await client.post("/api/v1/auth/login", json={})
+        assert resp.status_code == 422
+        data = resp.json()
+        fields = data["error"]["details"]["fields"]
+        assert "email" in fields
+        assert fields["email"]["message_key"] == "errors.field_required"
+        assert "password" in fields
+
+    @pytest.mark.asyncio
+    async def test_reset_password_missing_fields(self, client: AsyncClient):
+        resp = await client.post("/api/v1/auth/reset-password", json={})
+        assert resp.status_code == 422
+        data = resp.json()
+        fields = data["error"]["details"]["fields"]
+        assert "token" in fields
+        assert "password" in fields
+        assert "password_confirm" in fields
+
+    @pytest.mark.asyncio
+    async def test_existing_endpoints_unaffected(self, client: AsyncClient):
+        resp = await client.get("/api/v1/auth/csrf")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "message_key" in data

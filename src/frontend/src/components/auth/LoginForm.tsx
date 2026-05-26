@@ -18,11 +18,13 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
     if (!email || !password) {
       setError(t("errors.email_password_required"));
       return;
@@ -32,7 +34,15 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
       await login(email, password);
       navigate(redirectTo);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+      if (err instanceof ApiError && err.fields) {
+        const mapped: Record<string, string> = {};
+        for (const [field, info] of Object.entries(err.fields)) {
+          mapped[field] = info.message;
+        }
+        setFieldErrors(mapped);
+      } else {
+        setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+      }
     } finally {
       setLoading(false);
     }
@@ -53,6 +63,7 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
+            error={fieldErrors.email}
           />
         </label>
 
@@ -65,6 +76,7 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
+              error={fieldErrors.password}
             />
             <button
               type="button"
