@@ -37,7 +37,7 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
       if (err instanceof ApiError && err.fields) {
         const mapped: Record<string, string> = {};
         for (const [field, info] of Object.entries(err.fields)) {
-          mapped[field] = info.message;
+          mapped[field] = info.message_key ? t(info.message_key) : info.message;
         }
         setFieldErrors(mapped);
       } else {
