@@ -27,6 +27,8 @@ i18n.use(initReactI18next).init({
   resources,
   lng: detectLanguage(),
   fallbackLng: DEFAULT_LANGUAGE,
+  defaultNS: "common",
+  ns: ["common", "errors"],
   interpolation: {
     escapeValue: false,
   },

@@ -29,11 +29,11 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
     setError(null);
     setFieldErrors({});
     if (!email || !firstName || !lastName || !password || !passwordConfirm) {
-      setError(t("errors.all_fields_required"));
+      setError(t("errors:all_fields_required"));
       return;
     }
     if (password !== passwordConfirm) {
-      setError(t("errors.password_mismatch"));
+      setError(t("errors:password_mismatch"));
       return;
     }
     setLoading(true);
@@ -48,7 +48,7 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
         }
         setFieldErrors(mapped);
       } else {
-        setError(err instanceof ApiError ? err.message : t("errors.unexpected_error"));
+        setError(err instanceof ApiError ? err.message : t("errors:unexpected_error"));
       }
     } finally {
       setLoading(false);

@@ -23,7 +23,7 @@ export default function ResetPasswordPage() {
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) { setError(t("errors.email_required")); return; }
+    if (!email.trim()) { setError(t("errors:email_required")); return; }
     setLoading(true);
     setError(null);
     try {
@@ -34,7 +34,7 @@ export default function ResetPasswordPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError(t("errors.unexpected_error"));
+        setError(t("errors:unexpected_error"));
       }
     } finally {
       setLoading(false);
@@ -44,9 +44,9 @@ export default function ResetPasswordPage() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!password || !passwordConfirm) { setError(t("errors.all_fields_required")); return; }
-    if (password !== passwordConfirm) { setError(t("errors.password_mismatch")); return; }
-    if (!token) { setError(t("errors.missing_reset_token")); return; }
+    if (!password || !passwordConfirm) { setError(t("errors:all_fields_required")); return; }
+    if (password !== passwordConfirm) { setError(t("errors:password_mismatch")); return; }
+    if (!token) { setError(t("errors:missing_reset_token")); return; }
     setLoading(true);
     try {
       const msg = await resetPassword(token, password, passwordConfirm);
@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError(t("errors.unexpected_error"));
+        setError(t("errors:unexpected_error"));
       }
     } finally {
       setLoading(false);

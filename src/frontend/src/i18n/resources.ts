@@ -1,11 +1,15 @@
-import enTranslation from "./en.json";
-import frTranslation from "./fr.json";
+import commonEn from "./en.json";
+import commonFr from "./fr.json";
+import errorsEn from "./errors/en.json";
+import errorsFr from "./errors/fr.json";
 
 export const resources = {
   en: {
-    translation: enTranslation,
+    common: commonEn,
+    errors: errorsEn,
   },
   fr: {
-    translation: frTranslation,
+    common: commonFr,
+    errors: errorsFr,
   },
 } as const;
