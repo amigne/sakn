@@ -7,16 +7,18 @@ from app.config import Settings
 class TestValidateSecretKey:
     """ADR-007: SECRET_KEY must be non-default and >= 32 chars in non-development environments."""
 
-    def test_development_skips_secret_key_validation(self):
+    def test_development_skips_secret_key_validation(self, monkeypatch):
         """Non-production environments accept the default placeholder key."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
         s = Settings(
             _env_file=None,
             ENVIRONMENT="development",
         )
         assert s.SECRET_KEY == "change-me-in-production-use-at-least-32-characters"
 
-    def test_staging_default_key_raises(self):
+    def test_staging_default_key_raises(self, monkeypatch):
         """Staging environment must reject the default placeholder key."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
         with pytest.raises(ValueError, match="known default"):
             Settings(
                 _env_file=None,
@@ -41,8 +43,9 @@ class TestValidateSecretKey:
         )
         assert len(s.SECRET_KEY) == 32
 
-    def test_production_with_default_key_raises(self):
+    def test_production_with_default_key_raises(self, monkeypatch):
         """Production must not use the default placeholder key."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
         with pytest.raises(ValueError, match="known default"):
             Settings(
                 _env_file=None,
@@ -147,13 +150,16 @@ class TestValidateSecretKey:
 class TestValidateHealthToken:
     """HEALTH_FULL_TOKEN must be >= 32 chars when set in non-development environments."""
 
-    def test_development_skips_health_token_validation(self):
+    def test_development_skips_health_token_validation(self, monkeypatch):
         """Development accepts empty or short health tokens."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        monkeypatch.delenv("HEALTH_FULL_TOKEN", raising=False)
         s = Settings(_env_file=None, ENVIRONMENT="development")
         assert s.HEALTH_FULL_TOKEN == ""
 
-    def test_production_empty_token_is_ok(self):
+    def test_production_empty_token_is_ok(self, monkeypatch):
         """Empty token in production means /health/full is disabled, which is fine."""
+        monkeypatch.delenv("HEALTH_FULL_TOKEN", raising=False)
         s = Settings(
             _env_file=None,
             ENVIRONMENT="production",
@@ -191,8 +197,9 @@ class TestValidateHealthToken:
                 HEALTH_FULL_TOKEN="short",
             )
 
-    def test_staging_empty_token_is_ok(self):
+    def test_staging_empty_token_is_ok(self, monkeypatch):
         """Empty health token in staging is accepted."""
+        monkeypatch.delenv("HEALTH_FULL_TOKEN", raising=False)
         s = Settings(
             _env_file=None,
             ENVIRONMENT="staging",
@@ -204,7 +211,8 @@ class TestValidateHealthToken:
 class TestValidateEnvironment:
     """ENVIRONMENT is required and must be one of {development, staging, production}."""
 
-    def test_accepts_development(self):
+    def test_accepts_development(self, monkeypatch):
+        monkeypatch.delenv("SECRET_KEY", raising=False)
         s = Settings(_env_file=None, ENVIRONMENT="development")
         assert s.ENVIRONMENT == "development"
 
