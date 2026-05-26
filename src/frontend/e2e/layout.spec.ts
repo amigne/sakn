@@ -26,11 +26,11 @@ test.describe("Layout", () => {
   });
 
   test("footer is visible with version", async ({ page }) => {
-    test.skip(!!process.env.CI, "Pre-existing — ambiguous locators, see #200");
     await page.goto("/", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
-    await expect(page.locator("footer")).toBeVisible();
-    await expect(page.locator("footer")).toContainText("v0.0.1");
+    const footer = page.getByRole("contentinfo");
+    await expect(footer).toBeVisible();
+    await expect(footer).toContainText(/SAKN v/);
   });
 
   test("ping page loads as default", async ({ page }) => {
