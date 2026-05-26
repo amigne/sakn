@@ -253,3 +253,105 @@ class TestValidateEnvironment:
         monkeypatch.delenv("ENVIRONMENT", raising=False)
         with pytest.raises(ValidationError):
             Settings(_env_file=None)
+
+
+class TestNormalizeCorsOrigins:
+    """#47: CORS_ORIGINS are normalized (lowercase, no trailing slash, default ports stripped)."""
+
+    def test_default_unchanged(self, monkeypatch):
+        """Default CORS_ORIGINS value is left as-is."""
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(_env_file=None, ENVIRONMENT="development")
+        assert s.CORS_ORIGINS == "http://localhost:5173,http://localhost:8000"
+
+    def test_mixed_case_lowered(self, monkeypatch):
+        """Scheme and host are lowercased."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="https://Example.COM",
+        )
+        assert s.CORS_ORIGINS == "https://example.com"
+
+    def test_trailing_slash_removed(self, monkeypatch):
+        """Trailing slash is stripped (browser never sends it in Origin)."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="https://example.com/",
+        )
+        assert s.CORS_ORIGINS == "https://example.com"
+
+    def test_default_https_port_removed(self, monkeypatch):
+        """:443 is stripped for HTTPS origins (browser omits default ports)."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="https://example.com:443",
+        )
+        assert s.CORS_ORIGINS == "https://example.com"
+
+    def test_default_http_port_removed(self, monkeypatch):
+        """:80 is stripped for HTTP origins (browser omits default ports)."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="http://example.com:80",
+        )
+        assert s.CORS_ORIGINS == "http://example.com"
+
+    def test_non_default_port_preserved(self, monkeypatch):
+        """Non-default ports (e.g. :5173, :8000) are preserved."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="http://localhost:5173",
+        )
+        assert s.CORS_ORIGINS == "http://localhost:5173"
+
+    def test_duplicates_deduplicated(self, monkeypatch):
+        """Duplicate origins after normalization are collapsed to one entry."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="https://example.com,https://example.com/,HTTPS://Example.COM:443",
+        )
+        assert s.CORS_ORIGINS == "https://example.com"
+
+    def test_whitespace_trimmed(self, monkeypatch):
+        """Leading/trailing whitespace around entries is trimmed."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS=" https://a.com , http://b.com ",
+        )
+        assert s.CORS_ORIGINS == "https://a.com,http://b.com"
+
+    def test_empty_entries_skipped(self, monkeypatch):
+        """Empty entries (double comma, trailing comma) are skipped."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="https://a.com,,https://b.com,",
+        )
+        assert s.CORS_ORIGINS == "https://a.com,https://b.com"
+
+    def test_invalid_url_preserved_as_is(self, monkeypatch):
+        """Unparseable entries are passed through unchanged (no crash)."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        s = Settings(
+            _env_file=None,
+            ENVIRONMENT="development",
+            CORS_ORIGINS="not-a-url,*",
+        )
+        assert "not-a-url" in s.CORS_ORIGINS
+        assert "*" in s.CORS_ORIGINS
