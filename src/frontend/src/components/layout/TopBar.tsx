@@ -96,6 +96,7 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
           onClick={toggleLanguage}
           className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label={t("common.switch_language")}
+          data-testid="language-toggle"
         >
           {currentLang.toUpperCase()}
         </button>
