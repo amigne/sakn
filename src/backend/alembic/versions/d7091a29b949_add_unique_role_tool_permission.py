@@ -1,6 +1,6 @@
 """Add UniqueConstraint on role_tool_permissions (role, tool_id)
 
-Revision ID: 5a1b2c3d4e56
+Revision ID: d7091a29b949
 Revises: 4cf8dd599766
 Create Date: 2026-05-21
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "5a1b2c3d4e56"
+revision: str = "d7091a29b949"
 down_revision: Union[str, None] = "4cf8dd599766"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
