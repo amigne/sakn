@@ -34,7 +34,7 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
     if len(password) < 8:
         return False, "errors.password_too_short"
     if len(password) > 128:
-        return False, "errors.password_too_short"
+        return False, "errors.password_too_long"
 
     has_upper = any(c in string.ascii_uppercase for c in password)
     has_lower = any(c in string.ascii_lowercase for c in password)

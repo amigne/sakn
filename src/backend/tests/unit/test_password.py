@@ -60,3 +60,4 @@ class TestPasswordStrength:
     def test_too_long(self):
         valid, err = validate_password_strength("A" * 128 + "b1")
         assert not valid
+        assert err == "errors.password_too_long"
