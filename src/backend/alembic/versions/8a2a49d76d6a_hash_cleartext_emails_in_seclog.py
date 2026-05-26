@@ -1,6 +1,6 @@
 """hash_cleartext_emails_in_seclog
 
-Revision ID: f1a2b3c4d5e6
+Revision ID: 8a2a49d76d6a
 Revises: d7091a29b949
 Create Date: 2026-05-25
 
@@ -25,7 +25,7 @@ from sqlalchemy import text
 from app.config import settings
 
 
-revision: str = 'f1a2b3c4d5e6'
+revision: str = '8a2a49d76d6a'
 down_revision: Union[str, None] = 'd7091a29b949'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
