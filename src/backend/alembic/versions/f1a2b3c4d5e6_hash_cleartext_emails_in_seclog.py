@@ -1,7 +1,7 @@
 """hash_cleartext_emails_in_seclog
 
 Revision ID: f1a2b3c4d5e6
-Revises: 5a1b2c3d4e56
+Revises: d7091a29b949
 Create Date: 2026-05-25
 
 Replace plaintext email in SecurityEventLog.details with HMAC-SHA256(email, SECRET_KEY).
@@ -26,7 +26,7 @@ from app.config import settings
 
 
 revision: str = 'f1a2b3c4d5e6'
-down_revision: Union[str, None] = '5a1b2c3d4e56'
+down_revision: Union[str, None] = 'd7091a29b949'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
