@@ -24,7 +24,19 @@ and every pull request. It runs chromium and firefox in parallel.
 **Backend-dependent tests** (5 tests across `layout.spec.ts`,
 `tool-execution.spec.ts`, `traceroute.spec.ts`) are skipped in CI with
 `test.skip(!!process.env.CI)`. They require a running backend and will be
-re-enabled once the full-stack CI setup is in place (follow-up issue TBD).
+re-enabled once the full-stack CI setup is in place — see [#195](https://github.com/amigne/sakn/issues/195).
+
+**Pre-existing failing tests** (15 tests) are also skipped in CI pending
+dedicated fixes. Each `test.skip` carries the tracking issue in its message:
+
+| Issue | Tests | Cause |
+|-------|-------|-------|
+| [#199](https://github.com/amigne/sakn/issues/199) | 11 (admin-pages, sidebar, tool-execution) | E2E reference a `Dev:` toolbar that was removed from `src/frontend/src/` |
+| [#200](https://github.com/amigne/sakn/issues/200) | 3 (auth-pages, layout footer) | Locators resolve to multiple elements (Playwright strict-mode violation) |
+| [#201](https://github.com/amigne/sakn/issues/201) | 1 (theme) | Assertion assumes 2-state toggle, but the toggle cycles `system → light → dark` |
+
+Total in CI: **29 passing, 20 skipped (5 backend + 15 pre-existing), 0 failed**
+per browser.
 
 ## Interpreting flakes
 
