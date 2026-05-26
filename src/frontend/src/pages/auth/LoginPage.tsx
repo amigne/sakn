@@ -6,7 +6,7 @@ export default function LoginPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--color-surface-alt)] px-4">
       <div className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
         <LoginForm />
 
@@ -16,6 +16,6 @@ export default function LoginPage() {
           <p><Link to="/ping" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">{t("auth.continue_as_guest")}</Link></p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
