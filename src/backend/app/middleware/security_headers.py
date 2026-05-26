@@ -5,7 +5,7 @@ from starlette.responses import Response
 from app.config import settings
 
 # Paths excluded from security headers (OpenAPI docs, only relevant when enabled in dev)
-_EXEMPT_PREFIXES = {"/docs", "/redoc", "/openapi.json"}
+_EXEMPT_PATHS = {"/docs", "/redoc", "/openapi.json"}
 
 # Security header values — computed once at import time
 _CSP_HEADER = (
@@ -23,7 +23,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
 
-        if request.url.path in _EXEMPT_PREFIXES:
+        if request.url.path in _EXEMPT_PATHS:
             return response
 
         response.headers["Content-Security-Policy"] = _CSP_HEADER
