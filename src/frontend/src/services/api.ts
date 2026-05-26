@@ -104,7 +104,7 @@ export class ApiError extends Error {
     this.code = err?.code ?? "UNKNOWN";
     const rawKey = err?.message_key ?? null;
     this.messageKey = rawKey?.startsWith("errors.")
-      ? "errors:" + rawKey.slice("errors.".length)
+      ? `errors:${rawKey.slice("errors.".length)}`
       : rawKey;
     const rawFields = err?.details?.fields ?? null;
     if (rawFields) {
@@ -112,7 +112,7 @@ export class ApiError extends Error {
       for (const [field, info] of Object.entries(rawFields)) {
         rewritten[field] = {
           message_key: info.message_key?.startsWith("errors.")
-            ? "errors:" + info.message_key.slice("errors.".length)
+            ? `errors:${info.message_key.slice("errors.".length)}`
             : info.message_key,
           message: info.message,
         };
