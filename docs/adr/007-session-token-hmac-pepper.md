@@ -1,7 +1,8 @@
 # ADR-007: HMAC-Peppered Session Token Hashing
 
 ## Status
-Accepted — 2026-05-21
+Accepted (migration completed 2026-05-26, ahead of schedule) — legacy SHA-256
+fallback removed
 
 ## Context
 Session tokens are hashed with plain SHA-256 before storage in PostgreSQL and
@@ -28,9 +29,35 @@ These are short-lived (≤24h). They switch to HMAC immediately — old tokens
 issued before deployment become invalid. Acceptable blast radius: a handful of
 users need to re-request verification or password reset.
 
-**Migration window**: 30 days (covers the 24h session TTL with buffer).
-After 30 days and confirmed zero legacy lookups, remove `hash_token_legacy()`
-and the fallback path from `verify_token()`.
+**Migration window**: originally planned at 30 days (covers the 24h session TTL
+with buffer), with cleanup targeted for 2026-06-20.
+
+**Cleanup completed ahead of schedule (2026-05-26, issue #109)**. Rationale for
+accelerating from 30 → 5 days:
+
+- SAKN is **not yet deployed in production** at the time of cleanup. The
+  population of users with continuously-active sliding sessions predating the
+  HMAC deployment (2026-05-21) is empirically zero.
+- 24h absolute TTL plus inactivity timeout means the practical legacy-session
+  window is already drained for any realistic dev/test usage.
+- The "confirmed zero legacy lookups" check from the original plan was not
+  instrumented (no metric / log counter on the legacy branch). Waiting the full
+  30 days would have provided no additional verifiable safety in the absence of
+  that telemetry — pre-prod context makes the gain marginal vs. carrying the
+  fallback code surface area longer.
+- If SAKN is later deployed to production with this change already in place,
+  there is no legacy session population to worry about — HMAC has been the only
+  path from day one of prod.
+
+All legacy code removed in commit `<this PR>`:
+- `hash_token_legacy()` — deleted
+- `is_legacy_hash()` — deleted
+- `verify_token()` legacy fallback — removed
+- `_resolve_session()` dual-lookup in middleware — simplified to HMAC-only
+- `_upgrade_session_hash()` — deleted
+- `migrate_session_hash()` in Redis store — deleted
+- `session_service.get()` legacy branch — removed
+- `test_legacy_session_authenticates_and_upgrades` — removed
 
 ## Consequences
 - Session token hashes are now keyed with the application's `SECRET_KEY`.
