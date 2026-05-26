@@ -386,6 +386,25 @@ Guidelines: new columns NULLABLE or have DEFAULT. Production migrations in deplo
 
 SQLite compat: use `sa.Text()` for JSONB, `sa.String()` for INET, `sa.String(64)` for UUID (SQLite has no native UUID/INET/JSONB).
 
+#### Revision IDs — always auto-generated
+
+**Mandatory rule (humans and AI agents alike)**: never hand-write the `revision: str = "..."` value of a migration. Always run:
+
+```bash
+cd src/backend
+alembic revision -m "short description"
+# or, when generating from model changes:
+alembic revision --autogenerate -m "short description"
+```
+
+Alembic produces a random 12-character hexadecimal ID (e.g. `d7091a29b949`). Use that ID as-is and let Alembic also name the file (`<id>_<slug>.py`). Do **not**:
+
+- compose a "looking-random" ID by hand (e.g. `5a1b2c3d4e56`, `f1a2b3c4d5e6`) — these sequential or low-entropy strings risk colliding with a future auto-generated ID and break Alembic's diff tooling
+- copy an existing revision ID from another project
+- rename a migration file after it has been committed to master (renaming after merge requires every dev/staging/prod environment to run `UPDATE alembic_version SET version_num='<new>' WHERE version_num='<old>'` manually)
+
+If you discover a manually-composed ID after merge, file an issue rather than renaming silently. The cleanup PR must document the required `UPDATE alembic_version` step for each environment that has already applied the migration.
+
 ---
 
 ## 5. Security Architecture
