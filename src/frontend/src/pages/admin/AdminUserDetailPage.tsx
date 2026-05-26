@@ -109,7 +109,7 @@ export default function AdminUserDetailPage() {
           <p className="text-sm text-[var(--color-text)]">
             <span className="font-medium">{t("admin.email_verified")}</span> {user.email_verified ? t("common.yes") : t("common.no")}
             {!user.email_verified && !isSelf && (
-              <Button variant="ghost" size="sm" onClick={() => handleAction("verify")} loading={acting} className="ml-2">{t("admin.verify_now")}</Button>
+              <Button variant="ghost" size="sm" onClick={() => handleAction("verify")} loading={acting} className="ms-2">{t("admin.verify_now")}</Button>
             )}
           </p>
           <p className="text-sm text-[var(--color-text)]"><span className="font-medium">{t("admin.failed_login_attempts")}</span> {user.failed_login_attempts}</p>
@@ -165,12 +165,12 @@ export default function AdminUserDetailPage() {
               <p className="text-sm text-[var(--color-text)]">
                 <span className="font-medium">{t("admin.soft_limit")}</span>{" "}
                 <span className="font-mono">{rlStatus.soft_count} / {rlStatus.soft_limit === 0 ? "∞" : rlStatus.soft_limit}</span>
-                <span className="text-xs text-[var(--color-text-secondary)] ml-1">{t("admin.unit_req_s")}</span>
+                <span className="text-xs text-[var(--color-text-secondary)] ms-1">{t("admin.unit_req_s")}</span>
               </p>
               <p className="text-sm text-[var(--color-text)]">
                 <span className="font-medium">{t("admin.hard_limit")}</span>{" "}
                 <span className="font-mono">{rlStatus.hard_count} / {rlStatus.hard_limit === 0 ? "∞" : rlStatus.hard_limit}</span>
-                <span className="text-xs text-[var(--color-text-secondary)] ml-1">{t("admin.unit_req_h")}</span>
+                <span className="text-xs text-[var(--color-text-secondary)] ms-1">{t("admin.unit_req_h")}</span>
               </p>
             </>
           ) : (

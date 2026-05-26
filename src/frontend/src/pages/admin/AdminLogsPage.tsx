@@ -149,7 +149,7 @@ export default function AdminLogsPage() {
             ]} value={toolFilter} onChange={(v) => { setToolFilter(v); setOffset(0); }} ariaLabel={t("admin.filter_by_tool")} />
           )}
           <ToggleSwitch checked={autoRefresh} onChange={handleAutoRefreshChange} label={t("admin.auto_refresh")} />
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1 ms-auto">
             <span className="text-xs text-[var(--color-text-secondary)]">{t("admin.rows")}</span>
             <Select options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
               value={String(limit)} onChange={handleLimitChange} ariaLabel={t("admin.rows_per_page")} />

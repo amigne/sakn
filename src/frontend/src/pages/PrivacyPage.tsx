@@ -36,7 +36,7 @@ export default function PrivacyPage() {
             <p>{t("privacy.cookies.intro")}</p>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-start border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
                     <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">{t("privacy.cookies.cookie_header")}</th>
