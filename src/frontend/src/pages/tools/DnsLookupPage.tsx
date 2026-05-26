@@ -70,7 +70,7 @@ function DnsServerInput({ servers, value, onChange, onEnter }: DnsServerInputPro
         }}
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg text-sm">
+        <ul className="absolute top-full start-0 end-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg text-sm">
           {filtered.map((s, i) => (
             <li
               key={s.value}
@@ -79,7 +79,7 @@ function DnsServerInput({ servers, value, onChange, onEnter }: DnsServerInputPro
               onMouseEnter={() => setFocusedIdx(i)}
             >
               <span>{s.value}</span>
-              <span className="ml-2 text-[var(--color-text-secondary)] text-xs">{s.label}</span>
+              <span className="ms-2 text-[var(--color-text-secondary)] text-xs">{s.label}</span>
             </li>
           ))}
         </ul>
@@ -313,7 +313,7 @@ export default function DnsLookupPage() {
               const allRecs = Object.values(hopRecords).flat();
               if (allRecs.length === 0) return null;
               return (
-              <div key={hop} className="card p-3 border-l-2 border-primary-400">
+              <div key={hop} className="card p-3 border-s-2 border-primary-400">
                 <h3 className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase mb-2">
                   {hop} <span className="text-[var(--color-text-secondary)] font-normal normal-case">{t("tools.dns.cname_chain_suffix")}</span>
                 </h3>
@@ -336,7 +336,7 @@ export default function DnsLookupPage() {
 
             {/* Authority section */}
             {dnsResult.authority && Object.keys(dnsResult.authority).length > 0 && (
-              <div className="card p-3 border-l-2 border-warning-500">
+              <div className="card p-3 border-s-2 border-warning-500">
                 <h3 className="text-xs font-semibold text-warning-600 dark:text-warning-500 uppercase mb-2">{t("tools.dns.authority_section")}</h3>
                 <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
                   {Object.entries(dnsResult.authority).flatMap(([type, records]) =>
@@ -354,7 +354,7 @@ export default function DnsLookupPage() {
 
             {/* Additional section */}
             {dnsResult.additional && Object.keys(dnsResult.additional).length > 0 && (
-              <div className="card p-3 border-l-2 border-info-500">
+              <div className="card p-3 border-s-2 border-info-500">
                 <h3 className="text-xs font-semibold text-info-600 dark:text-info-500 uppercase mb-2">{t("tools.dns.additional_section")}</h3>
                 <div className="font-mono text-sm text-[var(--color-text)] space-y-0.5">
                   {Object.entries(dnsResult.additional).flatMap(([type, records]) =>
