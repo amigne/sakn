@@ -36,7 +36,8 @@ async def list_users(
         query = query.where(User.status == status)
         count_q = count_q.where(User.status == status)
     if search:
-        # Escape LIKE wildcards in user input to prevent wildcard enumeration
+        # Escape LIKE wildcards in user input to prevent wildcard enumeration.
+        # Order matters: escape backslash FIRST so subsequent \% and \_ aren't re-escaped.
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.where(User.email.ilike(f"%{escaped}%", escape="\\"))
         count_q = count_q.where(User.email.ilike(f"%{escaped}%", escape="\\"))
