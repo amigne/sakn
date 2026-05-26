@@ -4,6 +4,7 @@ test.describe("Traceroute", () => {
   test("executes with configurable probe count and resets", async ({
     page,
   }) => {
+    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/traceroute", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
 
