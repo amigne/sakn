@@ -1,5 +1,5 @@
 import hashlib
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
@@ -100,6 +100,40 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:8000"
+
+    @field_validator("CORS_ORIGINS", mode="after")
+    @classmethod
+    def normalize_cors_origins(cls, v: str) -> str:
+        """Normalize each origin and deduplicate.
+
+        Browsers send Origin without trailing slash, and with lowercase
+        scheme+host. Without normalization, a trailing slash or mixed-case
+        entry in CORS_ORIGINS would never match — a silent misconfiguration.
+        Default ports (:80 for HTTP, :443 for HTTPS) are stripped since
+        they are never present in the browser's Origin header.
+        """
+        origins: list[str] = []
+        seen: set[str] = set()
+        for raw in v.split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            parsed = urlparse(raw)
+            scheme = parsed.scheme.lower()
+            host = (parsed.hostname or "").lower()
+            if not scheme or not host:
+                origins.append(raw)
+                continue
+            port = parsed.port
+            if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+                port = None
+            origin = f"{scheme}://{host}"
+            if port is not None:
+                origin += f":{port}"
+            if origin not in seen:
+                seen.add(origin)
+                origins.append(origin)
+        return ",".join(origins)
 
     # WebSocket origin validation (see ADR-009)
     WS_REQUIRE_ORIGIN: bool = False  # set true in production for CSWSH protection
