@@ -44,14 +44,14 @@ async def list_tools_for_role(
     from app.models.tool_module import RoleToolPermission
 
     row = await session.execute(
-        select(ToolModule).where(ToolModule.enabled == True)
+        select(ToolModule).where(ToolModule.enabled.is_(True))
     )
     enabled_tools = {t.name for t in row.scalars().all()}
 
     perm_row = await session.execute(
         select(RoleToolPermission, ToolModule.name)
         .join(ToolModule, RoleToolPermission.tool_id == ToolModule.id)
-        .where(RoleToolPermission.role == role, RoleToolPermission.allowed == True)
+        .where(RoleToolPermission.role == role, RoleToolPermission.allowed.is_(True))
     )
     allowed_tools = {tool_name for _, tool_name in perm_row.all()}
 
@@ -73,7 +73,7 @@ async def list_tools(
 
     # Load enabled tool names from DB
     row = await session.execute(
-        select(ToolModule).where(ToolModule.enabled == True)
+        select(ToolModule).where(ToolModule.enabled.is_(True))
     )
     enabled_tools = {t.name for t in row.scalars().all()}
 
@@ -81,7 +81,7 @@ async def list_tools(
     perm_row = await session.execute(
         select(RoleToolPermission, ToolModule.name)
         .join(ToolModule, RoleToolPermission.tool_id == ToolModule.id)
-        .where(RoleToolPermission.role == role, RoleToolPermission.allowed == True)
+        .where(RoleToolPermission.role == role, RoleToolPermission.allowed.is_(True))
     )
     allowed_tools = {tool_name for _, tool_name in perm_row.all()}
 
@@ -105,9 +105,9 @@ async def list_tool_dns_servers(
 
     row = await session.execute(
         select(ToolModule)
-        .where(ToolModule.name == tool_name, ToolModule.enabled == True)
+        .where(ToolModule.name == tool_name, ToolModule.enabled.is_(True))
         .join(RoleToolPermission, RoleToolPermission.tool_id == ToolModule.id)
-        .where(RoleToolPermission.role == "visitor", RoleToolPermission.allowed == True)
+        .where(RoleToolPermission.role == "visitor", RoleToolPermission.allowed.is_(True))
     )
     tool = row.scalar_one_or_none()
     if tool is None:
