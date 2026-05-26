@@ -176,6 +176,7 @@ to their current status:
 | H-1 | High | Redis without authentication | Fixed |
 | H-2 | High | WebSocket fail-open on DB error | Fixed |
 | H-3 | High | WebSocket no CSWSH/Origin validation | Fixed |
+| H-4 | High | Email enumeration via security logs (cleartext PII) | Fixed (issue #15) |
 | H-5 | High | SQL LIKE wildcard escaping in admin search | Fixed |
 | H-6 | High | Frontend nginx no security headers | Fixed |
 | H-7 | High | Default SECRET_KEY in docker-compose.dev.yml | Fixed |
@@ -195,10 +196,10 @@ to their current status:
    before the trusted proxy chain could spoof client IPs. See
    [ADR-003](../adr/003-proxy-trust-policy.md).
 
-3. **Session token hashing** uses raw SHA-256 without an HMAC pepper (audit
-   finding M-3). A simultaneous compromise of both PostgreSQL and Redis would
-   expose token hashes. The 256-bit entropy makes brute-force infeasible with
-   current compute, but HMAC peppering would add defence-in-depth.
+3. **Session token hashing** now uses HMAC-SHA256 with SECRET_KEY (ADR-007).
+   M-3 is resolved. Residual consideration: if SECRET_KEY is rotated, all
+   existing sessions are invalidated and users must re-authenticate. See
+   [secrets-management.md](./secrets-management.md) for rotation procedure.
 
 4. **Auth rate limits** are process-local (in-memory). On backend restart or
    multi-instance deployment, rate limit state is lost. The primary brute-force
