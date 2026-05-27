@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -8,17 +9,11 @@ from app.models.base import utcnow
 from app.models.preferences import GlobalSetting
 from app.redis.session_store import (
     _get_max_sessions,
-    enforce_concurrent_limit,
-    update_activity,
-)
-from app.redis.session_store import (
     create_session as redis_create_session,
-)
-from app.redis.session_store import (
     delete_session as redis_delete_session,
-)
-from app.redis.session_store import (
+    enforce_concurrent_limit,
     get_session as redis_get_session,
+    update_activity,
 )
 from app.security.tokens import generate_token, hash_token
 
