@@ -5,7 +5,6 @@ import PageLayout from "@/components/layout/PageLayout";
 
 const ADMIN_TAB_KEYS = [
   { key: "admin.users", to: "/admin/users" },
-  { key: "admin.access", to: "/admin/access" },
   { key: "admin.rate_limits", to: "/admin/rate-limits" },
   { key: "admin.modules", to: "/admin/modules" },
   { key: "admin.settings", to: "/admin/settings" },

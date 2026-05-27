@@ -6,7 +6,7 @@ import AccountDeletePage from "@/pages/account/AccountDeletePage";
 // Account
 import ProfilePage from "@/pages/account/ProfilePage";
 import SessionsPage from "@/pages/account/SessionsPage";
-import AdminAccessPage from "@/pages/admin/AdminAccessPage";
+
 import AdminLogsPage from "@/pages/admin/AdminLogsPage";
 import AdminModulesPage from "@/pages/admin/AdminModulesPage";
 import AdminRateLimitsPage from "@/pages/admin/AdminRateLimitsPage";
@@ -97,14 +97,6 @@ export default function Router() {
         element={
           <AdminGuard>
             <AdminUserDetailPage />
-          </AdminGuard>
-        }
-      />
-      <Route
-        path="/admin/access"
-        element={
-          <AdminGuard>
-            <AdminAccessPage />
           </AdminGuard>
         }
       />

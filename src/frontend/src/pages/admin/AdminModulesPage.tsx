@@ -7,19 +7,27 @@ import {
   deleteDnsServer,
   listDnsServers,
   listModules,
+  listRolePermissions,
   reorderDnsServers,
   updateDnsServer,
   updateModule,
+  updateRolePermissions,
 } from "@/services/admin";
 import { api } from "@/services/api";
-import type { DnsServerPreset, ToolModule } from "@/types/admin";
+import type { AccessPermission, DnsServerPreset, ToolModule } from "@/types/admin";
 import { toolDisplayName } from "@/types/admin";
+
+const ROLES = ["administrator", "authenticated", "visitor"] as const;
 
 export default function AdminModulesPage() {
   const { t } = useTranslation();
   const [modules, setModules] = useState<ToolModule[]>([]);
-  const [modulesLoading, setModulesLoading] = useState(true);
-  const [modulesError, setModulesError] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<AccessPermission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // DNS presets
   const [dnsPresets, setDnsPresets] = useState<DnsServerPreset[]>([]);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [showDnsEditor, setShowDnsEditor] = useState(false);
@@ -28,43 +36,73 @@ export default function AdminModulesPage() {
   const [presetDesc, setPresetDesc] = useState("");
   const [presetError, setPresetError] = useState("");
 
-  // Traceroute module settings
+  // Traceroute settings
   const [showTracerouteSettings, setShowTracerouteSettings] = useState(false);
   const [showPrivateHops, setShowPrivateHops] = useState(true);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const fetchModules = useCallback(async () => {
-    setModulesLoading(true);
-    setModulesError(null);
+  // ── Data fetching ──────────────────────────────────────────────────────
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const data = await listModules();
-      setModules(data.modules);
+      const [modData, permData] = await Promise.all([listModules(), listRolePermissions()]);
+      setModules(modData.modules);
+      setPermissions(permData.permissions);
     } catch (e) {
-      setModulesError(e instanceof Error ? e.message : t("admin.failed_load_modules"));
+      setError(e instanceof Error ? e.message : t("admin.failed_load_modules"));
     } finally {
-      setModulesLoading(false);
+      setLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    fetchModules();
-  }, [fetchModules]);
+    fetchData();
+  }, [fetchData]);
+
+  // ── Module toggle ──────────────────────────────────────────────────────
 
   const toggleModule = async (name: string, currentEnabled: boolean) => {
-    // Optimistic update
     setModules((prev) => prev.map((m) => (m.name === name ? { ...m, enabled: !currentEnabled } : m)));
     try {
       await updateModule(name, { enabled: !currentEnabled });
     } catch (e) {
-      setModulesError(e instanceof Error ? e.message : t("admin.failed_update_module"));
-      // Revert
+      setError(e instanceof Error ? e.message : t("admin.failed_update_module"));
       setModules((prev) => prev.map((m) => (m.name === name ? { ...m, enabled: currentEnabled } : m)));
     }
   };
 
-  const hasSettings = (name: string) => name === "dns_lookup" || name === "traceroute";
+  // ── Role permission toggle ─────────────────────────────────────────────
+
+  const getPermission = (toolName: string, role: string): AccessPermission | undefined =>
+    permissions.find((p) => p.tool_name === toolName && p.role === role);
+
+  const togglePermission = async (toolName: string, role: string) => {
+    const perm = getPermission(toolName, role);
+    if (!perm?.id) return;
+
+    const newAllowed = !perm.allowed;
+    setPermissions((prev) =>
+      prev.map((p) => (p.tool_name === toolName && p.role === role ? { ...p, allowed: newAllowed } : p)),
+    );
+
+    setSaving(true);
+    try {
+      await updateRolePermissions([{ id: perm.id, allowed: newAllowed }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("admin.failed_update_permission"));
+      setPermissions((prev) =>
+        prev.map((p) => (p.tool_name === toolName && p.role === role ? { ...p, allowed: perm.allowed } : p)),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Settings ───────────────────────────────────────────────────────────
 
   const openSettings = useCallback((moduleName: string) => {
     if (moduleName === "dns_lookup") {
@@ -76,7 +114,7 @@ export default function AdminModulesPage() {
     }
   }, []);
 
-  // ── Traceroute settings ──────────────────────────────────────────
+  // ── Traceroute settings (unchanged from current code) ──────────────────
 
   const loadTracerouteSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -118,7 +156,7 @@ export default function AdminModulesPage() {
     saveTracerouteSettings(value);
   };
 
-  // ── DNS presets ──────────────────────────────────────────────────
+  // ── DNS presets (unchanged from current code) ──────────────────────────
 
   const loadDnsPresets = useCallback(async () => {
     setDnsLoading(true);
@@ -204,7 +242,9 @@ export default function AdminModulesPage() {
     }
   };
 
-  if (modulesLoading) {
+  // ── Render ─────────────────────────────────────────────────────────────
+
+  if (loading) {
     return (
       <AdminLayout title={t("admin.module_activation")}>
         <div className="flex justify-center py-12">
@@ -216,14 +256,12 @@ export default function AdminModulesPage() {
 
   return (
     <AdminLayout title={t("admin.module_activation")}>
-      <div className="space-y-4 max-w-lg">
-        {modulesError && (
-          <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">
-            {modulesError}
-          </div>
+      <div className="space-y-4">
+        {error && (
+          <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
 
-        <div className="card p-4">
+        <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
@@ -231,7 +269,7 @@ export default function AdminModulesPage() {
                   scope="col"
                   className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
                 >
-                  {t("admin.module")}
+                  {t("admin.tool")}
                 </th>
                 <th
                   scope="col"
@@ -239,6 +277,15 @@ export default function AdminModulesPage() {
                 >
                   {t("admin.enabled")}
                 </th>
+                {ROLES.map((role) => (
+                  <th
+                    key={role}
+                    scope="col"
+                    className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize"
+                  >
+                    {role}
+                  </th>
+                ))}
                 <th
                   scope="col"
                   className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20"
@@ -248,43 +295,62 @@ export default function AdminModulesPage() {
               </tr>
             </thead>
             <tbody>
-              {modules.map((mod) => (
-                <tr key={mod.name} className="border-b border-[var(--color-border)]">
-                  <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">
-                    {toolDisplayName(mod.name)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-center">
-                      <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name, mod.enabled)} />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-center">
-                      {hasSettings(mod.name) && (
-                        <button
-                          onClick={() => openSettings(mod.name)}
-                          className="text-primary-600 hover:text-primary-700"
-                        >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              {modules.map((mod) => {
+                const moduleDisabled = !mod.enabled;
+                return (
+                  <tr key={mod.name} className="border-b border-[var(--color-border)]">
+                    <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">
+                      {toolDisplayName(mod.name)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-center">
+                        <ToggleSwitch checked={mod.enabled} onChange={() => toggleModule(mod.name, mod.enabled)} />
+                      </div>
+                    </td>
+                    {ROLES.map((role) => {
+                      const perm = getPermission(mod.name, role);
+                      return (
+                        <td key={role} className="px-3 py-2">
+                          <div className="flex justify-center">
+                            <ToggleSwitch
+                              checked={perm?.allowed ?? false}
+                              onChange={() => togglePermission(mod.name, role)}
+                              disabled={moduleDisabled || saving}
+                              aria-disabled={moduleDisabled}
                             />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2">
+                      <div className="flex justify-center">
+                        {mod.has_settings && (
+                          <button
+                            onClick={() => openSettings(mod.name)}
+                            className="text-primary-600 hover:text-primary-700"
+                            aria-label={t("admin.settings")}
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={1.5}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                              />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

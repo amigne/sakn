@@ -32,10 +32,24 @@ async def list_modules(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin),
 ) -> dict[str, Any]:
+    from app.models.preferences import GlobalSetting
+
     rows = await session.execute(
         select(ToolModule).order_by(ToolModule.name)
     )
     modules = rows.scalars().all()
+
+    # Build set of module names that have at least one GlobalSetting with the module prefix
+    prefix = f"{MODULE_SETTING_PREFIX}"
+    settings_rows = await session.execute(
+        select(GlobalSetting.key).where(GlobalSetting.key.like(f"{prefix}%"))
+    )
+    settings_modules: set[str] = set()
+    for (key,) in settings_rows.all():
+        rest = key[len(prefix):]
+        mod_name = rest.split(".")[0]
+        settings_modules.add(mod_name)
+
     return {
         "modules": [
             {
@@ -45,6 +59,7 @@ async def list_modules(
                 "description_key": m.description_key,
                 "enabled": m.enabled,
                 "version": m.version,
+                "has_settings": m.name in settings_modules,
             }
             for m in modules
         ]
