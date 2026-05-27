@@ -7,6 +7,9 @@ on:
   schedule:
     - cron: '23 7 * * 1'  # Weekly Monday 07:23 UTC
 
+permissions:
+  contents: read
+
 jobs:
   backend-pip-audit:
     name: Backend (pip-audit)

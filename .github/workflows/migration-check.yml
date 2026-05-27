@@ -8,6 +8,9 @@ on:
       - 'src/backend/alembic/**'
       - 'src/backend/app/models/**'
 
+permissions:
+  contents: read
+
 jobs:
   migration-test:
     name: Alembic upgrade/downgrade/upgrade
