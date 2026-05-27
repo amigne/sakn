@@ -2,7 +2,8 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Theme", () => {
   test("toggles from light to dark mode", async ({ page }) => {
-    test.skip(!!process.env.CI, "Pre-existing — theme is 3-state (system→light→dark), see #201");
+    // Force initial state to light for deterministic behavior
+    await page.addInitScript(() => localStorage.setItem("theme", "light"));
     await page.goto("/", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
 
@@ -11,13 +12,12 @@ test.describe("Theme", () => {
       getComputedStyle(el).backgroundColor,
     );
 
-    await page.click('button[aria-label*="Theme"]');
-    await page.waitForTimeout(300);
+    const themeBtn = page.locator('button[aria-label*="Theme" i]');
+    await themeBtn.click(); // light → dark
 
-    const hasDark = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark"),
-    );
-    expect(hasDark).toBe(true);
+    await expect.poll(() =>
+      page.evaluate(() => document.documentElement.classList.contains("dark"))
+    ).toBe(true);
 
     const darkBg = await card.evaluate((el) =>
       getComputedStyle(el).backgroundColor,
