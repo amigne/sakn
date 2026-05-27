@@ -3,10 +3,12 @@ import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { Badge, Button, Modal } from "@/components/ui";
 import * as sessionService from "@/services/sessionService";
+import { useAuthStore } from "@/stores/authStore";
 import type { Session } from "@/types/user";
 
 export default function SessionsPage() {
   const { t } = useTranslation();
+  const userLocale = useAuthStore((s) => s.preferences?.locale || s.user?.locale);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export default function SessionsPage() {
 
   const formatDate = (d: string) => {
     try {
-      return new Date(d).toLocaleString();
+      return new Date(d).toLocaleString(userLocale);
     } catch {
       return d;
     }

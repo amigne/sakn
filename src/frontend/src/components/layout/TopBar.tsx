@@ -45,7 +45,7 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
     if (currentUser) {
       useAuthStore
         .getState()
-        .savePreferences({ locale: next })
+        .savePreferences({ language: next })
         .catch(() => {});
     }
   };
