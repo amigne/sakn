@@ -175,9 +175,8 @@ test.describe("A11y Audit — Keyboard", () => {
   });
 });
 
-test.describe("A11y Audit — Zoom 200%", () => {
-  test("Login page at 200% zoom has no horizontal scroll", async ({ page }) => {
-    // Set viewport to simulate 200% zoom
+test.describe("A11y Audit — Narrow Viewport (WCAG 1.4.10 Reflow)", () => {
+  test("Login page at narrow viewport has no horizontal scroll", async ({ page }) => {
     await page.setViewportSize({ width: 640, height: 480 });
     await page.goto("/login", { waitUntil: "networkidle" });
 
@@ -185,7 +184,7 @@ test.describe("A11y Audit — Zoom 200%", () => {
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > window.innerWidth;
     });
-    console.log(`Horizontal scroll at 200% zoom: ${hasHorizontalScroll}`);
+    console.log(`Horizontal scroll at narrow viewport: ${hasHorizontalScroll}`);
   });
 });
 
@@ -215,4 +214,21 @@ test.describe("A11y Audit — Targeted Rules", () => {
       .analyze();
     expect(results.violations).toEqual([]);
   });
+});
+
+test.describe("A11y Audit — Real Browser Zoom 200% (WCAG 1.4.4 Resize Text)", () => {
+  const SCREENS = ["/login", "/register", "/privacy"];
+  for (const path of SCREENS) {
+    test(`${path} at 200% zoom has no horizontal scroll`, async ({ page, browserName }) => {
+      test.skip(browserName === "firefox", "CSS zoom unsupported in Firefox");
+      await page.goto(path, { waitUntil: "networkidle" });
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = "200%";
+      });
+      const hasHorizontalScroll = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > window.innerWidth;
+      });
+      expect(hasHorizontalScroll).toBe(false);
+    });
+  }
 });
