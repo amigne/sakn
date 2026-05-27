@@ -415,6 +415,7 @@
   "privacy.cookies.purpose_header": "Purpose",
   "privacy.cookies.duration_header": "Duration",
   "privacy.cookies.access_header": "Access",
+  "privacy.cookies.table_label": "Cookies table",
   "privacy.cookies.session_purpose": "Authenticates your session and keeps you signed in",
   "privacy.cookies.session_duration": "24 hours (renews with activity)",
   "privacy.cookies.session_access": "Server only (httpOnly)",
