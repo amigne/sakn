@@ -128,7 +128,7 @@ export default function TraceroutePage() {
           hop,
           h.ip ?? "*",
           h.hostname || "",
-          ...(h.probes || []).map((pr) => (pr.rtt_ms ? `${pr.rtt_ms}ms` : "*")),
+          ...h.probes.map((pr) => (pr.rtt_ms ? `${pr.rtt_ms}ms` : "*")),
         ];
         return `| ${cells.join(" | ")} |`;
       });
@@ -153,7 +153,7 @@ export default function TraceroutePage() {
               .join("\n");
           }
           if (!h.ip) return `${idx + 1}  * * *`;
-          const probeStr = (h.probes || []).map((p) => (p.rtt_ms ? `${p.rtt_ms}ms` : "*")).join("  ");
+          const probeStr = h.probes.map((p) => (p.rtt_ms ? `${p.rtt_ms}ms` : "*")).join("  ");
           const label = h.ip === "[hidden]" ? "[hidden]" : `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}`;
           return `${idx + 1}  ${label}  ${probeStr}${h.reached ? "  <- Destination" : ""}`;
         })
@@ -373,7 +373,7 @@ export default function TraceroutePage() {
                             </Badge>
                           )}
                         </td>
-                        {(h.probes || []).map((p, pi) => (
+                        {h.probes.map((p, pi) => (
                           <td key={pi} className="px-3 py-1 font-mono text-[var(--color-text)]">
                             {p.status === "ok" ? (
                               `${p.rtt_ms} ms`
@@ -399,7 +399,7 @@ export default function TraceroutePage() {
                         })
                         .join("\n");
                     }
-                    const probeStr = (h.probes || []).map((p) => (p.rtt_ms ? `${p.rtt_ms}ms` : "*")).join("  ");
+                    const probeStr = h.probes.map((p) => (p.rtt_ms ? `${p.rtt_ms}ms` : "*")).join("  ");
                     const label = h.ip ? `${h.ip}${h.hostname ? ` (${h.hostname})` : ""}` : "*";
                     return `${idx + 1}  ${label}  ${probeStr}${h.reached ? "  <- Destination" : ""}`;
                   })
