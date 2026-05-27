@@ -6,9 +6,10 @@ test.describe("Traceroute", () => {
   }) => {
     await page.goto("/traceroute", { waitUntil: "networkidle" });
 
+    await page.getByPlaceholder("8.8.8.8").fill("1.1.1.1");
     // Run with default probe count
     await page.click('button:has-text("Trace")');
-    await expect(page.locator("th").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("th").first()).toBeVisible({ timeout: 15000 });
 
     const headers = await page.locator("th").allTextContents();
     expect(headers.length).toBeGreaterThan(0);
