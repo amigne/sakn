@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
   pull_request:
+    paths:
+      - 'src/frontend/**'
+      - '.github/workflows/e2e.yml'
 
 jobs:
   playwright:
