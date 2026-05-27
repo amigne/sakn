@@ -46,8 +46,8 @@ function AuthInitializer({ children }: { children: ReactNode }) {
         if (prefs?.theme) {
           useThemeStore.getState().setMode(prefs.theme);
         }
-        if (prefs?.locale) {
-          import("@/i18n/i18n").then(({ setLanguage }) => setLanguage(prefs.locale!));
+        if (prefs?.language) {
+          import("@/i18n/i18n").then(({ setLanguage }) => setLanguage(prefs.language!));
         }
       }
     };
