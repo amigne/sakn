@@ -35,7 +35,7 @@ export default function PrivacyPage() {
           <div className="space-y-3 text-sm text-[var(--color-text-secondary)]">
             <p>{t("privacy.cookies.intro")}</p>
 
-            <div className="overflow-x-auto" tabIndex={0} aria-label="Cookies table">
+            <div className="overflow-x-auto" tabIndex={0} aria-label={t("privacy.cookies.table_label")}>
               <table className="w-full text-start border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
