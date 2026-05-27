@@ -14,6 +14,7 @@ import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import WebSocketDisconnect
 
 import app.api.v1.endpoints.tools as tools_mod
 import app.database as db_module
@@ -359,3 +360,117 @@ class TestWebSocketOriginValidation:
         ws.close.assert_called_once()
         assert ws.close.call_args[1]["code"] == WS_CLOSE_INVALID_ORIGIN
         assert ws.close.call_args[1]["reason"] == "origin_not_allowed"
+
+
+class TestTracerouteWSMasking:
+    """Issue #227: mask_private_hops is applied in the WebSocket handler.
+
+    Regression test for PR #225 which fixed IP masking of private hops.
+    If someone removes the _mask_private call in handle_traceroute_stream,
+    this test fails — private IPs leak into the WebSocket output.
+    """
+
+    @pytest.mark.asyncio
+    async def test_masks_private_hops_in_ws_stream(self, monkeypatch):
+        import asyncio as asyncio_mod
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.websocket.handlers.traceroute_ws import handle_traceroute_stream
+
+        # ── Mock filter_target: allow the target, return a public IP ──
+        async def _mock_filter_target(target):
+            return ("93.184.216.34", None)
+
+        monkeypatch.setattr(
+            "app.websocket.handlers.traceroute_ws.filter_target",
+            _mock_filter_target,
+        )
+
+        # ── Mock DB: async_session_factory returns a session with show_private=False ──
+        class _MockDBSession:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+            async def execute(self, *args, **kwargs):
+                mock_setting = MagicMock()
+                mock_setting.value = "false"
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = mock_setting
+                return mock_result
+
+        def _mock_session_factory():
+            return _MockDBSession()
+
+        monkeypatch.setattr(
+            "app.websocket.handlers.traceroute_ws.async_session_factory",
+            _mock_session_factory,
+        )
+
+        # ── Mock subprocess: emit a hop with a private IP (10.0.0.1) ──
+        fake_stdout_lines = [
+            b" 1  10.0.0.1  2.334 ms  2.123 ms  1.987 ms\n",
+        ]
+
+        mock_stdout = MagicMock()
+        mock_stdout.readline = AsyncMock(side_effect=fake_stdout_lines + [b""])
+
+        mock_stderr = MagicMock()
+        mock_stderr.readline = AsyncMock(return_value=b"")
+
+        async def _mock_process_wait():
+            return 0
+
+        mock_process = MagicMock()
+        mock_process.stdout = mock_stdout
+        mock_process.stderr = mock_stderr
+        mock_process.wait = _mock_process_wait
+        mock_process.returncode = 0
+
+        async def _mock_create_subprocess_exec(*args, **kwargs):
+            return mock_process
+
+        monkeypatch.setattr(
+            asyncio_mod, "create_subprocess_exec", _mock_create_subprocess_exec
+        )
+
+        # ── Mock WebSocket: send start, collect all output messages ──
+        sent_messages: list[dict] = []
+
+        async def _collect_send_json(data):
+            sent_messages.append(data)
+
+        ws = AsyncMock()
+        ws.send_json = _collect_send_json
+        # Second receive_json() is called by listen_cancel; raise to end the
+        # cancel loop (safe because the mock process already completed).
+        ws.receive_json = AsyncMock(side_effect=[
+            {"type": "start", "params": {"target": "example.com"}},
+            WebSocketDisconnect(code=1000, reason=""),
+        ])
+
+        await handle_traceroute_stream(ws, "session-id", None, "127.0.0.1")
+
+        # ── Assertions ──
+        # Find all "result" messages
+        hop_messages = [m for m in sent_messages if m.get("type") == "result"]
+        assert len(hop_messages) == 1, (
+            f"Expected 1 hop message, got {len(hop_messages)}: {sent_messages}"
+        )
+
+        hop_data = hop_messages[0]["data"]
+        # The private IP (10.0.0.1) MUST be masked to [hidden]
+        assert hop_data["ip"] == "[hidden]", (
+            f"Private IP leaked: expected '[hidden]', got '{hop_data['ip']}'"
+        )
+        # Probes must still be present (the fix in #225 preserves them)
+        assert "probes" in hop_data, "probes key missing from hop data"
+        assert len(hop_data["probes"]) == 3, (
+            f"Expected 3 probes, got {len(hop_data['probes'])}"
+        )
+
+        # Verify a "complete" message was sent eventually
+        complete = [m for m in sent_messages if m.get("type") == "complete"]
+        assert len(complete) == 1, "Expected a 'complete' message at the end"
