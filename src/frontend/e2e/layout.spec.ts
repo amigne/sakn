@@ -50,7 +50,6 @@ test.describe("Layout", () => {
   });
 
   test("executes ping and shows results", async ({ page }) => {
-    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
 
     const execBtn = page.locator("button", { hasText: "Execute" });
@@ -63,7 +62,6 @@ test.describe("Layout", () => {
   });
 
   test("table/text toggle works", async ({ page }) => {
-    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
 
     const execBtn = page.locator("button", { hasText: "Execute" });

@@ -2,7 +2,6 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Tool Execution", () => {
   test("executes ping and displays results in table", async ({ page }) => {
-    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
 
     const execBtn = page.locator("button", { hasText: "Execute" });
@@ -16,7 +15,6 @@ test.describe("Tool Execution", () => {
   });
 
   test("text view toggle shows raw output", async ({ page }) => {
-    test.skip(!!process.env.CI, "Backend required — follow-up issue for E2E backend-dependent tests");
     await page.goto("/ping", { waitUntil: "networkidle" });
 
     await page.locator("button", { hasText: "Execute" }).click();
