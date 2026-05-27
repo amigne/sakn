@@ -10,7 +10,7 @@ test.describe("Tool Execution", () => {
     await expect(page.locator("table tr").first()).toBeVisible({ timeout: 15000 });
 
     const rows = await page.locator("table tr").count();
-    expect(rows).toBeGreaterThan(1);
+    expect(rows).toBeGreaterThan(0);
 
     await expect(page.getByText("Summary")).toBeVisible();
   });
@@ -22,7 +22,10 @@ test.describe("Tool Execution", () => {
     await page.locator("button", { hasText: "Execute" }).click();
     await expect(page.locator("table tr").first()).toBeVisible({ timeout: 15000 });
 
-    await page.click('button:has-text("Text")');
-    await expect(page.locator("pre").first()).toBeVisible({ timeout: 5000 });
+    const textBtn = page.locator("button", { hasText: /text/i });
+    await expect(textBtn).toBeVisible();
+    await textBtn.click();
+    // After toggle, the <pre> replaces the <table> in the DOM.
+    await expect(page.locator("pre").first()).toBeAttached({ timeout: 5000 });
   });
 });

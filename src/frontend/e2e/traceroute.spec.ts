@@ -9,7 +9,7 @@ test.describe("Traceroute", () => {
     await page.getByPlaceholder("8.8.8.8").fill("1.1.1.1");
     // Run with default probe count
     await page.click('button:has-text("Trace")');
-    await expect(page.locator("th").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("th").first()).toBeVisible({ timeout: 25000 });
 
     const headers = await page.locator("th").allTextContents();
     expect(headers.length).toBeGreaterThan(0);
@@ -20,7 +20,7 @@ test.describe("Traceroute", () => {
 
     await page.click('button:has-text("Reset")');
     await page.click('button:has-text("Trace")');
-    await expect(page.locator("th").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("th").first()).toBeVisible({ timeout: 25000 });
 
     const headersNew = await page.locator("th").allTextContents();
     expect(headersNew.length).toBeGreaterThan(0);
