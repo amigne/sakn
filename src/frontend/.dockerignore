@@ -5,3 +5,18 @@ node_modules
 *.test.tsx
 *.spec.ts
 *.spec.tsx
+
+# Secrets — prevent VITE_* from being inlined into the Docker bundle
+.env
+.env.local
+.env.*.local
+.env.prod-test
+
+# Build artefacts — rebuilt inside Docker, no need to copy
+dist/
+
+# Tests E2E / CI artefacts — not needed for production build
+e2e/
+playwright-report/
+test-results/
+coverage/
