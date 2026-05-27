@@ -30,8 +30,8 @@ const ADMIN_SCREENS = [
 ];
 
 const BASELINE_UNAUTH: Record<string, number> = {
-  "/login": 1,
-  "/register": 1,
+  "/login": 0,
+  "/register": 0,
   "/reset-password": 0,
   "/verify-email": 0,
   "/privacy": 1,
@@ -186,5 +186,23 @@ test.describe("A11y Audit — Zoom 200%", () => {
       return document.documentElement.scrollWidth > window.innerWidth;
     });
     console.log(`Horizontal scroll at 200% zoom: ${hasHorizontalScroll}`);
+  });
+});
+
+test.describe("A11y Audit — Targeted Rules", () => {
+  test("Login page has no link-in-text-block", async ({ page }) => {
+    await page.goto("/login", { waitUntil: "networkidle" });
+    const results = await new AxeBuilder({ page })
+      .withRules(["link-in-text-block"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("Register page has no link-in-text-block", async ({ page }) => {
+    await page.goto("/register", { waitUntil: "networkidle" });
+    const results = await new AxeBuilder({ page })
+      .withRules(["link-in-text-block"])
+      .analyze();
+    expect(results.violations).toEqual([]);
   });
 });
