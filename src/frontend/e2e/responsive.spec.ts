@@ -98,7 +98,7 @@ test.describe("Responsive", () => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
 
-    let navWidth = await page
+    const navWidth = await page
       .locator("nav")
       .evaluate((el) => el.offsetWidth);
     expect(navWidth).toBeLessThan(100); // collapsed on tablet
@@ -115,7 +115,7 @@ test.describe("Responsive", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
 
-    let navWidth = await page
+    const navWidth = await page
       .locator("nav")
       .evaluate((el) => el.offsetWidth);
     expect(navWidth).toBeGreaterThan(100); // expanded on desktop

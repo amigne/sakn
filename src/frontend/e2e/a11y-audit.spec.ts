@@ -92,7 +92,7 @@ test.describe("A11y Audit — Admin (TODO: needs admin user fixture)", () => {
 test.describe("A11y Audit — Contrast (Light Theme)", () => {
   test("Login page contrast", async ({ page }) => {
     await page.goto("/login", { waitUntil: "networkidle" });
-    
+
 
     // Force light theme
     await page.evaluate(() => {
@@ -120,7 +120,7 @@ test.describe("A11y Audit — Contrast (Light Theme)", () => {
 test.describe("A11y Audit — Contrast (Dark Theme)", () => {
   test("Login page contrast", async ({ page }) => {
     await page.goto("/login", { waitUntil: "networkidle" });
-    
+
 
     // Force dark theme
     await page.evaluate(() => {
@@ -153,7 +153,7 @@ test.describe("A11y Audit — Keyboard", () => {
     test.skip(!!process.env.CI, "Manual audit - run locally");
 
     await page.goto("/login", { waitUntil: "networkidle" });
-    
+
 
     // Press Tab multiple times and verify the focused element is visible
     for (let i = 0; i < 10; i++) {
@@ -180,7 +180,7 @@ test.describe("A11y Audit — Zoom 200%", () => {
     // Set viewport to simulate 200% zoom
     await page.setViewportSize({ width: 640, height: 480 });
     await page.goto("/login", { waitUntil: "networkidle" });
-    
+
 
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > window.innerWidth;

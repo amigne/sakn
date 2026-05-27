@@ -43,7 +43,7 @@ test.describe("Admin Pages", () => {
   for (const [route, expected] of adminPages) {
     test(`admin page ${route} shows correct heading`, async ({ page }) => {
       await page.goto(route, { waitUntil: "networkidle" });
-  
+
       await expect(page.locator("h1")).toHaveText(expected);
     });
   }
