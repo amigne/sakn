@@ -80,14 +80,6 @@ async def delete_session(token_hash: str) -> None:
         pass
 
 
-async def list_user_sessions(user_id: str) -> list[str]:
-    try:
-        redis = await get_redis()
-        return list(await redis.smembers(_user_sessions_key(user_id)))
-    except Exception:
-        return []
-
-
 async def count_user_sessions(user_id: str) -> int:
     try:
         redis = await get_redis()
