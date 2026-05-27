@@ -54,8 +54,7 @@ async def lifespan(app: FastAPI) -> Any:
         )
         # Fall back to local SQLite in development only
         try:
-            from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-            from sqlalchemy.ext.asyncio import create_async_engine as cae
+            from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine as cae
 
             fallback_url = "sqlite+aiosqlite:///./sakn.db"
             fallback_engine = cae(fallback_url, echo=False, future=True)
