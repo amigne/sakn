@@ -33,8 +33,7 @@ test.describe("Admin Pages", () => {
 
   const adminPages: [string, string, string][] = [
     ["/admin/users", "User Management"],
-    ["/admin/access", "Access Rights"],
-    ["/admin/rate-limits", "Rate Limits"],
+["/admin/rate-limits", "Rate Limits"],
     ["/admin/modules", "Module Activation"],
     ["/admin/settings", "Global Settings"],
     ["/admin/logs", "Log Viewer"],

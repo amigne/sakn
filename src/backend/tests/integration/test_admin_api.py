@@ -325,7 +325,7 @@ class TestAdminModules:
         from tests.factories import create_global_setting, create_tool_module
 
         # Create a module with a GlobalSetting
-        mod = await create_tool_module(db_session, name="has_settings_mod", enabled=True)
+        await create_tool_module(db_session, name="has_settings_mod", enabled=True)
         await create_global_setting(db_session, key="module.has_settings_mod.foo", value="bar")
         # Create a module without any GlobalSetting
         await create_tool_module(db_session, name="no_settings_mod", enabled=True)

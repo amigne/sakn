@@ -51,7 +51,7 @@ Each `[O]` is a `<ToggleSwitch>`.
 1. **"Enabled" OFF** → the 3 role toggles on the same row become **disabled** (greyed out, `aria-disabled="true"`). Their backend `allowed` values are **preserved** — not set to false, just non-editable until re-enabled.
 2. **"Enabled" ON** → role toggles become editable again, restoring their previous values.
 3. **Settings gear (⚙)** appears only for modules that have `GlobalSetting` entries matching `module.{name}.%`. Opens the existing settings modal (DNS presets or Traceroute settings).
-4. The `/admin/access` route is removed from the menu and redirects to `/admin/modules`. Backend endpoints are NOT deleted.
+4. The `/admin/access` route is removed entirely (returns 404). Backend endpoints are NOT deleted.
 
 ## 3. Technical Spec
 
@@ -71,9 +71,9 @@ However, the "has settings" check currently hardcoded as `name === "dns_lookup" 
 ### Routes & navigation
 
 - `/admin/modules` → new `AdminModulesPage` (matrix)
-- `/admin/access` → `<Navigate to="/admin/modules" replace />` (redirect)
+- `/admin/access` → route removed (returns 404)
 - AdminLayout: remove the "Access" tab (index 1), keep "Modules" tab
-- Router: replace `AdminAccessPage` import with a redirect
+- Router: remove `AdminAccessPage` import and `/admin/access` route
 
 ### Backend changes
 
@@ -112,8 +112,7 @@ No new endpoint. No endpoint deletion.
 6. Settings button: opens existing modals (DNS presets / Traceroute settings) — unchanged
 
 **`Router.tsx`**:
-- Replace `AdminAccessPage` import with `Navigate` import
-- Change `/admin/access` route to `<Route path="/admin/access" element={<Navigate to="/admin/modules" replace />} />`
+- Replace `AdminAccessPage` import and `/admin/access` route entirely (route removed, returns 404)
 
 **`AdminLayout.tsx`**:
 - Remove `{ key: "admin.access", to: "/admin/access" }` from `ADMIN_TAB_KEYS`
@@ -129,7 +128,7 @@ No new endpoint. No endpoint deletion.
 2. Toggling "Enabled" off greys out the 3 role toggles on that row without modifying backend role permissions.
 3. Toggling "Enabled" back on restores editable state for the role toggles, with their previous values preserved.
 4. The Settings gear only appears for modules with `has_settings: true`.
-5. `/admin/access` redirects to `/admin/modules`. The "Access" tab is removed from the admin menu.
+5. `/admin/access` returns 404. The "Access" tab is removed from the admin menu.
 6. All existing module settings (DNS presets, Traceroute show_private_hops) continue to work through the gear icon.
 
 ## 5. Implementation Plan
