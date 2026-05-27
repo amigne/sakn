@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.models import (
     DnsServerPreset,
     EmailVerification,
@@ -14,7 +15,6 @@ from app.models import (
     User,
     UserPreference,
 )
-from app.constants.roles import ROLE_AUTHENTICATED
 from app.models.base import new_uuid7
 
 

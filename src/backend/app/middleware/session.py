@@ -3,8 +3,8 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.models.base import new_uuid7
 from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
+from app.models.base import new_uuid7
 from app.security.cookies import get_session_token, session_cookie_name
 from app.security.csrf import generate_csrf_token, set_csrf_cookie
 from app.security.tokens import hash_token

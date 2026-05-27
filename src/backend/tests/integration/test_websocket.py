@@ -17,12 +17,12 @@ import pytest
 
 import app.api.v1.endpoints.tools as tools_mod
 import app.database as db_module
-from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_DB_UNAVAILABLE,
     WS_CLOSE_INVALID_ORIGIN,
     WS_CLOSE_RATE_LIMITED,
 )
+from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.redis.rate_limit_store import get_rate_limiter
 from app.security.tokens import generate_token, hash_token
 from tests.factories import (
