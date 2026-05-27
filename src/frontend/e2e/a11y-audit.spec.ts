@@ -204,9 +204,7 @@ test.describe("A11y Audit — Targeted Rules", () => {
       .analyze();
     expect(results.violations).toEqual([]);
   });
-});
 
-test.describe("A11y Audit — Targeted Rules", () => {
   test("Privacy page has no scrollable-region-focusable", async ({ page }) => {
     await page.goto("/privacy", { waitUntil: "networkidle" });
     const results = await new AxeBuilder({ page })
