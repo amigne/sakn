@@ -1,6 +1,6 @@
-import { useSearchParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -13,7 +13,10 @@ export default function VerifyEmailPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!token) { setState("expired"); return; }
+    if (!token) {
+      setState("expired");
+      return;
+    }
 
     let cancelled = false;
     const verify = async () => {
@@ -30,7 +33,9 @@ export default function VerifyEmailPage() {
       }
     };
     verify();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token, verifyEmail]);
 
   return (
@@ -48,7 +53,13 @@ export default function VerifyEmailPage() {
 
         {state === "success" && (
           <>
-            <svg className="mx-auto h-12 w-12 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg
+              className="mx-auto h-12 w-12 text-success-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">{t("auth.email_verified_title")}</h1>
@@ -61,10 +72,22 @@ export default function VerifyEmailPage() {
 
         {state === "expired" && (
           <>
-            <svg className="mx-auto h-12 w-12 text-warning-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="mx-auto h-12 w-12 text-warning-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
-            <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">{t("auth.verification_expired_title")}</h1>
+            <h1 className="mt-3 text-lg font-semibold text-[var(--color-text)]">
+              {t("auth.verification_expired_title")}
+            </h1>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{t("auth.verification_expired_message")}</p>
             <Link to="/login" className="mt-4 inline-block">
               <Button>{t("auth.return_to_login")}</Button>

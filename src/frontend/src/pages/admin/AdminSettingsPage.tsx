@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { TextInput, Spinner, ToggleSwitch } from "@/components/ui";
+import { Spinner, TextInput, ToggleSwitch } from "@/components/ui";
 import { getSettings, updateSettings } from "@/services/admin";
 import type { GlobalSettings } from "@/types/admin";
 
@@ -56,7 +56,9 @@ export default function AdminSettingsPage() {
   if (loading) {
     return (
       <AdminLayout title={t("admin.global_settings")}>
-        <div className="flex justify-center py-12"><Spinner /></div>
+        <div className="flex justify-center py-12">
+          <Spinner />
+        </div>
       </AdminLayout>
     );
   }
@@ -94,7 +96,9 @@ export default function AdminSettingsPage() {
               onChange={(e) => update("session_duration_hours", e.target.value)}
               className="w-24"
             />
-            {savedKey === "session_duration_hours" && <span className="text-xs text-success-600">{t("admin.saved")}</span>}
+            {savedKey === "session_duration_hours" && (
+              <span className="text-xs text-success-600">{t("admin.saved")}</span>
+            )}
           </div>
         </label>
 
@@ -109,13 +113,17 @@ export default function AdminSettingsPage() {
               onChange={(e) => update("max_concurrent_sessions", e.target.value)}
               className="w-24"
             />
-            {savedKey === "max_concurrent_sessions" && <span className="text-xs text-success-600">{t("admin.saved")}</span>}
+            {savedKey === "max_concurrent_sessions" && (
+              <span className="text-xs text-success-600">{t("admin.saved")}</span>
+            )}
           </div>
         </label>
 
         <label className="flex items-center justify-between gap-4">
           <div>
-            <span className="text-sm font-medium text-[var(--color-text)]">{t("admin.email_verification_required")}</span>
+            <span className="text-sm font-medium text-[var(--color-text)]">
+              {t("admin.email_verification_required")}
+            </span>
             <p className="text-xs text-[var(--color-text-secondary)]">{t("admin.email_verification_description")}</p>
           </div>
           <ToggleSwitch

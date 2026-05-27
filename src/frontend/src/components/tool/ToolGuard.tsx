@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
-import { useAvailableTools, TOOL_ROUTES } from "@/hooks/useAvailableTools";
 import { Spinner } from "@/components/ui";
+import { TOOL_ROUTES, useAvailableTools } from "@/hooks/useAvailableTools";
 
 interface Props {
   toolName: string;
@@ -20,7 +20,7 @@ export default function ToolGuard({ toolName, children }: Props) {
 
   if (!tools.includes(toolName)) {
     const first = tools[0];
-    return <Navigate to={first ? TOOL_ROUTES[first] ?? "/ping" : "/no-tools"} replace />;
+    return <Navigate to={first ? (TOOL_ROUTES[first] ?? "/ping") : "/no-tools"} replace />;
   }
 
   return <>{children}</>;

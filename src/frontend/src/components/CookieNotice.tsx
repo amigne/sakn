@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 const STORAGE_KEY = "sakn_cookie_notice_dismissed";
 
@@ -22,7 +22,9 @@ export default function CookieNotice() {
       <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[var(--color-text-secondary)]">
         <span>
           {t("cookies.notice")}{" "}
-          <Link to="/privacy" className="underline underline-offset-2 hover:text-[var(--color-text)]">{t("cookies.learn_more")}</Link>
+          <Link to="/privacy" className="underline underline-offset-2 hover:text-[var(--color-text)]">
+            {t("cookies.learn_more")}
+          </Link>
         </span>
         <button
           onClick={() => {

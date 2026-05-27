@@ -1,10 +1,10 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useNavigate } from "react-router-dom";
+import { getLanguage, setLanguage } from "@/i18n/i18n";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { ThemeMode } from "@/types/user";
-import { setLanguage, getLanguage } from "@/i18n/i18n";
-import { useState, useRef, useEffect } from "react";
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -43,7 +43,10 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
     setCurrentLang(next);
     const currentUser = useAuthStore.getState().user;
     if (currentUser) {
-      useAuthStore.getState().savePreferences({ locale: next }).catch(() => {});
+      useAuthStore
+        .getState()
+        .savePreferences({ locale: next })
+        .catch(() => {});
     }
   };
 
@@ -65,9 +68,11 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
 
   const currentMode: ThemeMode = mode ?? "system";
   const themeIcon =
-    currentMode === "dark" ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" :
-    currentMode === "light" ? "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" :
-    "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z";
+    currentMode === "dark"
+      ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+      : currentMode === "light"
+        ? "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+        : "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z";
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4">
@@ -84,11 +89,17 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
           </button>
         )}
         <Link to="/ping" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-        <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-        <span className="hidden min-[350px]:inline">SAKN</span>
-      </Link>
+          <svg
+            className="h-6 w-6 text-blue-600 dark:text-blue-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span className="hidden min-[350px]:inline">SAKN</span>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2">
@@ -121,16 +132,43 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
               <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold">
                 {initials}
               </span>
-              <svg className="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="h-3 w-3 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
             {menuOpen && (
               <div className="absolute end-0 top-full mt-1 w-48 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-50">
-                <Link to="/account/preferences" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.preferences")}</Link>
-                <Link to="/account/sessions" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.sessions")}</Link>
+                <Link
+                  to="/account/preferences"
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {t("auth.preferences")}
+                </Link>
+                <Link
+                  to="/account/sessions"
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {t("auth.sessions")}
+                </Link>
                 <hr className="border-gray-200 dark:border-gray-700" />
-                <button onClick={async () => { await logout(); setMenuOpen(false); navigate("/ping"); }} className="w-full px-3 py-2 text-start text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">{t("auth.logout")}</button>
+                <button
+                  onClick={async () => {
+                    await logout();
+                    setMenuOpen(false);
+                    navigate("/ping");
+                  }}
+                  className="w-full px-3 py-2 text-start text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {t("auth.logout")}
+                </button>
               </div>
             )}
           </div>

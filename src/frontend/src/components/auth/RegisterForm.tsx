@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { TextInput, Button, Alert } from "@/components/ui";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
-import { useAuthStore } from "@/stores/authStore";
+import { Alert, Button, TextInput } from "@/components/ui";
 import { ApiError } from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 
 interface RegisterFormProps {
   className?: string;
@@ -59,22 +59,47 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
     <div className={`w-full max-w-sm ${className}`}>
       <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.create_account")}</h1>
 
-      {error && <Alert variant="error" className="mb-4">{error}</Alert>}
+      {error && (
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.email")}</span>
-          <TextInput type="email" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" error={fieldErrors.email} />
+          <TextInput
+            type="email"
+            placeholder="user@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            error={fieldErrors.email}
+          />
         </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.first_name")} *</span>
-            <TextInput type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required error={fieldErrors.first_name} />
+            <TextInput
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              autoComplete="given-name"
+              required
+              error={fieldErrors.first_name}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.last_name")} *</span>
-            <TextInput type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required error={fieldErrors.last_name} />
+            <TextInput
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              autoComplete="family-name"
+              required
+              error={fieldErrors.last_name}
+            />
           </label>
         </div>
 
@@ -98,11 +123,19 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 {showPassword ? (
                   <>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+                    />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </>
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
                 )}
               </svg>
             </button>
@@ -112,10 +145,19 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
 
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.confirm_password")}</span>
-          <TextInput type="password" placeholder="••••••••" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} autoComplete="new-password" error={fieldErrors.password_confirm} />
+          <TextInput
+            type="password"
+            placeholder="••••••••"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            autoComplete="new-password"
+            error={fieldErrors.password_confirm}
+          />
         </label>
 
-        <Button type="submit" className="w-full" loading={loading}>{t("auth.create_account")}</Button>
+        <Button type="submit" className="w-full" loading={loading}>
+          {t("auth.create_account")}
+        </Button>
       </form>
     </div>
   );

@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import PageLayout from "@/components/layout/PageLayout";
 
 export default function NotFoundPage() {

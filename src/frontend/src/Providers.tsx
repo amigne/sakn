@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { type ReactNode, useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
-import { useEffect, type ReactNode } from "react";
-import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useThemeStore } from "@/stores/themeStore";
 import "@/i18n/i18n";
 
 const queryClient = new QueryClient({
@@ -21,7 +21,9 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(mode);
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => { if (mode === "system") applyTheme("system"); };
+    const handler = () => {
+      if (mode === "system") applyTheme("system");
+    };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [mode, applyTheme]);

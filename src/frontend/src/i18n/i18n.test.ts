@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // i18n.ts runs i18n.init() at import time which reads document.cookie.
 // Dynamic imports ensure mocks are in place before module init.

@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
-import { useAvailableTools, TOOL_ROUTES } from "@/hooks/useAvailableTools";
 import { Spinner } from "@/components/ui";
+import { TOOL_ROUTES, useAvailableTools } from "@/hooks/useAvailableTools";
 
 export default function DefaultRedirect() {
   const { tools, checked } = useAvailableTools();

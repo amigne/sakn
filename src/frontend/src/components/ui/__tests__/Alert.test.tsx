@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import Alert from "../Alert";
 
 describe("Alert", () => {
@@ -10,7 +10,11 @@ describe("Alert", () => {
   });
 
   it("renders with title", () => {
-    render(<Alert variant="success" title="Done">Operation complete</Alert>);
+    render(
+      <Alert variant="success" title="Done">
+        Operation complete
+      </Alert>,
+    );
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 });

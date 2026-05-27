@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -61,7 +61,9 @@ export function useAvailableTools() {
           setChecked(true);
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, isInitialized]);
 
   return { tools, checked };

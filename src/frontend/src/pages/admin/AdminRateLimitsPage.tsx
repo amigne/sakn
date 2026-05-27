@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Spinner } from "@/components/ui";
@@ -47,16 +47,14 @@ export default function AdminRateLimitsPage() {
   const commitEdit = async () => {
     if (!edit) return;
     const val = parseInt(edit.value, 10);
-    if (isNaN(val) || val < 0) {
+    if (Number.isNaN(val) || val < 0) {
       setEdit(null);
       return;
     }
 
     // Optimistic update
     const prevLimits = [...limits];
-    setLimits((prev) =>
-      prev.map((l) => (l.id === edit.id ? { ...l, [edit.field]: val } : l))
-    );
+    setLimits((prev) => prev.map((l) => (l.id === edit.id ? { ...l, [edit.field]: val } : l)));
     setEdit(null);
 
     try {
@@ -83,17 +81,10 @@ export default function AdminRateLimitsPage() {
     if (e.key === "Escape") setEdit(null);
   };
 
-  const EditableCell = ({
-    id,
-    field,
-    value,
-  }: {
-    id: string;
-    field: "soft_limit" | "hard_limit";
-    value: number;
-  }) => {
+  const EditableCell = ({ id, field, value }: { id: string; field: "soft_limit" | "hard_limit"; value: number }) => {
     const isEditing = edit?.id === id && edit?.field === field;
     return (
+      // biome-ignore lint/a11y/useKeyWithClickEvents: admin-only inline edit cell (follow-up: keyboard handler)
       <td
         className="px-3 py-2 text-end font-mono text-sm text-[var(--color-text)] cursor-pointer hover:bg-[var(--color-surface-alt)]"
         onClick={() => startEdit(id, field, value)}
@@ -102,12 +93,11 @@ export default function AdminRateLimitsPage() {
           <input
             type="number"
             min={0}
-            value={edit!.value}
+            value={edit?.value}
             onChange={(e) => setEdit({ ...edit!, value: e.target.value })}
             onBlur={commitEdit}
             onKeyDown={handleKeyDown}
             className="w-20 text-end bg-[var(--color-surface)] dark:[color-scheme:dark] border border-primary-500 rounded px-1 py-0.5 text-sm text-[var(--color-text)] focus:outline-none"
-            autoFocus
           />
         ) : (
           value || t("admin.unlimited")
@@ -119,7 +109,9 @@ export default function AdminRateLimitsPage() {
   if (loading) {
     return (
       <AdminLayout title={t("admin.rate_limits")}>
-        <div className="flex justify-center py-12"><Spinner /></div>
+        <div className="flex justify-center py-12">
+          <Spinner />
+        </div>
       </AdminLayout>
     );
   }
@@ -131,21 +123,36 @@ export default function AdminRateLimitsPage() {
           <div className="p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
         {successMsg && (
-          <div className="p-3 rounded bg-green-50 dark:bg-green-950 text-sm text-green-700 dark:text-green-300">{successMsg}</div>
+          <div className="p-3 rounded bg-green-50 dark:bg-green-950 text-sm text-green-700 dark:text-green-300">
+            {successMsg}
+          </div>
         )}
 
         {/* Global limits */}
         <div className="card p-4">
           <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t("admin.global_limits")}</h2>
-          <p className="text-xs text-[var(--color-text-secondary)] mb-4">
-            {t("admin.rate_limit_description")}
-          </p>
+          <p className="text-xs text-[var(--color-text-secondary)] mb-4">{t("admin.rate_limit_description")}</p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.role")}</th>
-                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.soft_limit_req_s")}</th>
-                <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.hard_limit_req_h")}</th>
+                <th
+                  scope="col"
+                  className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                >
+                  {t("admin.role")}
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                >
+                  {t("admin.soft_limit_req_s")}
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                >
+                  {t("admin.hard_limit_req_h")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -164,23 +171,43 @@ export default function AdminRateLimitsPage() {
         {perToolLimits.length > 0 && (
           <div className="card p-4">
             <h2 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t("admin.per_tool_limits")}</h2>
-            <p className="text-xs text-[var(--color-text-secondary)] mb-4">
-              {t("admin.per_tool_limits_description")}
-            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] mb-4">{t("admin.per_tool_limits_description")}</p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.role")}</th>
-                  <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.tool")}</th>
-                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.soft_limit_header")}</th>
-                  <th scope="col" className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.hard_limit_header")}</th>
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                  >
+                    {t("admin.role")}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                  >
+                    {t("admin.tool")}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                  >
+                    {t("admin.soft_limit_header")}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-2 text-end text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                  >
+                    {t("admin.hard_limit_header")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {perToolLimits.map((limit) => (
                   <tr key={limit.id} className="border-b border-[var(--color-border)]">
                     <td className="px-3 py-2 text-[var(--color-text)] capitalize">{limit.role}</td>
-                    <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">{limit.tool_name ? toolDisplayName(limit.tool_name) : "-"}</td>
+                    <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">
+                      {limit.tool_name ? toolDisplayName(limit.tool_name) : "-"}
+                    </td>
                     <EditableCell id={limit.id!} field="soft_limit" value={limit.soft_limit} />
                     <EditableCell id={limit.id!} field="hard_limit" value={limit.hard_limit} />
                   </tr>

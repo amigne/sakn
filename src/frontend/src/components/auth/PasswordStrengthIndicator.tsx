@@ -30,8 +30,17 @@ export default function PasswordStrengthIndicator({ password }: PasswordStrength
       </div>
       <ul className="text-xs space-y-0.5">
         {checks.map((check, i) => (
-          <li key={i} className={`flex items-center gap-1 ${check.passed ? "text-success-600 dark:text-success-500" : "text-[var(--color-text-secondary)]"}`}>
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={check.passed ? 3 : 1.5}>
+          <li
+            key={i}
+            className={`flex items-center gap-1 ${check.passed ? "text-success-600 dark:text-success-500" : "text-[var(--color-text-secondary)]"}`}
+          >
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={check.passed ? 3 : 1.5}
+            >
               {check.passed ? (
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               ) : (

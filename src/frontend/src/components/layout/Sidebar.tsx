@@ -1,7 +1,7 @@
-import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useAuthStore } from "@/stores/authStore";
+import { NavLink } from "react-router-dom";
 import { useAvailableTools } from "@/hooks/useAvailableTools";
+import { useAuthStore } from "@/stores/authStore";
 
 interface SidebarItem {
   label: string;
@@ -12,9 +12,24 @@ interface SidebarItem {
 
 const ALL_TOOLS: SidebarItem[] = [
   { label: "tools.ping.name", to: "/ping", name: "ping", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
-  { label: "tools.traceroute.name", to: "/traceroute", name: "traceroute", icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" },
-  { label: "tools.dns.name", to: "/dns", name: "dns_lookup", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" },
-  { label: "tools.ssl.name", to: "/ssl", name: "ssl_viewer", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
+  {
+    label: "tools.traceroute.name",
+    to: "/traceroute",
+    name: "traceroute",
+    icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
+  },
+  {
+    label: "tools.dns.name",
+    to: "/dns",
+    name: "dns_lookup",
+    icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9",
+  },
+  {
+    label: "tools.ssl.name",
+    to: "/ssl",
+    name: "ssl_viewer",
+    icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+  },
 ];
 
 interface SidebarProps {
@@ -30,7 +45,7 @@ export default function Sidebar({ collapsed = false, onNavigate, onToggle, showT
   const role = user?.role ?? "visitor";
   const { tools: toolNames, checked } = useAvailableTools();
   const availableNames = checked ? new Set(toolNames) : null;
-  const visibleTools = availableNames === null ? [] : ALL_TOOLS.filter(t => availableNames.has(t.name));
+  const visibleTools = availableNames === null ? [] : ALL_TOOLS.filter((t) => availableNames.has(t.name));
 
   return (
     <nav
@@ -49,9 +64,7 @@ export default function Sidebar({ collapsed = false, onNavigate, onToggle, showT
         </button>
       )}
       {!collapsed && (
-        <div className="px-3 py-1 text-xs font-semibold uppercase text-gray-500 tracking-wide">
-          {t("common.tools")}
-        </div>
+        <div className="px-3 py-1 text-xs font-semibold uppercase text-gray-500 tracking-wide">{t("common.tools")}</div>
       )}
       {visibleTools.map((item) => (
         <NavLink
@@ -100,7 +113,11 @@ export default function Sidebar({ collapsed = false, onNavigate, onToggle, showT
             }
           >
             <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             {!collapsed && t("admin.section_title")}

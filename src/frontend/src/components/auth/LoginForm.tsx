@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { TextInput, Button, Alert } from "@/components/ui";
-import { useAuthStore } from "@/stores/authStore";
+import { Alert, Button, TextInput } from "@/components/ui";
 import { ApiError } from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -52,7 +52,11 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
     <div className={`w-full max-w-sm ${className}`}>
       <h1 className="mb-6 text-center text-xl font-semibold text-[var(--color-text)]">{t("auth.sign_in")}</h1>
 
-      {error && <Alert variant="error" className="mb-4">{error}</Alert>}
+      {error && (
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="flex flex-col gap-1">
@@ -87,18 +91,28 @@ export default function LoginForm({ redirectTo = "/ping", className = "" }: Logi
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 {showPassword ? (
                   <>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+                    />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </>
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
                 )}
               </svg>
             </button>
           </div>
         </label>
 
-        <Button type="submit" className="w-full" loading={loading}>{t("auth.sign_in")}</Button>
+        <Button type="submit" className="w-full" loading={loading}>
+          {t("auth.sign_in")}
+        </Button>
       </form>
     </div>
   );

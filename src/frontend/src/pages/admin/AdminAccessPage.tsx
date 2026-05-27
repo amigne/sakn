@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { ToggleSwitch, Spinner } from "@/components/ui";
+import { Spinner, ToggleSwitch } from "@/components/ui";
 import { listRolePermissions, updateRolePermissions } from "@/services/admin";
 import type { AccessPermission } from "@/types/admin";
 import { toolDisplayName } from "@/types/admin";
@@ -41,7 +41,7 @@ export default function AdminAccessPage() {
 
     // Optimistic update
     const updated = permissions.map((p) =>
-      p.tool_name === tool && p.role === role ? { ...p, allowed: !p.allowed } : p
+      p.tool_name === tool && p.role === role ? { ...p, allowed: !p.allowed } : p,
     );
     setPermissions(updated);
 
@@ -60,23 +60,36 @@ export default function AdminAccessPage() {
   return (
     <AdminLayout title={t("admin.access_rights")}>
       <div className="card p-4 max-w-md">
-        <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          {t("admin.access_description")}
-        </p>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-4">{t("admin.access_description")}</p>
 
         {error && (
-          <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">{error}</div>
+          <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">
+            {error}
+          </div>
         )}
 
         {loading ? (
-          <div className="flex justify-center py-12"><Spinner /></div>
+          <div className="flex justify-center py-12">
+            <Spinner />
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.tool")}</th>
+                <th
+                  scope="col"
+                  className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                >
+                  {t("admin.tool")}
+                </th>
                 {ROLES.map((r) => (
-                  <th key={r} scope="col" className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize">{r}</th>
+                  <th
+                    key={r}
+                    scope="col"
+                    className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize"
+                  >
+                    {r}
+                  </th>
                 ))}
               </tr>
             </thead>

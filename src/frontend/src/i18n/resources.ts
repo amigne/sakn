@@ -1,7 +1,7 @@
 import commonEn from "./en.json";
-import commonFr from "./fr.json";
 import errorsEn from "./errors/en.json";
 import errorsFr from "./errors/fr.json";
+import commonFr from "./fr.json";
 
 export const resources = {
   en: {

@@ -1,7 +1,7 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import PageLayout from "@/components/layout/PageLayout";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { NavLink, useLocation } from "react-router-dom";
+import PageLayout from "@/components/layout/PageLayout";
 
 const ADMIN_TAB_KEYS = [
   { key: "admin.users", to: "/admin/users" },

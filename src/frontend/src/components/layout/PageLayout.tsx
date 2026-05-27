@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import TopBar from "./TopBar";
+import { Link } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
 
 interface PageLayoutProps {
   children: ReactNode;
@@ -79,9 +79,7 @@ export default function PageLayout({ children }: PageLayoutProps) {
       <TopBar onToggleSidebar={toggleSidebar} showHamburger={isMobile} />
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop/tablet: inline sidebar */}
-        {!isMobile && (
-          <Sidebar collapsed={collapsed} onToggle={toggleSidebar} showToggle />
-        )}
+        {!isMobile && <Sidebar collapsed={collapsed} onToggle={toggleSidebar} showToggle />}
 
         {/* Mobile: overlay sidebar */}
         {isMobile && mobileOpen && (
@@ -93,14 +91,13 @@ export default function PageLayout({ children }: PageLayoutProps) {
           </>
         )}
 
-        <main className="flex-1 overflow-auto p-4">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto p-4">{children}</main>
       </div>
       <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1 text-center text-xs text-gray-500 dark:text-gray-400">
-        SAKN v0.0.2 — {t("common.footer.tagline")} — {t("common.footer.copyright", { year: 2026 })}
-        {" "}·{" "}
-        <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">{t("common.privacy")}</Link>
+        SAKN v0.0.2 — {t("common.footer.tagline")} — {t("common.footer.copyright", { year: 2026 })} ·{" "}
+        <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">
+          {t("common.privacy")}
+        </Link>
       </footer>
     </div>
   );

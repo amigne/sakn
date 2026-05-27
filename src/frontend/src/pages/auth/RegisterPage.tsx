@@ -11,7 +11,13 @@ export default function RegisterPage() {
         <RegisterForm />
 
         <p className="mt-4 text-center text-sm text-[var(--color-text-secondary)]">
-          {t("auth.has_account")} <Link to="/login" className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">{t("auth.sign_in")}</Link>
+          {t("auth.has_account")}{" "}
+          <Link
+            to="/login"
+            className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+          >
+            {t("auth.sign_in")}
+          </Link>
         </p>
       </div>
     </main>
