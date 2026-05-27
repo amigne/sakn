@@ -44,6 +44,18 @@ test.describe("Account Pages", () => {
   });
 
   test("sessions page loads", async ({ page }) => {
+    // Mock the sessions API: the backend is running in full-stack CI and
+    // returns 401 (no auth cookie), which triggers a redirect to /login
+    // via the api.ts interceptor.  Without this mock the test would never
+    // see the sessions heading.
+    await page.route("**/api/v1/sessions", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ sessions: [] }),
+      });
+    });
+
     await page.goto("/account/sessions", { waitUntil: "networkidle" });
 
 

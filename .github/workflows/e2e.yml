@@ -22,17 +22,83 @@ jobs:
     defaults:
       run:
         working-directory: src/frontend
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: sakn
+          POSTGRES_PASSWORD: sakn
+          POSTGRES_DB: sakn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sakn"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq traceroute
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --frozen
+
+      - name: Run migrations
+        working-directory: src/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://sakn:sakn@localhost:5432/sakn
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-test-secret-key-not-for-production-${{ github.run_id }}
+          ENVIRONMENT: development
+        run: uv run alembic upgrade head
+
+      - name: Start backend
+        working-directory: src/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://sakn:sakn@localhost:5432/sakn
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-test-secret-key-not-for-production-${{ github.run_id }}
+          ENVIRONMENT: development
+        run: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          echo "Backend did not start within 60s"
+          exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
+
+      - name: Install frontend dependencies
         run: npm ci
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps ${{ matrix.browser }}
+
       - name: Run Playwright tests
         run: npx playwright test --project=${{ matrix.browser }}
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
