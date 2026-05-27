@@ -34,7 +34,7 @@ const BASELINE_UNAUTH: Record<string, number> = {
   "/register": 0,
   "/reset-password": 0,
   "/verify-email": 0,
-  "/privacy": 1,
+  "/privacy": 0,
   "/nonexistent": 0,
 };
 
@@ -202,6 +202,16 @@ test.describe("A11y Audit — Targeted Rules", () => {
     await page.goto("/register", { waitUntil: "networkidle" });
     const results = await new AxeBuilder({ page })
       .withRules(["link-in-text-block"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("A11y Audit — Targeted Rules", () => {
+  test("Privacy page has no scrollable-region-focusable", async ({ page }) => {
+    await page.goto("/privacy", { waitUntil: "networkidle" });
+    const results = await new AxeBuilder({ page })
+      .withRules(["scrollable-region-focusable"])
       .analyze();
     expect(results.violations).toEqual([]);
   });
