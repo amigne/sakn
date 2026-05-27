@@ -24,7 +24,7 @@ test.describe("SAKN smoke tests", () => {
 
   test("language toggle switches", async ({ page }) => {
     await page.goto("/ping");
-    const langBtn = page.locator('button[aria-label*="lang" i]');
+    const langBtn = page.locator('[data-testid="language-toggle"]');
     await expect(langBtn).toBeVisible();
     const initial = await langBtn.textContent();
     await langBtn.click();
