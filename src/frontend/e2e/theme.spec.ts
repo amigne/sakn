@@ -41,7 +41,6 @@ test.describe("Theme", () => {
 
     // Click twice
     await themeBtn.click();
-    const label2 = await themeBtn.getAttribute("aria-label");
     // After two clicks, we should be in a different state from initial
     await expect.poll(() =>
       page.evaluate(() => document.documentElement.classList.contains("dark"))
