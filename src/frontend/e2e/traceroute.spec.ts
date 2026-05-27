@@ -7,8 +7,9 @@ test.describe("Traceroute", () => {
     // Traceroute uses UDP probes by default. GitHub Actions runners block
     // outbound UDP to high ports, so the tool never receives replies and
     // the WebSocket never emits a "complete" message — the test times out.
-    // The test passes locally with a real backend. Follow-up: issue #195.
-    test.skip(!!process.env.CI, "UDP outbound blocked in CI — traceroute probes never reply");
+    // The test passes locally with a real backend. Follow-up: issue #257
+    // (investigate TCP-based traceroute or move to docker-compose CI).
+    test.skip(!!process.env.CI, "UDP outbound blocked in CI — see #257");
 
     await page.goto("/traceroute", { waitUntil: "networkidle" });
 
