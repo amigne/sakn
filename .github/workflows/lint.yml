@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Ruff (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies
+        working-directory: src/backend
+        run: uv sync --frozen --all-extras
+      - name: Run ruff check
+        working-directory: src/backend
+        run: uv run ruff check .
+
+  biome:
+    name: Biome (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        working-directory: src/frontend
+        run: npm ci
+      - name: Run biome check
+        working-directory: src/frontend
+        run: npx biome check src/
