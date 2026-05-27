@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.middleware.admin import require_admin
-from app.models.tool_module import RateLimitConfig
 from app.models import ToolModule
+from app.models.tool_module import RateLimitConfig
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
@@ -104,12 +104,18 @@ async def update_rate_limits(
                 if global_config.soft_limit > 0 and ps > global_config.soft_limit:
                     raise HTTPException(
                         status_code=422,
-                        detail=f"Per-tool soft limit ({ps}) exceeds global ({global_config.soft_limit}) for role {role}",
+                        detail=(
+                            f"Per-tool soft limit ({ps}) exceeds "
+                            f"global ({global_config.soft_limit}) for role {role}"
+                        ),
                     )
                 if global_config.hard_limit > 0 and ph > global_config.hard_limit:
                     raise HTTPException(
                         status_code=422,
-                        detail=f"Per-tool hard limit ({ph}) exceeds global ({global_config.hard_limit}) for role {role}",
+                        detail=(
+                            f"Per-tool hard limit ({ph}) exceeds "
+                            f"global ({global_config.hard_limit}) for role {role}"
+                        ),
                     )
 
     admin_id = getattr(request.state, "user_id", None)

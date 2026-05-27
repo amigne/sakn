@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy import String, Integer, DateTime, Text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, UUID7Mixin, TimestampMixin, utcnow
+from app.models.base import Base, TimestampMixin, UUID7Mixin
 
 
 class User(Base, UUID7Mixin, TimestampMixin):

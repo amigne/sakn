@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,13 +7,18 @@ from app.models import Session
 from app.models.base import utcnow
 from app.models.preferences import GlobalSetting
 from app.redis.session_store import (
-    create_session as redis_create_session,
-    get_session as redis_get_session,
-    delete_session as redis_delete_session,
-    list_user_sessions,
-    update_activity,
-    enforce_concurrent_limit,
     _get_max_sessions,
+    enforce_concurrent_limit,
+    update_activity,
+)
+from app.redis.session_store import (
+    create_session as redis_create_session,
+)
+from app.redis.session_store import (
+    delete_session as redis_delete_session,
+)
+from app.redis.session_store import (
+    get_session as redis_get_session,
 )
 from app.security.tokens import generate_token, hash_token
 
@@ -21,7 +26,7 @@ SESSION_DURATION_HOURS = 24
 
 
 def _now_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def _get_session_duration(db: AsyncSession) -> int:
@@ -38,7 +43,13 @@ async def _get_session_duration(db: AsyncSession) -> int:
     return SESSION_DURATION_HOURS
 
 
-async def create(db: AsyncSession, *, user_id: str | None, ip_address: str, user_agent: str | None = None) -> tuple[str, Session]:
+async def create(
+    db: AsyncSession,
+    *,
+    user_id: str | None,
+    ip_address: str,
+    user_agent: str | None = None,
+) -> tuple[str, Session]:
     """Create a session in Redis and DB. Returns (raw_token, db_session)."""
     token = generate_token()
     token_hash = hash_token(token)

@@ -1,13 +1,14 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.rate_limit_service import (
-    get_effective_limits,
+    AUTH_LIMITS,
+    DEFAULT_LIMITS,
     auth_check,
     auth_record,
     auth_remaining,
-    AUTH_LIMITS,
-    DEFAULT_LIMITS,
+    get_effective_limits,
 )
 
 

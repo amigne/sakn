@@ -1,6 +1,5 @@
 import redis.asyncio as aioredis
 
-
 _redis: aioredis.Redis | None = None
 
 

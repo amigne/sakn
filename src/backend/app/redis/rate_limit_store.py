@@ -5,7 +5,6 @@ soft/hard windows, and record the request. Falls back to in-memory
 counters when Redis is unavailable.
 """
 
-import json
 import logging
 import time
 from dataclasses import dataclass

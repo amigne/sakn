@@ -1,5 +1,4 @@
-import pytest
-from app.security.password import hash_password, verify_password, validate_password_strength
+from app.security.password import hash_password, validate_password_strength, verify_password
 
 
 class TestPasswordHashing:

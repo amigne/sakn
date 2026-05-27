@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ async def cleanup_expired_anonymous_sessions(db: AsyncSession) -> int:
     result = await db.execute(
         delete(Session).where(
             Session.user_id.is_(None),
-            Session.expires_at < datetime.now(timezone.utc),
+            Session.expires_at < datetime.now(UTC),
         )
     )
     return result.rowcount

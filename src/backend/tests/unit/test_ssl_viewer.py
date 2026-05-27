@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -26,12 +26,12 @@ def tool():
 def _fake_leaf_cert():
     """Create a minimal fake certificate for testing."""
     from cryptography import x509
-    from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(
@@ -65,12 +65,12 @@ def _fake_leaf_cert():
 def _fake_ca_cert():
     """Create a minimal fake CA certificate for testing."""
     from cryptography import x509
-    from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(
@@ -220,14 +220,12 @@ class TestSslViewerExecute:
 
     @pytest.mark.asyncio
     async def test_timeout_handling(self, tool, ctx):
-        import socket as sock_mod
-        import _socket
 
         with patch("app.tools.ssl_viewer.filter_target") as mock_filter:
             mock_filter.return_value = ("93.184.216.34", None)
             with patch("app.tools.ssl_viewer.asyncio.to_thread") as mock_thread:
                 # Python's socket.timeout is a built-in exception
-                mock_thread.side_effect = sock_mod.timeout("timed out")
+                mock_thread.side_effect = TimeoutError("timed out")
                 result = await tool.execute({"url": "example.com"}, ctx)
 
         assert result.success is False

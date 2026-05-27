@@ -1,5 +1,5 @@
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -29,10 +29,9 @@ async def lifespan(app: FastAPI) -> Any:
         logger.warning("Redis unavailable, continuing without it")
 
     # Ensure tables exist (idempotent — safe to call even after alembic migrations)
-    from app.models import Base
-
-    from app.database import set_db_available
     from app.config import settings as cfg
+    from app.database import set_db_available
+    from app.models import Base
 
     try:
         async with engine.begin() as conn:
@@ -55,7 +54,8 @@ async def lifespan(app: FastAPI) -> Any:
         )
         # Fall back to local SQLite in development only
         try:
-            from sqlalchemy.ext.asyncio import create_async_engine as cae, AsyncSession, async_sessionmaker
+            from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+            from sqlalchemy.ext.asyncio import create_async_engine as cae
 
             fallback_url = "sqlite+aiosqlite:///./sakn.db"
             fallback_engine = cae(fallback_url, echo=False, future=True)
@@ -79,11 +79,11 @@ async def lifespan(app: FastAPI) -> Any:
             db_available = False
 
     # Tool registry (always available, even without DB)
-    from app.tools.registry import ToolRegistry
-    from app.tools.ping import PingTool
-    from app.tools.traceroute import TracerouteTool
     from app.tools.dns_lookup import DnsLookupTool
+    from app.tools.ping import PingTool
+    from app.tools.registry import ToolRegistry
     from app.tools.ssl_viewer import SslViewerTool
+    from app.tools.traceroute import TracerouteTool
 
     registry = ToolRegistry()
     registry.register(PingTool())
@@ -95,11 +95,12 @@ async def lifespan(app: FastAPI) -> Any:
     # Seed tool modules + default config rows (idempotent)
     if db_available:
         try:
+            from sqlalchemy import select
+
             from app.database import async_session_factory
             from app.models import ToolModule
-            from app.models.tool_module import RoleToolPermission, RateLimitConfig, DnsServerPreset
             from app.models.preferences import GlobalSetting
-            from sqlalchemy import select
+            from app.models.tool_module import DnsServerPreset, RateLimitConfig, RoleToolPermission
 
             async with async_session_factory() as db:
                 # Upsert tool modules
@@ -125,7 +126,7 @@ async def lifespan(app: FastAPI) -> Any:
                 # Seed default RoleToolPermission rows (all roles → all tools allowed)
                 all_roles = ["visitor", "authenticated", "administrator"]
                 for role in all_roles:
-                    for tool_name, tool_id in tool_ids.items():
+                    for _tool_name, tool_id in tool_ids.items():
                         row = await db.execute(
                             select(RoleToolPermission).where(
                                 RoleToolPermission.role == role,
@@ -221,10 +222,11 @@ async def lifespan(app: FastAPI) -> Any:
             try:
                 async with async_session_factory() as db:
                     from sqlalchemy import select as sel
-                    from app.models.preferences import GlobalSetting as GS
+
+                    from app.models.preferences import GlobalSetting
 
                     row = await db.execute(
-                        sel(GS).where(GS.key == "log_retention_days")
+                        sel(GlobalSetting).where(GlobalSetting.key == "log_retention_days")
                     )
                     setting = row.scalar_one_or_none()
                     retention = int(setting.value) if setting else 90
@@ -270,10 +272,8 @@ async def lifespan(app: FastAPI) -> Any:
 
     # Cleanup
     if hasattr(app.state, "scheduler"):
-        try:
+        with suppress(Exception):
             app.state.scheduler.shutdown(wait=False)
-        except Exception:
-            pass
     try:
         from app.redis.connection import close_redis
 
@@ -333,7 +333,7 @@ from app.api.v1.router import v1_router
 app.include_router(v1_router)
 
 # Error handlers
-from app.api.errors import AppError, app_error_handler, register_error_handlers
+from app.api.errors import AppError, register_error_handlers
 
 register_error_handlers(app)
 

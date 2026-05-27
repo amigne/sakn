@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -100,7 +100,7 @@ async def update_activity(token_hash: str, ttl_seconds: int = 86400) -> None:
     try:
         redis = await get_redis()
         key = _session_key(token_hash)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         await redis.hset(key, "last_activity_at", now)
         await redis.expire(key, ttl_seconds)
     except Exception:

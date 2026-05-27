@@ -29,7 +29,7 @@ def is_db_available() -> bool:
     return _db_available
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     if not _db_available:
         from app.api.errors import AppError
         raise AppError(503, "DATABASE_UNAVAILABLE", "errors.database_unavailable",

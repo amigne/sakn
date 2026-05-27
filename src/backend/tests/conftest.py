@@ -8,15 +8,15 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.database import get_session
-from app.main import app
-from app.models import Base
 import app.database as db_module
 import app.middleware.rate_limit as rl_module
 import app.middleware.session as mw_module
+from app.database import get_session
+from app.main import app
+from app.models import Base
 
 TEST_DATABASE_URL = "sqlite+aiosqlite://"
 
@@ -38,21 +38,20 @@ async def _engine():
 
 
 @pytest_asyncio.fixture
-async def db_session(_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(_engine) -> AsyncGenerator[AsyncSession]:
     session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
-    async with session_factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    async with session_factory() as session, session.begin():
+        yield session
+        await session.rollback()
 
 
 @pytest_asyncio.fixture
-async def client(_engine) -> AsyncGenerator[AsyncClient, None]:
+async def client(_engine) -> AsyncGenerator[AsyncClient]:
     """Test client with dependency overrides for the test DB."""
     session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
     # Override endpoint DI
-    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+    async def override_get_session() -> AsyncGenerator[AsyncSession]:
         async with session_factory() as session:
             try:
                 yield session

@@ -1,24 +1,24 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    User,
+    DnsServerPreset,
+    EmailVerification,
+    GlobalSetting,
+    PasswordReset,
+    RateLimitConfig,
+    RoleToolPermission,
     Session,
     ToolModule,
-    RoleToolPermission,
-    RateLimitConfig,
-    DnsServerPreset,
+    User,
     UserPreference,
-    EmailVerification,
-    PasswordReset,
-    GlobalSetting,
 )
 from app.models.base import new_uuid7
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def create_user(

@@ -1,6 +1,5 @@
 from app.tools.ping import PingTool
 
-
 SAMPLE_PING_OUTPUT = """PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
 64 bytes from 8.8.8.8: icmp_seq=1 ttl=119 time=10.3 ms
 64 bytes from 8.8.8.8: icmp_seq=2 ttl=119 time=10.5 ms
@@ -56,7 +55,11 @@ class TestPingParsing:
         assert summary["loss_pct"] == 75.0
 
     def test_build_args_basic(self):
-        args = PingTool._build_args("8.8.8.8", {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": False, "dscp": 0, "max_duration": 30})
+        args = PingTool._build_args(
+            "8.8.8.8",
+            {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": False,
+             "dscp": 0, "max_duration": 30},
+        )
         assert args[0] == "ping"
         assert "8.8.8.8" in args
         assert "-c" in args and "4" in args
@@ -64,13 +67,25 @@ class TestPingParsing:
         assert "-s" in args and "56" in args
 
     def test_build_args_df_bit(self):
-        args = PingTool._build_args("8.8.8.8", {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": True, "dscp": 0, "max_duration": 30})
+        args = PingTool._build_args(
+            "8.8.8.8",
+            {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": True,
+             "dscp": 0, "max_duration": 30},
+        )
         assert "-M" in args and "do" in args
 
     def test_build_args_dscp(self):
-        args = PingTool._build_args("8.8.8.8", {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": False, "dscp": 46, "max_duration": 30})
+        args = PingTool._build_args(
+            "8.8.8.8",
+            {"count": 4, "timeout": 10, "packet_size": 56, "df_bit": False,
+             "dscp": 46, "max_duration": 30},
+        )
         assert "-Q" in args and "184" in args  # 46 << 2 = 184 (DSCP → TOS)
 
     def test_build_args_unlimited_count(self):
-        args = PingTool._build_args("8.8.8.8", {"count": 0, "timeout": 10, "packet_size": 56, "df_bit": False, "dscp": 0, "max_duration": 30})
+        args = PingTool._build_args(
+            "8.8.8.8",
+            {"count": 0, "timeout": 10, "packet_size": 56, "df_bit": False,
+             "dscp": 0, "max_duration": 30},
+        )
         assert "-c" not in args or args[args.index("-c") + 1] == "0"

@@ -40,7 +40,15 @@ _PYDANTIC_ERROR_MESSAGES: dict[str, str] = {
 
 
 class AppError(Exception):
-    def __init__(self, status_code: int, code: str, message_key: str, message: str, details: dict | None = None, headers: dict | None = None):
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message_key: str,
+        message: str,
+        details: dict | None = None,
+        headers: dict | None = None,
+    ):
         self.status_code = status_code
         self.code = code
         self.message_key = message_key

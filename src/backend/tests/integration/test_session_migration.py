@@ -5,11 +5,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, Session
+from app.models import Session, User
 from app.models.base import new_uuid7, utcnow
-from app.security.tokens import generate_token, hash_token
 from app.security.password import hash_password
-
+from app.security.tokens import generate_token, hash_token
 
 STRONG_PW = "MyC0rrectHorseBatteryStaple!"
 

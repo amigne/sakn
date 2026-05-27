@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Integer, DateTime, Text, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUID7Mixin, utcnow

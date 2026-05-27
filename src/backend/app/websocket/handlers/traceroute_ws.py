@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Any
@@ -8,14 +9,14 @@ from sqlalchemy import select
 
 from app.database import async_session_factory
 from app.models.preferences import GlobalSetting
+from app.security.address_filter import filter_target, is_ip_blocked
+from app.tools.network.executor import SubprocessExecutor
 from app.tools.traceroute import (
-    TracerouteTool,
-    HOP_LINE_RE,
     HEADER_RE,
+    HOP_LINE_RE,
+    TracerouteTool,
     _parse_probes_from_tokens,
 )
-from app.tools.network.executor import SubprocessExecutor
-from app.security.address_filter import filter_target, is_ip_blocked
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,7 @@ async def handle_traceroute_stream(
         try:
             await asyncio.wait_for(process.wait(), timeout=hard_timeout)
             timed_out = False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             if process.returncode is None:
                 process.kill()
@@ -289,17 +290,13 @@ async def handle_traceroute_stream(
         logger.exception("traceroute_ws error")
         await _log_tool_exec("traceroute", params, "failure", 0, str(e),
                              user_id, session_id, source_ip)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({
                 "type": "error",
                 "message_key": "errors.internal_error",
                 "message": "An unexpected error occurred",
             })
-        except Exception:
-            pass
     finally:
         if process and process.returncode is None:
-            try:
+            with contextlib.suppress(Exception):
                 process.kill()
-            except Exception:
-                pass

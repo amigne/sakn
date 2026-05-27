@@ -22,14 +22,14 @@ from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_INVALID_ORIGIN,
     WS_CLOSE_RATE_LIMITED,
 )
-from app.security.tokens import generate_token, hash_token
 from app.redis.rate_limit_store import get_rate_limiter
+from app.security.tokens import generate_token, hash_token
 from tests.factories import (
-    create_user,
+    create_rate_limit_config,
+    create_role_permission,
     create_session,
     create_tool_module,
-    create_role_permission,
-    create_rate_limit_config,
+    create_user,
 )
 
 
@@ -147,7 +147,7 @@ class TestWebSocketRateLimit:
             # First call should NOT be rate-limited
             await tools_mod.tool_stream(ws1, "ping")
             assert ws1.close.call_args is None or ws1.close.call_args[1]["code"] != WS_CLOSE_RATE_LIMITED, (
-                f"First connection should not be rate-limited"
+                "First connection should not be rate-limited"
             )
 
             # Second call must be rate-limited
@@ -162,8 +162,8 @@ class TestWebSocketRateLimit:
             # Clean up committed DB rows (db_session rollback won't cover the commit above)
             from sqlalchemy import delete
             from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-            from app.models.tool_module import RoleToolPermission, RateLimitConfig
-            from app.models.tool_module import ToolModule
+
+            from app.models.tool_module import RateLimitConfig, RoleToolPermission, ToolModule
 
             cleanup_factory = async_sessionmaker(
                 _engine, class_=AsyncSession, expire_on_commit=False
@@ -195,6 +195,7 @@ class TestWebSocketRedisSessionException:
         """When Redis session lookup raises, logger.exception is called and flow continues."""
         from sqlalchemy import delete
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
         from app.models import ToolModule
         from app.models.base import new_uuid7
         from app.models.tool_module import RoleToolPermission
@@ -223,12 +224,11 @@ class TestWebSocketRedisSessionException:
             ws = _make_mock_ws(cookies="sakn_session=some-token-value")
             logger = logging.getLogger("app.api.v1.endpoints.tools")
 
-            with patch.object(logger, "exception") as mock_log:
-                with patch(
-                    "app.redis.session_store.get_session",
-                    side_effect=Exception("Redis connection refused"),
-                ):
-                    await tools_mod.tool_stream(ws, "ping")
+            with patch.object(logger, "exception") as mock_log, patch(
+                "app.redis.session_store.get_session",
+                side_effect=Exception("Redis connection refused"),
+            ):
+                await tools_mod.tool_stream(ws, "ping")
 
             mock_log.assert_any_call("Redis session lookup failed for WS")
         finally:
@@ -246,14 +246,15 @@ class TestWebSocketRedisSessionException:
     @pytest.mark.asyncio
     async def test_rate_limit_creates_security_event_log(self, db_session, _engine, monkeypatch):
         """Issue #62: rate limit rejection logs a SecurityEventLog row."""
+        from sqlalchemy import delete
+
         from app.models.log import SecurityEventLog
         from app.models.tool_module import ToolModule
-        from sqlalchemy import delete, select as sa_select
 
         get_rate_limiter().clear_for_tests()
 
         # Clean up any leftover data from previous tests
-        from app.models.tool_module import RateLimitConfig, RoleToolPermission
+        from app.models.tool_module import RateLimitConfig
         await db_session.execute(delete(SecurityEventLog))
         await db_session.execute(delete(RateLimitConfig).where(RateLimitConfig.role == "authenticated"))
         await db_session.execute(delete(ToolModule).where(ToolModule.name == "ping"))
@@ -300,8 +301,9 @@ class TestWebSocketRedisSessionException:
             assert ws2.close.call_args[1]["reason"] == "rate_limit_exceeded"
 
             # Verify SecurityEventLog row was created
-            from app.models.log import SecurityEventLog
             from sqlalchemy import select
+
+            from app.models.log import SecurityEventLog
 
             async with test_factory() as check_db:
                 row = await check_db.execute(

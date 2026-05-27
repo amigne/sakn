@@ -115,7 +115,7 @@ class TestValidateSecretKey:
             ENVIRONMENT="production",
             SECRET_KEY=key,
         )
-        assert s.SECRET_KEY == key
+        assert key == s.SECRET_KEY
 
     def test_production_with_low_entropy_key_raises(self):
         """A key with only 1 distinct character must be rejected."""

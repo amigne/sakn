@@ -2,15 +2,15 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-from sqlalchemy import select, delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
 from app.database import get_session
-from app.models import User, Session
-from app.models.log import ToolExecutionLog, SecurityEventLog, AuditLog
-from app.models.preferences import UserPreference, EmailVerification, PasswordReset
-from app.security.csrf import validate_csrf, SAFE_METHODS
+from app.models import Session, User
+from app.models.log import AuditLog, SecurityEventLog, ToolExecutionLog
+from app.models.preferences import EmailVerification, PasswordReset, UserPreference
+from app.security.csrf import SAFE_METHODS, validate_csrf
 from app.security.password import verify_password
 
 logger = logging.getLogger(__name__)

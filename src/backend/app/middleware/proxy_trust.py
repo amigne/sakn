@@ -7,7 +7,7 @@ the choice and version of the upstream reverse proxy.
 
 See docs/adr/003-proxy-trust-policy.md for the design rationale.
 """
-from typing import Iterable
+from collections.abc import Iterable
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 

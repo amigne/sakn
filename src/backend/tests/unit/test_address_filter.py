@@ -1,17 +1,16 @@
 from unittest.mock import MagicMock, patch
 
-import asyncio
 import dns.name
 import dns.resolver
 import pytest
 
 from app.security.address_filter import (
-    is_ip_blocked,
-    filter_target,
-    resolve_hostname,
-    _make_resolver,
     BLOCKED_NETWORKS,
     CNAME_MAX_HOPS,
+    _make_resolver,
+    filter_target,
+    is_ip_blocked,
+    resolve_hostname,
 )
 
 # ── Mock helpers for DNS resolver ────────────────────────────────────────────
@@ -323,7 +322,7 @@ class TestResolveHostnameTimeout:
     @pytest.mark.asyncio
     async def test_global_timeout_returns_empty(self):
         """asyncio.TimeoutError → empty list with a warning log."""
-        with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+        with patch("asyncio.wait_for", side_effect=TimeoutError()):
             result = await resolve_hostname("slow.example.com")
             assert result == []
 

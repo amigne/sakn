@@ -1,17 +1,12 @@
-import secrets
 
-import pytest
 from fastapi import Request, Response
-from starlette.testclient import TestClient
 
 from app.security.csrf import (
     CSRF_COOKIE,
-    CSRF_HEADER,
+    clear_csrf_cookie,
     generate_csrf_token,
     set_csrf_cookie,
-    clear_csrf_cookie,
     validate_csrf,
-    get_csrf_from_request,
 )
 
 

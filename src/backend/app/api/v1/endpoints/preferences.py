@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+from app.security.csrf import SAFE_METHODS, validate_csrf
 from app.services.preference_service import get_preferences, set_preferences
-from app.security.csrf import validate_csrf, SAFE_METHODS
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 import pytest
 
-from app.tools.base import BaseTool, ToolDefinition, ToolCategory
+from app.tools.base import BaseTool, ToolCategory, ToolDefinition
 from app.tools.registry import ToolRegistry
 
 

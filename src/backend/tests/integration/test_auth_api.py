@@ -3,13 +3,12 @@ import json
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, EmailVerification
+from app.models import EmailVerification, User
 from app.models.base import utcnow
 from app.models.log import SecurityEventLog
-from app.security.password import hash_password
 from app.security.tokens import generate_token, hash_token
 from app.services.auth_service import _hash_email_for_log
 from app.services.rate_limit_service import _auth_counters

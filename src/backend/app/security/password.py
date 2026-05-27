@@ -1,10 +1,7 @@
-import hashlib
-import secrets
 import string
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerificationError, InvalidHashError
-
+from argon2.exceptions import InvalidHashError, VerificationError
 from zxcvbn import zxcvbn
 
 ph = PasswordHasher(

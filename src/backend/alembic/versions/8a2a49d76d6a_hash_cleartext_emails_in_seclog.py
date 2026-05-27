@@ -16,19 +16,18 @@ Forward-only: downgrade cannot restore the plaintext email from the hash.
 import hashlib
 import hmac
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 
+from alembic import op
 from app.config import settings
 
-
 revision: str = '8a2a49d76d6a'
-down_revision: Union[str, None] = 'd7091a29b949'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'd7091a29b949'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _hash_email(email: str) -> str:
