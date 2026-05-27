@@ -14,6 +14,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.models.tool_module import RateLimitConfig
 from app.redis.rate_limit_store import (
     RateLimitResult,
@@ -35,9 +36,9 @@ _auth_counters: dict[str, list[float]] = defaultdict(list)
 
 # Default rate limits per role when no DB config exists (spec-backend.md §6.3)
 DEFAULT_LIMITS = {
-    "visitor": {"soft": 1, "hard": 200},
-    "authenticated": {"soft": 1, "hard": 500},
-    "administrator": {"soft": 0, "hard": 3600},
+    ROLE_VISITOR: {"soft": 1, "hard": 200},
+    ROLE_AUTHENTICATED: {"soft": 1, "hard": 500},
+    ROLE_ADMINISTRATOR: {"soft": 0, "hard": 3600},
 }
 
 
@@ -149,7 +150,7 @@ async def check_tool_rate_limit(
     soft_window_s = 1  # 1-second burst window
     hard_window_s = window_s  # configured window (default 3600)
 
-    if role == "visitor" or (role == "visitor" and user_id is None):
+    if role == ROLE_VISITOR or (role == ROLE_VISITOR and user_id is None):
         # Dual check: session + IP
         session_result = await limiter.check(
             "session", session_id, soft_limit, hard_limit, soft_window_s, hard_window_s

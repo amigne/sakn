@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
+from app.constants.roles import ROLE_ADMINISTRATOR
 from app.models import AuditLog, User
 from app.models.base import new_uuid7
 
@@ -18,7 +19,7 @@ async def ensure_not_last_admin(db: AsyncSession, user_id: str) -> None:
     """Raise AppError if the given user is the last active administrator."""
     count = await db.execute(
         select(func.count(User.id)).where(
-            User.role == "administrator",
+            User.role == ROLE_ADMINISTRATOR,
             User.status.in_(["active", "pending"]),
             User.id != user_id,
         )

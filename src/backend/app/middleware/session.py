@@ -4,6 +4,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.models.base import new_uuid7
+from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.security.cookies import get_session_token, session_cookie_name
 from app.security.csrf import generate_csrf_token, set_csrf_cookie
 from app.security.tokens import hash_token
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def _resolve_role(user_id: str | None) -> str:
     """Look up the user's actual role from the database."""
     if not user_id:
-        return "visitor"
+        return ROLE_VISITOR
     try:
         from sqlalchemy import select
 
@@ -22,7 +23,7 @@ async def _resolve_role(user_id: str | None) -> str:
         from app.models import User
 
         if not is_db_available():
-            return "authenticated"  # fallback for known user_id when DB is down
+            return ROLE_AUTHENTICATED  # fallback for known user_id when DB is down
 
         async with async_session_factory() as db:
             result = await db.execute(select(User.role).where(User.id == user_id))
@@ -31,7 +32,7 @@ async def _resolve_role(user_id: str | None) -> str:
                 return role
     except Exception:
         logger.exception("Failed to resolve user role")
-    return "authenticated"
+    return ROLE_AUTHENTICATED
 
 
 async def _resolve_session(token_hash: str) -> dict | None:
@@ -134,11 +135,11 @@ class SessionMiddleware(BaseHTTPMiddleware):
                     request.state.session_token_hash = hash_token(anon["token"])
                     request.state.session_id = anon["session_id"]
                     request.state.user_id = None
-                    request.state.role = "visitor"
+                    request.state.role = ROLE_VISITOR
                 else:
                     request.state.session_id = f"anon_{new_uuid7()}"
                     request.state.user_id = None
-                    request.state.role = "visitor"
+                    request.state.role = ROLE_VISITOR
         else:
             # No session cookie — create a persisted anonymous session.
             anon = await _create_anonymous_session(request)
@@ -148,12 +149,12 @@ class SessionMiddleware(BaseHTTPMiddleware):
                 request.state.session_token_hash = hash_token(anon["token"])
                 request.state.session_id = anon["session_id"]
                 request.state.user_id = None
-                request.state.role = "visitor"
+                request.state.role = ROLE_VISITOR
             else:
                 anon_id = new_uuid7()
                 request.state.session_id = f"anon_{anon_id}"
                 request.state.user_id = None
-                request.state.role = "visitor"
+                request.state.role = ROLE_VISITOR
 
         response = await call_next(request)
 

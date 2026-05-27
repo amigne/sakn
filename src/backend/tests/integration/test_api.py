@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
 
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
+
 
 @pytest.mark.asyncio
 async def test_health_endpoint_minimal(client):
@@ -80,7 +82,7 @@ async def test_list_tools(client):
                           enabled=True, version="1.0")
         db.add(tool)
         await db.flush()
-        db.add(RoleToolPermission(role="visitor", tool_id=tool.id, allowed=True))
+        db.add(RoleToolPermission(role=ROLE_VISITOR, tool_id=tool.id, allowed=True))
         await db.commit()
 
     try:
@@ -125,7 +127,7 @@ async def test_list_tools_for_role_validation(client):
     response = await client.get("/api/v1/tools/available-for/administrator")
     assert response.status_code == 200
     data = response.json()
-    assert data["role"] == "administrator"
+    assert data["role"] == ROLE_ADMINISTRATOR
     assert isinstance(data["tools"], list)
 
     # Clear in-memory rate limiter so the next request isn't blocked
@@ -175,7 +177,7 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
                 id=new_uuid7(),
                 email="ratelimit-test@example.com",
                 password_hash="hashed",
-                role="authenticated",
+                role=ROLE_AUTHENTICATED,
                 status="active",
                 email_verified_at=utcnow(),
             )
@@ -195,7 +197,7 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
 
             # Low hard limit so the test doesn't need 500 requests
             rlc = RateLimitConfig(
-                role="authenticated",
+                role=ROLE_AUTHENTICATED,
                 tool_id=None,
                 soft_limit=5,
                 hard_limit=3,
@@ -260,7 +262,7 @@ class TestPublicDnsServers:
 
         tool = await create_tool_module(db_session, name="dns_disabled", enabled=False)
         await create_role_permission(
-            db_session, role="visitor", tool_id=tool.id, allowed=True
+            db_session, role=ROLE_VISITOR, tool_id=tool.id, allowed=True
         )
         await create_dns_server_preset(
             db_session, tool_module_id=tool.id, ip_address="1.2.3.4"
@@ -287,7 +289,7 @@ class TestPublicDnsServers:
             db_session, name="dns_enabled", enabled=True
         )
         await create_role_permission(
-            db_session, role="visitor", tool_id=tool.id, allowed=True
+            db_session, role=ROLE_VISITOR, tool_id=tool.id, allowed=True
         )
         await create_dns_server_preset(
             db_session,
@@ -320,7 +322,7 @@ class TestPublicDnsServers:
             db_session, name="dns_visitor_denied", enabled=True
         )
         await create_role_permission(
-            db_session, role="visitor", tool_id=tool.id, allowed=False
+            db_session, role=ROLE_VISITOR, tool_id=tool.id, allowed=False
         )
         await create_dns_server_preset(
             db_session, tool_module_id=tool.id, ip_address="1.2.3.4"

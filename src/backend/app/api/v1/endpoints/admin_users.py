@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models import Session, User
@@ -242,12 +243,12 @@ async def promote_user(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     old_role = user.role
-    user.role = "administrator"
+    user.role = ROLE_ADMINISTRATOR
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session, admin_id=admin_id or "unknown",
         action="user.promote", entity_type="user", entity_id=user_id,
-        old_value={"role": old_role}, new_value={"role": "administrator"},
+        old_value={"role": old_role}, new_value={"role": ROLE_ADMINISTRATOR},
     )
     await session.commit()
     return {"user": {"id": user.id, "email": user.email, "role": user.role}}
@@ -264,15 +265,15 @@ async def demote_user(
     user = row.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.role == "administrator":
+    if user.role == ROLE_ADMINISTRATOR:
         await ensure_not_last_admin(session, user_id)
     old_role = user.role
-    user.role = "authenticated"
+    user.role = ROLE_AUTHENTICATED
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session, admin_id=admin_id or "unknown",
         action="user.demote", entity_type="user", entity_id=user_id,
-        old_value={"role": old_role}, new_value={"role": "authenticated"},
+        old_value={"role": old_role}, new_value={"role": ROLE_AUTHENTICATED},
     )
     await session.commit()
     return {"user": {"id": user.id, "email": user.email, "role": user.role}}
@@ -412,7 +413,7 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Last admin protection
-    if user.role == "administrator":
+    if user.role == ROLE_ADMINISTRATOR:
         await ensure_not_last_admin(session, user_id)
 
     admin_id = getattr(request.state, "user_id", None)

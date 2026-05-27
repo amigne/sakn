@@ -17,6 +17,7 @@ import pytest
 
 import app.api.v1.endpoints.tools as tools_mod
 import app.database as db_module
+from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_DB_UNAVAILABLE,
     WS_CLOSE_INVALID_ORIGIN,
@@ -114,7 +115,7 @@ class TestWebSocketRateLimit:
         user = await create_user(db_session, email="wsratelimit@example.com")
         tool = await create_tool_module(db_session, name="ping", enabled=True)
         await create_role_permission(
-            db_session, role="authenticated", tool_id=tool.id, allowed=True
+            db_session, role=ROLE_AUTHENTICATED, tool_id=tool.id, allowed=True
         )
 
         raw_token = generate_token()
@@ -123,7 +124,7 @@ class TestWebSocketRateLimit:
         )
         await create_rate_limit_config(
             db_session,
-            role="authenticated",
+            role=ROLE_AUTHENTICATED,
             tool_id=None,
             soft_limit=1,
             hard_limit=1,
@@ -171,7 +172,7 @@ class TestWebSocketRateLimit:
             async with cleanup_factory() as cleanup_db:
                 await cleanup_db.execute(
                     delete(RateLimitConfig).where(
-                        RateLimitConfig.role == "authenticated"
+                        RateLimitConfig.role == ROLE_AUTHENTICATED
                     )
                 )
                 await cleanup_db.execute(
@@ -212,7 +213,7 @@ class TestWebSocketRedisSessionException:
             ))
             await seed_db.flush()
             seed_db.add(RoleToolPermission(
-                id=new_uuid7(), role="visitor", tool_id=tool_id, allowed=True,
+                id=new_uuid7(), role=ROLE_VISITOR, tool_id=tool_id, allowed=True,
             ))
             await seed_db.commit()
 
@@ -256,13 +257,13 @@ class TestWebSocketRedisSessionException:
         # Clean up any leftover data from previous tests
         from app.models.tool_module import RateLimitConfig
         await db_session.execute(delete(SecurityEventLog))
-        await db_session.execute(delete(RateLimitConfig).where(RateLimitConfig.role == "authenticated"))
+        await db_session.execute(delete(RateLimitConfig).where(RateLimitConfig.role == ROLE_AUTHENTICATED))
         await db_session.execute(delete(ToolModule).where(ToolModule.name == "ping"))
 
         user = await create_user(db_session, email="ws62@example.com")
         tool = await create_tool_module(db_session, name="ping", enabled=True)
         await create_role_permission(
-            db_session, role="authenticated", tool_id=tool.id, allowed=True
+            db_session, role=ROLE_AUTHENTICATED, tool_id=tool.id, allowed=True
         )
 
         raw_token = generate_token()
@@ -271,7 +272,7 @@ class TestWebSocketRedisSessionException:
         )
         await create_rate_limit_config(
             db_session,
-            role="authenticated",
+            role=ROLE_AUTHENTICATED,
             tool_id=None,
             soft_limit=1,
             hard_limit=1,

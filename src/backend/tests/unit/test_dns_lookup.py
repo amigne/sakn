@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import dns.rdatatype
 import pytest
 
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.tools.base import ExecutionContext
 from app.tools.dns_lookup import DnsLookupTool
 
@@ -13,7 +14,7 @@ def ctx():
         user_id="user-1",
         session_id="session-1",
         source_ip="192.0.2.1",
-        role="authenticated",
+        role=ROLE_AUTHENTICATED,
         request_id="req-1",
     )
 

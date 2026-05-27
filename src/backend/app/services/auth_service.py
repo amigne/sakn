@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.session_service as session_service
 from app.config import settings
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.models import EmailVerification, PasswordReset, SecurityEventLog, Session, User, UserPreference
 from app.models.base import new_uuid7, utcnow
 from app.security.password import hash_password, validate_password_strength, verify_password
@@ -128,7 +129,7 @@ async def register_user(
         id=new_uuid7(),
         email=email,
         password_hash=hash_password(password),
-        role="authenticated",
+        role=ROLE_AUTHENTICATED,
         status="pending",
         first_name=first_name.strip() if first_name else None,
         last_name=last_name.strip() if last_name else None,

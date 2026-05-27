@@ -1,5 +1,6 @@
 import pytest
 
+from app.constants.roles import ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.models import GlobalSetting, ToolModule, User
 from tests.factories import (
     create_dns_server_preset,
@@ -17,10 +18,10 @@ from tests.factories import (
 
 @pytest.mark.asyncio
 async def test_create_user(db_session):
-    user = await create_user(db_session, email="test@example.com", role="authenticated", status="active")
+    user = await create_user(db_session, email="test@example.com", role=ROLE_AUTHENTICATED, status="active")
     assert user.id is not None
     assert user.email == "test@example.com"
-    assert user.role == "authenticated"
+    assert user.role == ROLE_AUTHENTICATED
     assert user.status == "active"
 
 
@@ -32,7 +33,7 @@ async def test_user_defaults(db_session):
     )
     db_session.add(user)
     await db_session.flush()
-    assert user.role == "authenticated"
+    assert user.role == ROLE_AUTHENTICATED
     assert user.status == "pending"
     assert user.failed_login_attempts == 0
     assert user.locked_until is None
@@ -83,8 +84,8 @@ async def test_tool_module_unique_name(db_session):
 @pytest.mark.asyncio
 async def test_create_role_permission(db_session):
     tool = await create_tool_module(db_session, name="test_models_perm")
-    perm = await create_role_permission(db_session, role="visitor", tool_id=tool.id)
-    assert perm.role == "visitor"
+    perm = await create_role_permission(db_session, role=ROLE_VISITOR, tool_id=tool.id)
+    assert perm.role == ROLE_VISITOR
     assert perm.tool_id == tool.id
     assert perm.allowed is True
 
@@ -99,11 +100,11 @@ async def test_role_permission_unique_constraint(db_session):
 
     tool = await create_tool_module(db_session, name="unique-ping")
 
-    perm1 = RoleToolPermission(id=new_uuid7(), role="visitor", tool_id=tool.id, allowed=True)
+    perm1 = RoleToolPermission(id=new_uuid7(), role=ROLE_VISITOR, tool_id=tool.id, allowed=True)
     db_session.add(perm1)
     await db_session.flush()
 
-    perm2 = RoleToolPermission(id=new_uuid7(), role="visitor", tool_id=tool.id, allowed=False)
+    perm2 = RoleToolPermission(id=new_uuid7(), role=ROLE_VISITOR, tool_id=tool.id, allowed=False)
     db_session.add(perm2)
     with pytest.raises(IntegrityError):
         await db_session.flush()
@@ -111,8 +112,8 @@ async def test_role_permission_unique_constraint(db_session):
 
 @pytest.mark.asyncio
 async def test_create_rate_limit_config(db_session):
-    config = await create_rate_limit_config(db_session, role="authenticated", soft_limit=1, hard_limit=500)
-    assert config.role == "authenticated"
+    config = await create_rate_limit_config(db_session, role=ROLE_AUTHENTICATED, soft_limit=1, hard_limit=500)
+    assert config.role == ROLE_AUTHENTICATED
     assert config.soft_limit == 1
     assert config.hard_limit == 500
     assert config.tool_id is None  # global
@@ -121,7 +122,7 @@ async def test_create_rate_limit_config(db_session):
 @pytest.mark.asyncio
 async def test_rate_limit_config_per_tool(db_session):
     tool = await create_tool_module(db_session, name="dns_lookup")
-    config = await create_rate_limit_config(db_session, role="authenticated", tool_id=tool.id, soft_limit=2)
+    config = await create_rate_limit_config(db_session, role=ROLE_AUTHENTICATED, tool_id=tool.id, soft_limit=2)
     assert config.tool_id == tool.id
     assert config.soft_limit == 2
 
