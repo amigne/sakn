@@ -2,18 +2,18 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.models import User, UserPreference, EmailVerification, PasswordReset, SecurityEventLog, Session
-from app.models.base import new_uuid7, utcnow
-from app.security.password import hash_password, verify_password, validate_password_strength
-from app.security.tokens import generate_token, hash_token, verify_token
-from app.services.email_service import send_email
 import app.services.session_service as session_service
+from app.config import settings
+from app.models import EmailVerification, PasswordReset, SecurityEventLog, Session, User, UserPreference
+from app.models.base import new_uuid7, utcnow
+from app.security.password import hash_password, validate_password_strength, verify_password
+from app.security.tokens import generate_token, hash_token
+from app.services.email_service import send_email
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,10 @@ async def register_user(
     existing = result.scalar_one_or_none()
     if existing:
         # Enumeration-safe: return same success message
-        await _log_security_event(db, "registration_duplicate", source_ip, details={"email_hash": _hash_email_for_log(email)})
+        await _log_security_event(
+            db, "registration_duplicate", source_ip,
+            details={"email_hash": _hash_email_for_log(email)},
+        )
         return "auth.registration_success", "Registration successful. Check your email to verify your account."
 
     # Create user
@@ -254,7 +257,10 @@ async def login(
         await _record_ip_bruteforce(source_ip)
 
         # Enumeration-safe: identical response
-        await _log_security_event(db, "login_failed_no_user", source_ip, details={"email_hash": _hash_email_for_log(email)})
+        await _log_security_event(
+            db, "login_failed_no_user", source_ip,
+            details={"email_hash": _hash_email_for_log(email)},
+        )
         # Commit before AppError rollback
         await db.commit()
         return {"success": False, "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}
@@ -366,7 +372,10 @@ async def request_password_reset(
     user = result.scalar_one_or_none()
 
     if user is None:
-        await _log_security_event(db, "password_reset_request_no_user", source_ip, details={"email_hash": _hash_email_for_log(email)})
+        await _log_security_event(
+            db, "password_reset_request_no_user", source_ip,
+            details={"email_hash": _hash_email_for_log(email)},
+        )
         return "auth.reset_email_sent", "If this email is registered, a reset link has been sent."
 
     # Create reset token
@@ -483,9 +492,12 @@ def _render_verification_email(verification_url: str) -> str:
 <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
   <h1 style="color: #1a1a2e;">Verify your SAKN account</h1>
   <p>Click the link below to verify your email address:</p>
-  <p><a href="{verification_url}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Verify Email</a></p>
+  <p><a href="{verification_url}" style="display: inline-block; padding: 10px 20px;
+        background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">
+        Verify Email</a></p>
   <p style="color: #6b7280; font-size: 0.875rem;">This link expires in 24 hours.</p>
-  <p style="color: #6b7280; font-size: 0.875rem;">If you did not create this account, you can ignore this email.</p>
+  <p style="color: #6b7280; font-size: 0.875rem;">
+        If you did not create this account, you can ignore this email.</p>
 </body>
 </html>"""
 
@@ -495,8 +507,11 @@ def _render_reset_email(reset_url: str) -> str:
 <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
   <h1 style="color: #1a1a2e;">Reset your SAKN password</h1>
   <p>Click the link below to reset your password:</p>
-  <p><a href="{reset_url}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Reset Password</a></p>
+  <p><a href="{reset_url}" style="display: inline-block; padding: 10px 20px;
+        background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">
+        Reset Password</a></p>
   <p style="color: #6b7280; font-size: 0.875rem;">This link expires in 1 hour.</p>
-  <p style="color: #6b7280; font-size: 0.875rem;">If you did not request this, you can ignore this email.</p>
+  <p style="color: #6b7280; font-size: 0.875rem;">
+        If you did not request this, you can ignore this email.</p>
 </body>
 </html>"""

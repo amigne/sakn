@@ -4,9 +4,9 @@ import time
 from ipaddress import ip_address
 from typing import Any
 
-from app.tools.base import BaseTool, ToolDefinition, ToolCategory, ToolParameter, ExecutionContext, ToolResult
-from app.tools.network.executor import SubprocessExecutor
 from app.security.address_filter import filter_target
+from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolParameter, ToolResult
+from app.tools.network.executor import SubprocessExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +81,8 @@ def _extract_ip_hostname_map(tokens: list[str]) -> dict[str, str | None]:
         elif i + 1 < len(tokens) and tokens[i + 1].startswith("(") and tokens[i + 1].endswith(")"):
             # hostname (IP) — IP is in the parentheses
             inner = tokens[i + 1][1:-1]
-            if _is_ip(inner):
-                if inner not in mapping:
-                    mapping[inner] = t
+            if _is_ip(inner) and inner not in mapping:
+                mapping[inner] = t
             i += 2
         else:
             try:
@@ -96,7 +95,11 @@ def _extract_ip_hostname_map(tokens: list[str]) -> dict[str, str | None]:
     return mapping
 
 
-def _group_probes_by_ip(tokens: list[str], probes: list[dict[str, Any]], ip_map: dict[str, str | None]) -> list[dict[str, Any]]:
+def _group_probes_by_ip(
+    tokens: list[str],
+    probes: list[dict[str, Any]],
+    ip_map: dict[str, str | None],
+) -> list[dict[str, Any]]:
     """Group probes by the responding IP for multipath detection."""
     if not ip_map:
         return []

@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app.api.v1.endpoints.tools import _is_allowed_origin
 

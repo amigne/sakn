@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.services.auth_service import _check_ip_bruteforce, _record_ip_bruteforce
 

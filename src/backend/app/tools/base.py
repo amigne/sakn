@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from app.models import ToolModule
 
 
-class ToolCategory(str, Enum):
+class ToolCategory(StrEnum):
     NETWORK = "network"
     DNS = "dns"
     SECURITY = "security"

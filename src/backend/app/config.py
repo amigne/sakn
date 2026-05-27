@@ -1,12 +1,14 @@
 import hashlib
 from urllib.parse import quote, urlparse
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _KNOWN_DEFAULT_KEY_HASHES: frozenset[str] = frozenset({
-    "f1b26d32000838014dae4c8fd56073c2e9de9ba0f4d7c6190097feb2171ac5f1",  # change-me-in-production-use-at-least-32-characters
-    "19cd1e7f65109ed570df433a76166522c7d03377a1fcc6f3153f28085d90efe5",  # change-me-in-production-use-at-least-32-bytes-base64
+    # change-me-in-production-use-at-least-32-characters
+    "f1b26d32000838014dae4c8fd56073c2e9de9ba0f4d7c6190097feb2171ac5f1",
+    # change-me-in-production-use-at-least-32-bytes-base64
+    "19cd1e7f65109ed570df433a76166522c7d03377a1fcc6f3153f28085d90efe5",
     "a268e47c2aabfd8c9e6eac615564d426d33f08bcd7fd2789315517676987a97f",  # CHANGE-ME
     "e2186dbdb1bb4193608605e84f33208765b5693b55edd4f730a719a100eeea6f",  # change-me
     "057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86",  # changeme
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "sakn"
 
     @model_validator(mode="after")
-    def assemble_database_url(self) -> "Settings":
+    def assemble_database_url(self) -> Settings:
         # Keep explicit DATABASE_URL as-is for backward compatibility
         if "DATABASE_URL" in self.model_fields_set:
             return self
@@ -43,7 +45,7 @@ class Settings(BaseSettings):
     SECURITY_DNS_RESOLVER: str = "1.1.1.1"
 
     @model_validator(mode="after")
-    def validate_secret_key(self) -> "Settings":
+    def validate_secret_key(self) -> Settings:
         if self.ENVIRONMENT == "development":
             return self
         key_hash = hashlib.sha256(self.SECRET_KEY.encode()).hexdigest()
@@ -65,7 +67,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_health_token(self) -> "Settings":
+    def validate_health_token(self) -> Settings:
         if self.ENVIRONMENT == "development":
             return self
         if self.HEALTH_FULL_TOKEN == "":

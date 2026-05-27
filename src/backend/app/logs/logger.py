@@ -6,7 +6,6 @@ the RequestIDMiddleware via contextvars.
 """
 
 import logging
-import os
 from contextvars import ContextVar
 
 import structlog

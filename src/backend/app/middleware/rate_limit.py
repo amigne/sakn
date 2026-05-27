@@ -8,12 +8,10 @@ own hardcoded limits (applied in auth endpoint handlers, not here).
 """
 
 import logging
-import time
-from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import Request, Response
+from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import async_session_factory, is_db_available
 from app.services.rate_limit_service import check_tool_rate_limit
@@ -89,9 +87,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             session_token = get_session_token(request)
             if session_token:
                 try:
-                    from app.security.tokens import hash_token
                     from sqlalchemy import select
+
                     from app.models import Session, User
+                    from app.security.tokens import hash_token
 
                     token_hash = hash_token(session_token)
                     async with async_session_factory() as db:
@@ -143,8 +142,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
             # Persist SecurityEventLog row
             try:
-                from app.models.log import SecurityEventLog
                 from app.models.base import new_uuid7
+                from app.models.log import SecurityEventLog
 
                 async with async_session_factory() as se_db:
                     se_db.add(SecurityEventLog(
@@ -168,7 +167,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 pass  # Don't block the 429 response on logging failure
 
             limit_type = result.limit_type
-            retry_msg = f"{limit_type.capitalize()} limit reached ({result.soft_limit}/s soft, {result.hard_limit}/h hard). Retry after {result.retry_after}s."
+            retry_msg = (
+                f"{limit_type.capitalize()} limit reached "
+                f"({result.soft_limit}/s soft, {result.hard_limit}/h hard). "
+                f"Retry after {result.retry_after}s."
+            )
             return JSONResponse(
                 status_code=429,
                 content={

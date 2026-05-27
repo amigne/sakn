@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import pytest
 from httpx import AsyncClient
 
@@ -64,8 +66,8 @@ class TestAnonymousSessionPersistence:
         self, client: AsyncClient, db_session
     ):
         """Existing authenticated session resolution is not broken."""
-        from app.security.tokens import hash_token, generate_token
-        from tests.factories import create_user, create_session
+        from app.security.tokens import generate_token, hash_token
+        from tests.factories import create_session, create_user
 
         user = await create_user(db_session, email="authtest@example.com")
         token = generate_token()
@@ -107,13 +109,15 @@ class TestAnonymousSessionCleanup:
     @pytest.mark.asyncio
     async def test_deletes_expired_anonymous_session(self, db_session):
         """Expired anonymous sessions (user_id IS NULL) are deleted."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from sqlalchemy import select
+
         from app.models import Session
         from app.models.base import new_uuid7
         from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
 
-        old_date = datetime.now(timezone.utc) - timedelta(hours=48)
+        old_date = datetime.now(UTC) - timedelta(hours=48)
         sess = Session(
             id=new_uuid7(),
             user_id=None,
@@ -134,13 +138,15 @@ class TestAnonymousSessionCleanup:
     @pytest.mark.asyncio
     async def test_keeps_non_expired_anonymous_session(self, db_session):
         """Anonymous sessions that are not yet expired are kept."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from sqlalchemy import select
+
         from app.models import Session
         from app.models.base import new_uuid7
         from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
 
-        future_date = datetime.now(timezone.utc) + timedelta(hours=24)
+        future_date = datetime.now(UTC) + timedelta(hours=24)
         sess = Session(
             id=new_uuid7(),
             user_id=None,
@@ -161,15 +167,17 @@ class TestAnonymousSessionCleanup:
     @pytest.mark.asyncio
     async def test_keeps_expired_authenticated_session(self, db_session):
         """Authenticated sessions (even expired) are never deleted by this job."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from sqlalchemy import select
+
         from app.models import Session
         from app.models.base import new_uuid7
-        from tests.factories import create_user
         from app.services.session_cleanup_service import cleanup_expired_anonymous_sessions
+        from tests.factories import create_user
 
         user = await create_user(db_session, email="keep-auth@example.com")
-        old_date = datetime.now(timezone.utc) - timedelta(hours=48)
+        old_date = datetime.now(UTC) - timedelta(hours=48)
         sess = Session(
             id=new_uuid7(),
             user_id=user.id,

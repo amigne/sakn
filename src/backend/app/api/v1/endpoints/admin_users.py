@@ -1,15 +1,16 @@
 """Admin user management endpoints."""
 
 import logging
+from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.middleware.admin import require_admin
-from app.models import User, Session
+from app.models import Session, User
 from app.services.admin_service import ensure_not_last_admin, log_admin_action
 
 logger = logging.getLogger(__name__)
@@ -56,10 +57,7 @@ async def list_users(
     elif sort == "role":
         sort_col = User.role
 
-    if order == "desc":
-        sort_col = sort_col.desc()
-    else:
-        sort_col = sort_col.asc()
+    sort_col = sort_col.desc() if order == "desc" else sort_col.asc()
 
     rows = await session.execute(
         query.order_by(sort_col).offset(offset).limit(limit)
@@ -287,13 +285,13 @@ async def admin_verify_email(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin),
 ) -> dict[str, Any]:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     row = await session.execute(select(User).where(User.id == user_id))
     user = row.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    user.email_verified_at = datetime.now(timezone.utc)
+    user.email_verified_at = datetime.now(UTC)
     if user.status == "pending":
         user.status = "active"
     admin_id = getattr(request.state, "user_id", None)
@@ -319,8 +317,8 @@ async def get_user_rate_limit_status(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from app.services.rate_limit_service import get_effective_limits
     from app.redis.rate_limit_store import get_current_counts
+    from app.services.rate_limit_service import get_effective_limits
 
     limits = await get_effective_limits(session, user.role, None)
 
@@ -420,7 +418,7 @@ async def delete_user(
     admin_id = getattr(request.state, "user_id", None)
 
     # Anonymize logs
-    from app.models import ToolExecutionLog, SecurityEventLog
+    from app.models import SecurityEventLog, ToolExecutionLog
 
     await session.execute(
         ToolExecutionLog.__table__.update()

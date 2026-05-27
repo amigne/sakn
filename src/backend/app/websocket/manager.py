@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -35,10 +36,8 @@ class ConnectionManager:
         async with self._lock:
             conn = self._connections.pop(session_id, None)
         if conn:
-            try:
+            with contextlib.suppress(Exception):
                 await conn.websocket.close()
-            except Exception:
-                pass
 
     async def send_json(self, session_id: str, message: dict[str, Any]) -> bool:
         conn = self._connections.get(session_id)

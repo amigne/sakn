@@ -1,14 +1,10 @@
-import json
 import logging
 import time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
-from app.config import settings
-from app.database import get_session, async_session_factory
-from app.tools.registry import ToolRegistry
 from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_DB_UNAVAILABLE,
     WS_CLOSE_INVALID_ORIGIN,
@@ -16,6 +12,12 @@ from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_RATE_LIMITED,
     WS_CLOSE_UNKNOWN_TOOL,
 )
+from app.config import settings
+from app.database import async_session_factory, get_session
+from app.tools.registry import ToolRegistry
+
+if TYPE_CHECKING:
+    from app.websocket.manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +102,8 @@ async def list_tool_dns_servers(
     session=Depends(get_session),
 ) -> dict[str, Any]:
     """Return DNS server presets for a tool (public endpoint)."""
-    from app.models.tool_module import DnsServerPreset, RoleToolPermission
     from app.models import ToolModule
+    from app.models.tool_module import DnsServerPreset, RoleToolPermission
 
     row = await session.execute(
         select(ToolModule)
@@ -128,7 +130,7 @@ async def list_tool_dns_servers(
     }
 
 
-def _get_ws_manager(app) -> "ConnectionManager":
+def _get_ws_manager(app) -> ConnectionManager:
     from app.websocket.manager import ConnectionManager
 
     if not hasattr(app.state, "ws_manager"):
@@ -139,6 +141,7 @@ def _get_ws_manager(app) -> "ConnectionManager":
 def _read_session_from_ws(websocket: WebSocket) -> tuple[str, str | None]:
     """Read session token from WebSocket cookies (BaseHTTPMiddleware skips WS)."""
     from http.cookies import SimpleCookie
+
     from app.models.base import new_uuid7
     from app.security.cookies import SESSION_COOKIE_NAMES
 
@@ -191,8 +194,8 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
 
     try:
         from app.database import async_session_factory, is_db_available
-        from app.models.tool_module import RoleToolPermission
         from app.models import ToolModule, User
+        from app.models.tool_module import RoleToolPermission
         from app.security.tokens import hash_token
 
         if is_db_available():
@@ -298,7 +301,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
             await handle_traceroute_stream(websocket, session_token, user_id, source_ip)
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         logger.exception("tool_stream error")
     finally:
         await manager.disconnect(session_token)
@@ -309,6 +312,7 @@ async def _check_tool_access(
 ) -> None:
     """Raise HTTPException if tool is disabled or role not allowed."""
     from fastapi import HTTPException
+
     from app.models import ToolModule
     from app.models.tool_module import RoleToolPermission
 

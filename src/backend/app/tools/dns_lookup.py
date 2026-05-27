@@ -6,7 +6,6 @@ import dns.flags
 import dns.rdatatype
 import dns.resolver
 
-from app.config import settings
 from app.security.address_filter import is_ip_blocked, resolve_hostname
 from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolParameter, ToolResult
 
@@ -95,8 +94,8 @@ class DnsLookupTool(BaseTool):
         # Normalize IDN to Punycode so the domain key matches DNS record owners.
         try:
             target = target.encode("idna").decode()
-        except (UnicodeError, ValueError):
-            raise ValueError("Invalid domain name")
+        except (UnicodeError, ValueError) as err:
+            raise ValueError("Invalid domain name") from err
 
         record_types = params.get("record_types", ["A"])
         if isinstance(record_types, str):
@@ -139,7 +138,6 @@ class DnsLookupTool(BaseTool):
             additional: dict[str, list[dict[str, Any]]] = {}
             dnssec_ad_flag = False
             cname_chain: list[str] | None = None
-            cname_blocked: dict[str, bool] = {}
 
             for rt in record_types:
                 try:
@@ -193,7 +191,6 @@ class DnsLookupTool(BaseTool):
                     target, resolver_ip, record_types
                 )
                 cname_chain = chain
-                cname_blocked = blocked
 
             duration_ms = (time.monotonic() - start) * 1000
 

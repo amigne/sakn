@@ -1,6 +1,6 @@
-import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
+import pytest
 from starlette.responses import Response
 
 

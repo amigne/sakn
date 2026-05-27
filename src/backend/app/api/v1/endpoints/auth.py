@@ -1,22 +1,23 @@
 import logging
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
 from app.config import settings
 from app.database import get_session
-from app.services import auth_service
-from app.services.rate_limit_service import auth_check as rl_check, auth_record as rl_record
-from app.security.cookies import session_cookie_name, get_session_token
+from app.security.cookies import get_session_token, session_cookie_name
 from app.security.csrf import (
+    SAFE_METHODS,
     generate_csrf_token,
     set_csrf_cookie,
     validate_csrf,
-    SAFE_METHODS,
 )
-from app.security.tokens import generate_token, hash_token
+from app.security.tokens import hash_token
+from app.services import auth_service
+from app.services.rate_limit_service import auth_check as rl_check
+from app.services.rate_limit_service import auth_record as rl_record
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +236,7 @@ async def me(
         raise AppError(401, "SESSION_EXPIRED", "errors.session_expired", "Session required.")
 
     from sqlalchemy import select
+
     from app.models import User, UserPreference
 
     result = await db.execute(select(User).where(User.id == user_id))

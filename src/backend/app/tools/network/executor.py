@@ -4,7 +4,6 @@ import os
 import signal
 import time
 from dataclasses import dataclass
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ class SubprocessExecutor:
                 duration_ms=duration_ms,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration_ms = (time.monotonic() - start) * 1000
             await self._kill_process(process)
             return SubprocessResult(
@@ -92,7 +91,7 @@ class SubprocessExecutor:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 try:
                     await asyncio.wait_for(process.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     os.killpg(os.getpgid(process.pid), signal.SIGKILL)
                     await process.wait()
         except ProcessLookupError:

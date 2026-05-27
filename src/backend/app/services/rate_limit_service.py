@@ -10,16 +10,13 @@ which bypass the DB-configured limit system.
 import logging
 import time
 from collections import defaultdict
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.tool_module import RateLimitConfig
 from app.redis.rate_limit_store import (
     RateLimitResult,
-    SlidingWindowRateLimiter,
     get_rate_limiter,
 )
 
@@ -103,6 +100,7 @@ async def _get_visitor_ip_limits(db: AsyncSession) -> tuple[int, int]:
     Defaults: soft=5 req/s, hard=500 req/h.
     """
     from sqlalchemy import select as sel
+
     from app.models.preferences import GlobalSetting
 
     soft = 5

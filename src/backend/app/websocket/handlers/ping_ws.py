@@ -1,13 +1,14 @@
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.tools.ping import PingTool
-from app.tools.network.executor import SubprocessExecutor
 from app.security.address_filter import filter_target
+from app.tools.network.executor import SubprocessExecutor
+from app.tools.ping import PingTool
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,6 @@ async def _log_tool_exec(
         from app.database import async_session_factory, is_db_available
         if not is_db_available():
             return
-        import json
         import app.services.log_service as log_svc
         async with async_session_factory() as db:
             await log_svc.create_tool_execution_log(
@@ -42,7 +42,11 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
     try:
         raw = await websocket.receive_json()
         if raw.get("type") != "start":
-            await websocket.send_json({"type": "error", "message_key": "errors.invalid_params", "message": "Expected 'start' message"})
+            await websocket.send_json({
+                "type": "error",
+                "message_key": "errors.invalid_params",
+                "message": "Expected 'start' message",
+            })
             return
 
         params = raw.get("params", {})
@@ -174,7 +178,7 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
         try:
             await asyncio.wait_for(process.wait(), timeout=hard_timeout)
             timed_out = False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             if process.returncode is None:
                 process.kill()
@@ -190,11 +194,15 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
         parsed_summary = PingTool._parse_summary(full_stdout)
 
         real_transmitted = parsed_summary.get("transmitted", 0)
-        use_count = real_transmitted if real_transmitted > 0 else (count if count > 0 else max(results_by_seq.keys(), default=0))
+        use_count = (
+            real_transmitted if real_transmitted > 0
+            else (count if count > 0 else max(results_by_seq.keys(), default=0))
+        )
 
         # When max_duration killed the process, cap at packets physically sendable
         if timed_out and max_duration > 0:
-            max_possible = int(max_duration / PING_INTERVAL)  # exclude last packet sent at deadline (no chance to reply)
+            # exclude last packet sent at deadline (no chance to reply)
+            max_possible = int(max_duration / PING_INTERVAL)
             use_count = min(use_count, max_possible)
 
         # Fill in any remaining missing seqs as timeouts
@@ -212,7 +220,10 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
         duration_ms = (time.monotonic() - start) * 1000
 
         if real_transmitted > 0 and not timed_out:
-            rtts = [r["rtt_ms"] for r in results_by_seq.values() if r.get("rtt_ms") is not None and r.get("status") == "ok"]
+            rtts = [
+                r["rtt_ms"] for r in results_by_seq.values()
+                if r.get("rtt_ms") is not None and r.get("status") == "ok"
+            ]
             summary = {
                 "transmitted": parsed_summary["transmitted"],
                 "received": parsed_summary["received"],
@@ -250,20 +261,16 @@ async def handle_ping_stream(websocket: WebSocket, session_id: str, user_id: str
         logger.exception("ping_ws error")
         await _log_tool_exec("ping", params, "failure", 0, str(e),
                              user_id, session_id, source_ip)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({
                 "type": "error",
                 "message_key": "errors.internal_error",
                 "message": "An unexpected error occurred",
             })
-        except Exception:
-            pass
     finally:
         if process and process.returncode is None:
-            try:
+            with contextlib.suppress(Exception):
                 process.kill()
-            except Exception:
-                pass
 
 
 def _stddev(values: list[float]) -> float:

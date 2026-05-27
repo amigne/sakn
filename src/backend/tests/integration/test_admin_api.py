@@ -16,9 +16,10 @@ async def _create_admin_session(client: AsyncClient, db) -> tuple[str, str]:
     """Create an admin user, set up a session, and return (user_id, session_token)."""
     from datetime import timedelta
 
+    from sqlalchemy import select as sa_select
+
     from app.models import Session, User
     from app.models.base import new_uuid7, utcnow
-    from sqlalchemy import select as sa_select
 
     # Check if admin already exists (committed from a previous test)
     existing = await db.execute(
@@ -272,8 +273,8 @@ class TestAdminDnsServers:
     async def test_admin_gets_dns_servers(self, client: AsyncClient, db_session):
         """Admin can list DNS server presets for a tool."""
         from tests.factories import (
-            create_tool_module,
             create_dns_server_preset,
+            create_tool_module,
         )
 
         # Create test data before _create_admin_session (which commits)

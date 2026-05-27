@@ -1,9 +1,8 @@
 from app.tools.traceroute import (
     TracerouteTool,
-    _parse_probes_from_tokens,
     _extract_ip_hostname_map,
-    _group_probes_by_ip,
     _is_ip,
+    _parse_probes_from_tokens,
 )
 
 # Sample traceroute output with DNS resolution
@@ -128,19 +127,19 @@ class TestTracerouteParsing:
 
 class TestProbeParsing:
     def test_parse_simple_probes(self):
-        tokens = "192.168.1.1 2.334 ms 2.123 ms 2.456 ms".split()
+        tokens = ["192.168.1.1", "2.334", "ms", "2.123", "ms", "2.456", "ms"]
         probes = _parse_probes_from_tokens(tokens)
         assert len(probes) == 3
         assert all(p["status"] == "ok" for p in probes)
 
     def test_parse_timeouts(self):
-        tokens = "* * *".split()
+        tokens = ["*", "*", "*"]
         probes = _parse_probes_from_tokens(tokens)
         assert len(probes) == 3
         assert all(p["status"] == "timeout" for p in probes)
 
     def test_parse_mixed(self):
-        tokens = "10.0.0.1 5.678 ms * 5.901 ms".split()
+        tokens = ["10.0.0.1", "5.678", "ms", "*", "5.901", "ms"]
         probes = _parse_probes_from_tokens(tokens)
         assert len(probes) == 3
         assert probes[0]["status"] == "ok"
@@ -148,17 +147,17 @@ class TestProbeParsing:
         assert probes[2]["status"] == "ok"
 
     def test_parse_with_hostname(self):
-        tokens = "router.home (192.168.1.1) 2.334 ms 2.123 ms".split()
+        tokens = ["router.home", "(192.168.1.1)", "2.334", "ms", "2.123", "ms"]
         probes = _parse_probes_from_tokens(tokens)
         assert len(probes) == 2
 
     def test_extract_ip_map(self):
-        tokens = "router.home (192.168.1.1) 2.334 ms 2.123 ms".split()
+        tokens = ["router.home", "(192.168.1.1)", "2.334", "ms", "2.123", "ms"]
         ip_map = _extract_ip_hostname_map(tokens)
         assert ip_map == {"192.168.1.1": "router.home"}
 
     def test_extract_ip_map_no_hostname(self):
-        tokens = "192.168.1.1 2.334 ms 2.123 ms".split()
+        tokens = ["192.168.1.1", "2.334", "ms", "2.123", "ms"]
         ip_map = _extract_ip_hostname_map(tokens)
         assert ip_map == {"192.168.1.1": None}
 

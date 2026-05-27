@@ -2,13 +2,13 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ToolExecutionLog, SecurityEventLog, AuditLog
+from app.models import AuditLog, SecurityEventLog, ToolExecutionLog
 from app.models.base import new_uuid7
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ async def cleanup_old_logs(db: AsyncSession, retention_days: int = 90) -> dict[s
     """Delete log entries older than retention_days. Returns counts per table."""
     from datetime import timedelta
 
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=retention_days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=retention_days)
 
     deleted: dict[str, int] = {}
 

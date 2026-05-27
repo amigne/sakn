@@ -1,9 +1,9 @@
 """Request ID middleware — propagates a unique ID per request for log correlation."""
 
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.logs.logger import request_id_var, user_id_var
+from app.logs.logger import request_id_var
 from app.models.base import new_uuid7
 
 

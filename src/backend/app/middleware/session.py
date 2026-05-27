@@ -4,9 +4,9 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.models.base import new_uuid7
-from app.security.tokens import hash_token
-from app.security.csrf import generate_csrf_token, set_csrf_cookie
 from app.security.cookies import get_session_token, session_cookie_name
+from app.security.csrf import generate_csrf_token, set_csrf_cookie
+from app.security.tokens import hash_token
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,9 @@ async def _resolve_role(user_id: str | None) -> str:
     if not user_id:
         return "visitor"
     try:
-        from app.database import async_session_factory, is_db_available
         from sqlalchemy import select
+
+        from app.database import async_session_factory, is_db_available
         from app.models import User
 
         if not is_db_available():
@@ -55,8 +56,9 @@ async def _resolve_session(token_hash: str) -> dict | None:
 
     # DB fallback
     try:
-        from app.database import async_session_factory, is_db_available
         from sqlalchemy import select
+
+        from app.database import async_session_factory, is_db_available
         from app.models import Session
 
         if not is_db_available():

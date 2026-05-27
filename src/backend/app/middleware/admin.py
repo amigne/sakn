@@ -1,6 +1,6 @@
 """Admin middleware — verify administrator role on /admin/* routes."""
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 
 
 async def require_admin(request: Request) -> None:

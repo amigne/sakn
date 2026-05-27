@@ -1,7 +1,7 @@
-from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, UUID7Mixin, TimestampMixin
+from app.models.base import Base, TimestampMixin, UUID7Mixin
 
 
 class ToolModule(Base, UUID7Mixin, TimestampMixin):

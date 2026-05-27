@@ -1,9 +1,11 @@
 import asyncio
-from ipaddress import ip_address, ip_network
 import logging
+from ipaddress import ip_address, ip_network
+
 import dns.exception
 import dns.name
 import dns.resolver
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -43,10 +45,7 @@ def is_ip_blocked(target_ip: str) -> bool:
         ip = ip_address(target_ip)
     except ValueError:
         return True
-    for net in BLOCKED_NETWORKS:
-        if ip in net:
-            return True
-    return False
+    return any(ip in net for net in BLOCKED_NETWORKS)
 
 
 def _make_resolver(resolver_ip: str) -> dns.resolver.Resolver:
@@ -136,14 +135,14 @@ async def resolve_hostname(hostname: str, resolver_ip: str | None = None) -> lis
 
     Wraps the per-hop CNAME-walking resolver in a hard deadline so a chain
     of slow or non-responsive authoritative servers cannot occupy a worker
-    beyond GLOBAL_DNS_TIMEOUT seconds.
+    beyond global_dns_timeout seconds.
     """
-    GLOBAL_DNS_TIMEOUT = 10
+    global_dns_timeout = 10
     try:
         return await asyncio.wait_for(
-            _resolve_hostname_inner(hostname, resolver_ip), timeout=GLOBAL_DNS_TIMEOUT
+            _resolve_hostname_inner(hostname, resolver_ip), timeout=global_dns_timeout
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("DNS resolution global timeout for %s", hostname)
         return []
 

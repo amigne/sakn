@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import UserPreference
 from app.models.base import new_uuid7
 
+
 async def get_preferences(db: AsyncSession, *, user_id: str | None, session_id: str | None) -> dict:
     """Get preferences for a user or session. Returns key-value dict."""
     if user_id:

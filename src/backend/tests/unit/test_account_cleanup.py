@@ -1,17 +1,16 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
 
 from app.models.user import User
 from app.services.account_cleanup_service import cleanup_unverified_accounts
-from tests.factories import create_user
 
 
 @pytest.mark.asyncio
 async def test_deletes_unverified_account_older_than_retention(db_session):
     """Unverified account older than 7 days should be deleted."""
-    old_date = datetime.now(timezone.utc) - timedelta(days=8)
+    old_date = datetime.now(UTC) - timedelta(days=8)
     user = User(
         email="old-unverified@example.com",
         password_hash="hash",
@@ -32,7 +31,7 @@ async def test_deletes_unverified_account_older_than_retention(db_session):
 @pytest.mark.asyncio
 async def test_keeps_recent_unverified_account(db_session):
     """Unverified account less than 7 days old should be kept."""
-    recent_date = datetime.now(timezone.utc) - timedelta(days=3)
+    recent_date = datetime.now(UTC) - timedelta(days=3)
     user = User(
         email="recent-unverified@example.com",
         password_hash="hash",
@@ -53,7 +52,7 @@ async def test_keeps_recent_unverified_account(db_session):
 @pytest.mark.asyncio
 async def test_keeps_verified_account_older_than_retention(db_session):
     """Verified account older than 7 days should be kept."""
-    old_date = datetime.now(timezone.utc) - timedelta(days=10)
+    old_date = datetime.now(UTC) - timedelta(days=10)
     user = User(
         email="old-verified@example.com",
         password_hash="hash",

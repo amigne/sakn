@@ -4,11 +4,11 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
-from app.models import User, AuditLog
+from app.models import AuditLog, User
 from app.models.base import new_uuid7
 
 logger = logging.getLogger(__name__)

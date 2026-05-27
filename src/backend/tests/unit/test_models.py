@@ -1,18 +1,17 @@
 import pytest
-from sqlalchemy import select
 
-from app.models import User, Session, ToolModule, RoleToolPermission, RateLimitConfig, GlobalSetting
+from app.models import GlobalSetting, ToolModule, User
 from tests.factories import (
-    create_user,
+    create_dns_server_preset,
+    create_email_verification,
+    create_global_setting,
+    create_password_reset,
+    create_rate_limit_config,
+    create_role_permission,
     create_session,
     create_tool_module,
-    create_role_permission,
-    create_rate_limit_config,
-    create_global_setting,
+    create_user,
     create_user_preference,
-    create_email_verification,
-    create_password_reset,
-    create_dns_server_preset,
 )
 
 
@@ -94,6 +93,7 @@ async def test_create_role_permission(db_session):
 async def test_role_permission_unique_constraint(db_session):
     """Inserting a duplicate (role, tool_id) must raise IntegrityError."""
     from sqlalchemy.exc import IntegrityError
+
     from app.models.base import new_uuid7
     from app.models.tool_module import RoleToolPermission
 

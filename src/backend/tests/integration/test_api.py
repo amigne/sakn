@@ -1,4 +1,5 @@
 import pytest
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
@@ -68,9 +69,9 @@ async def test_health_full_correct_token(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_list_tools(client):
+
     from app.database import async_session_factory
-    from app.models.tool_module import ToolModule, RoleToolPermission
-    from sqlalchemy import select
+    from app.models.tool_module import RoleToolPermission, ToolModule
 
     # Use the monkey-patched factory so middleware sees the data
     # Use unique names to avoid conflicts with model tests
@@ -152,13 +153,15 @@ async def test_rate_limit_blocks_after_hard_limit_reached(client):
     (issue #37): if the rate-limit middleware silently fails, no 429 is returned.
     """
     from datetime import timedelta
+
     from sqlalchemy import delete
+
     from app.database import async_session_factory as test_factory
+    from app.models import Session, User
     from app.models.base import new_uuid7, utcnow
-    from app.models import User, Session
     from app.models.tool_module import RateLimitConfig
-    from app.security.tokens import generate_token, hash_token
     from app.redis.rate_limit_store import get_rate_limiter
+    from app.security.tokens import generate_token, hash_token
 
     # Clear the in-memory rate limit store between tests
     get_rate_limiter().clear_for_tests()
@@ -250,9 +253,9 @@ class TestPublicDnsServers:
     async def test_disabled_tool_returns_empty(self, client: AsyncClient, db_session):
         """Disabled tool returns empty servers list."""
         from tests.factories import (
-            create_tool_module,
-            create_role_permission,
             create_dns_server_preset,
+            create_role_permission,
+            create_tool_module,
         )
 
         tool = await create_tool_module(db_session, name="dns_disabled", enabled=False)
@@ -275,9 +278,9 @@ class TestPublicDnsServers:
     ):
         """Enabled tool with visitor allowed returns DNS presets."""
         from tests.factories import (
-            create_tool_module,
-            create_role_permission,
             create_dns_server_preset,
+            create_role_permission,
+            create_tool_module,
         )
 
         tool = await create_tool_module(
@@ -308,9 +311,9 @@ class TestPublicDnsServers:
     ):
         """Enabled tool where visitor is not allowed returns empty."""
         from tests.factories import (
-            create_tool_module,
-            create_role_permission,
             create_dns_server_preset,
+            create_role_permission,
+            create_tool_module,
         )
 
         tool = await create_tool_module(
@@ -334,7 +337,7 @@ class TestPublicDnsServers:
         self, client: AsyncClient, db_session,
     ):
         """Enabled tool with no role permission row at all returns empty."""
-        from tests.factories import create_tool_module, create_dns_server_preset
+        from tests.factories import create_dns_server_preset, create_tool_module
 
         tool = await create_tool_module(
             db_session, name="dns_no_perm", enabled=True

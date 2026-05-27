@@ -5,19 +5,21 @@ import re
 import socket
 import ssl
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, rsa
+from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import ocsp
 from cryptography.x509.oid import AuthorityInformationAccessOID, ExtensionOID, NameOID
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.hazmat.primitives.asymmetric import dsa, ec, rsa
 
 # CRL cache directory — one file per URL hash, refreshed daily.
 _CRL_CACHE_DIR = "/tmp/sakn-crl-cache"
+
+import contextlib
 
 from app.security.address_filter import filter_target
 from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolParameter, ToolResult
@@ -106,9 +108,12 @@ class SslViewerTool(BaseTool):
             duration_ms = (time.monotonic() - start) * 1000
             msg = str(e)
             if "handshake failure" in msg.lower() or "protocol version" in msg.lower():
-                msg = "SSL handshake failed — the server may require a TLS version or cipher not supported by this system"
+                msg = (
+                    "SSL handshake failed — the server may require "
+                    "a TLS version or cipher not supported by this system"
+                )
             return ToolResult(success=False, error=msg, duration_ms=duration_ms)
-        except socket.timeout:
+        except TimeoutError:
             duration_ms = (time.monotonic() - start) * 1000
             return ToolResult(success=False, error="errors.timeout", duration_ms=duration_ms)
         except ConnectionRefusedError:
@@ -190,10 +195,19 @@ class SslViewerTool(BaseTool):
 
         # Step 5: Build warnings (each is {message, variant: "error"|"warning"})
         if tls_version and self._is_tls_weak(tls_version):
-            warnings.append({"message": "Connection is not secure: TLS version is outdated (less than TLS 1.2).", "variant": "warning"})
+            warnings.append({
+                "message": (
+                    "Connection is not secure: "
+                    "TLS version is outdated (less than TLS 1.2)."
+                ),
+                "variant": "warning",
+            })
         if leaf_revoked:
             c0 = certificates[0] if certificates else {}
-            warnings.append({"message": f"Certificate is revoked: {c0.get('revocation_detail', '')}", "variant": "error"})
+            warnings.append({
+                "message": f"Certificate is revoked: {c0.get('revocation_detail', '')}",
+                "variant": "error",
+            })
             # When revoked, the chain-trusted message is redundant — skip it.
         elif not chain_valid:
             warnings.append({"message": "Certificate chain is not trusted by the system CA store.", "variant": "error"})
@@ -281,10 +295,8 @@ class SslViewerTool(BaseTool):
                 return "good", "Certificate is not revoked"
             elif ocsp_resp.certificate_status == ocsp.OCSPCertStatus.REVOKED:
                 when = ""
-                try:
+                with contextlib.suppress(Exception):
                     when = f" at {ocsp_resp.revocation_time.isoformat()}"
-                except Exception:
-                    pass
                 return "revoked", f"Certificate revoked{when}"
             else:
                 return "unknown", "OCSP status: unknown"
@@ -323,10 +335,8 @@ class SslViewerTool(BaseTool):
                 for revoked in crl:
                     if revoked.serial_number == leaf.serial_number:
                         when = ""
-                        try:
+                        with contextlib.suppress(Exception):
                             when = f" at {revoked.revocation_date_utc.isoformat()}"
-                        except Exception:
-                            pass
                         return "revoked", f"Certificate revoked{when}"
                 return "good", "Certificate is not revoked (CRL)"
             except Exception:
@@ -427,27 +437,26 @@ class SslViewerTool(BaseTool):
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
-        with socket.create_connection((hostname, port), timeout=10) as sock:
-            with ctx.wrap_socket(sock, server_hostname=sni) as ssock:
-                tls_version = ssock.version() or "Unknown"
-                cipher_info = ssock.cipher() or (None, None, None)
-                cipher_suite = cipher_info[0] or "Unknown"
+        with (
+            socket.create_connection((hostname, port), timeout=10) as sock,
+            ctx.wrap_socket(sock, server_hostname=sni) as ssock,
+        ):
+            tls_version = ssock.version() or "Unknown"
+            cipher_info = ssock.cipher() or (None, None, None)
+            cipher_suite = cipher_info[0] or "Unknown"
 
-                # Full certificate chain (leaf + intermediates)
-                try:
-                    full_chain: list[bytes] = ssock.get_unverified_chain()
-                except Exception:
-                    full_chain = [ssock.getpeercert(binary_form=True)]
+            # Full certificate chain (leaf + intermediates)
+            try:
+                full_chain: list[bytes] = ssock.get_unverified_chain()
+            except Exception:
+                full_chain = [ssock.getpeercert(binary_form=True)]
 
                 leaf_der = full_chain[0] if full_chain else ssock.getpeercert(binary_form=True)
                 intermediates = full_chain[1:] if len(full_chain) > 1 else []
 
                 # If the last cert is not self-signed, try to find its issuer
                 # (the root CA) in the system trust store and append it.
-                if intermediates:
-                    last_der = intermediates[-1]
-                else:
-                    last_der = leaf_der
+                last_der = intermediates[-1] if intermediates else leaf_der
                 root_der = SslViewerTool._find_root_in_store(last_der)
                 if root_der is not None:
                     intermediates = intermediates + [root_der]
@@ -461,8 +470,8 @@ class SslViewerTool(BaseTool):
         if cache is not None:
             return cache
 
-        import os
         import hashlib
+        import os
 
         pem_files: list[str] = []
         verify_paths = ssl.get_default_verify_paths()
@@ -505,10 +514,7 @@ class SslViewerTool(BaseTool):
         except Exception:
             return False
 
-        for ca in cls._load_system_ca_certs():
-            if ca.subject == cert.subject:
-                return True
-        return False
+        return any(ca.subject == cert.subject for ca in cls._load_system_ca_certs())
 
     @classmethod
     def _find_root_in_store(cls, cert_der: bytes) -> bytes | None:
@@ -535,9 +541,11 @@ class SslViewerTool(BaseTool):
         ctx.check_hostname = True
         ctx.verify_mode = ssl.CERT_REQUIRED
 
-        with socket.create_connection((hostname, port), timeout=10) as sock:
-            with ctx.wrap_socket(sock, server_hostname=sni):
-                pass  # Handshake succeeded → chain is valid
+        with (
+            socket.create_connection((hostname, port), timeout=10) as sock,
+            ctx.wrap_socket(sock, server_hostname=sni),
+        ):
+            pass  # Handshake succeeded → chain is valid
 
     @staticmethod
     def _is_tls_weak(tls_version: str) -> bool:
@@ -690,7 +698,7 @@ class SslViewerTool(BaseTool):
             pass
 
         # Validity
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         is_expired = now > cert.not_valid_after_utc
 
         # Is this a CA certificate? (BasicConstraints: CA=True)
@@ -846,9 +854,7 @@ def _hostname_matches(hostname: str, sans: list[str], subject_cn: str) -> bool:
         elif hostname_lower == pattern:
             return True
     cn = subject_cn.lower().rstrip(".")
-    if hostname_lower == cn:
-        return True
-    return False
+    return hostname_lower == cn
 
 
 def _normalize_key_algorithm(algo: str) -> str:

@@ -9,8 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.middleware.admin import require_admin
-from app.models import ToolModule, RoleToolPermission
-from app.models.tool_module import RateLimitConfig
+from app.models import RoleToolPermission, ToolModule
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
