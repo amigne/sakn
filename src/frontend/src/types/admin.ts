@@ -63,6 +63,7 @@ export interface DnsServerPreset {
 export interface ToolModule {
   name: string;
   enabled: boolean;
+  has_settings?: boolean;
 }
 
 export interface GlobalSettings {

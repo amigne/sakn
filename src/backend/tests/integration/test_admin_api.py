@@ -315,3 +315,37 @@ class TestAdminDnsServers:
             cookies={"sakn_session": token},
         )
         assert response.status_code == 404
+
+
+class TestAdminModules:
+    """Issue #217: Module list includes has_settings flag."""
+
+    @pytest.mark.asyncio
+    async def test_modules_include_has_settings(self, client: AsyncClient, db_session):
+        from tests.factories import create_global_setting, create_tool_module
+
+        # Create a module with a GlobalSetting
+        mod = await create_tool_module(db_session, name="has_settings_mod", enabled=True)
+        await create_global_setting(db_session, key="module.has_settings_mod.foo", value="bar")
+        # Create a module without any GlobalSetting
+        await create_tool_module(db_session, name="no_settings_mod", enabled=True)
+
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.get(
+            "/api/v1/admin/modules",
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        modules = data["modules"]
+
+        # Find the two test modules by name
+        has_mod = next(m for m in modules if m["name"] == "has_settings_mod")
+        no_mod = next(m for m in modules if m["name"] == "no_settings_mod")
+
+        assert has_mod["has_settings"] is True
+        assert no_mod["has_settings"] is False
+        # Every module must have the has_settings key
+        for m in modules:
+            assert "has_settings" in m
