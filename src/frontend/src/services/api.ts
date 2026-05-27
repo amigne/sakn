@@ -96,16 +96,16 @@ export class ApiError extends Error {
   fields: ErrorFields | null;
 
   constructor(status: number, data: unknown) {
-    const err = (data as { error?: { code?: string; message?: string; message_key?: string; details?: { fields?: ErrorFields } } })?.error;
+    const err = (
+      data as { error?: { code?: string; message?: string; message_key?: string; details?: { fields?: ErrorFields } } }
+    )?.error;
     const msg = err?.message ?? `API Error ${status}`;
     super(msg);
     this.status = status;
     this.data = data;
     this.code = err?.code ?? "UNKNOWN";
     const rawKey = err?.message_key ?? null;
-    this.messageKey = rawKey?.startsWith("errors.")
-      ? `errors:${rawKey.slice("errors.".length)}`
-      : rawKey;
+    this.messageKey = rawKey?.startsWith("errors.") ? `errors:${rawKey.slice("errors.".length)}` : rawKey;
     const rawFields = err?.details?.fields ?? null;
     if (rawFields) {
       const rewritten: ErrorFields = {};

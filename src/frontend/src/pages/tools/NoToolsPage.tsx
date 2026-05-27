@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import PageLayout from "@/components/layout/PageLayout";
 import { api } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
@@ -20,19 +20,17 @@ export default function NoToolsPage() {
     <PageLayout>
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
         <div className="text-6xl mb-4">&#128274;</div>
-        <h1 className="text-xl font-semibold text-[var(--color-text)] mb-2">
-          {t("notools.title")}
-        </h1>
+        <h1 className="text-xl font-semibold text-[var(--color-text)] mb-2">{t("notools.title")}</h1>
         <p className="text-sm text-[var(--color-text-secondary)] max-w-md mb-6">
-          {user
-            ? t("notools.message")
-            : t("notools.message_visitor")}
+          {user ? t("notools.message") : t("notools.message_visitor")}
         </p>
 
         {!user && authTools.length > 0 && (
           <ul className="text-sm text-[var(--color-text)] space-y-1 mb-6">
             {authTools.map((name) => (
-              <li key={name} className="capitalize">{name.replace(/_/g, " ")}</li>
+              <li key={name} className="capitalize">
+                {name.replace(/_/g, " ")}
+              </li>
             ))}
           </ul>
         )}

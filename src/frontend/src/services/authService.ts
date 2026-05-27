@@ -1,5 +1,5 @@
-import { api } from "./api";
 import type { User } from "@/types/user";
+import { api } from "./api";
 
 interface RegisterParams {
   email: string;

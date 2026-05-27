@@ -1,17 +1,17 @@
-import { api } from "./api";
 import type {
+  AccessPermission,
   AdminUser,
   AdminUserDetail,
-  AccessPermission,
-  RateLimit,
-  DnsServerPreset,
-  ToolModule,
-  GlobalSettings,
-  ToolExecutionLog,
-  SecurityEventLog,
   AuditLog,
+  DnsServerPreset,
+  GlobalSettings,
   Pagination,
+  RateLimit,
+  SecurityEventLog,
+  ToolExecutionLog,
+  ToolModule,
 } from "@/types/admin";
+import { api } from "./api";
 
 // ── Users ──────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,7 @@ export interface ListUsersParams {
   order?: string;
 }
 
-export async function listUsers(
-  params: ListUsersParams = {},
-): Promise<{ users: AdminUser[]; pagination: Pagination }> {
+export async function listUsers(params: ListUsersParams = {}): Promise<{ users: AdminUser[]; pagination: Pagination }> {
   const sp = new URLSearchParams();
   if (params.offset !== undefined) sp.set("offset", String(params.offset));
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
@@ -58,10 +56,7 @@ export async function unlockUser(userId: string): Promise<{ user: AdminUser }> {
   return api(`/admin/users/${userId}/unlock`, { method: "PUT" });
 }
 
-export async function updateUserNotes(
-  userId: string,
-  notes: string,
-): Promise<{ user: AdminUser }> {
+export async function updateUserNotes(userId: string, notes: string): Promise<{ user: AdminUser }> {
   return api(`/admin/users/${userId}/notes`, { method: "PUT", body: { notes } });
 }
 
@@ -99,10 +94,7 @@ export async function listAdminTools(): Promise<{ tools: ToolModule[] }> {
   return api("/admin/tools");
 }
 
-export async function updateTool(
-  toolName: string,
-  body: { enabled: boolean },
-): Promise<{ tool: ToolModule }> {
+export async function updateTool(toolName: string, body: { enabled: boolean }): Promise<{ tool: ToolModule }> {
   return api(`/admin/tools/${toolName}`, { method: "PUT", body });
 }
 
@@ -124,9 +116,7 @@ export async function listRateLimits(): Promise<{ rate_limits: RateLimit[] }> {
   return api("/admin/rate-limits");
 }
 
-export async function updateRateLimits(
-  rateLimits: Partial<RateLimit>[],
-): Promise<{ rate_limits: RateLimit[] }> {
+export async function updateRateLimits(rateLimits: Partial<RateLimit>[]): Promise<{ rate_limits: RateLimit[] }> {
   return api("/admin/rate-limits", { method: "PUT", body: { rate_limits: rateLimits } });
 }
 
@@ -136,18 +126,13 @@ export async function listModules(): Promise<{ modules: ToolModule[] }> {
   return api("/admin/modules");
 }
 
-export async function updateModule(
-  moduleName: string,
-  body: { enabled: boolean },
-): Promise<{ module: ToolModule }> {
+export async function updateModule(moduleName: string, body: { enabled: boolean }): Promise<{ module: ToolModule }> {
   return api(`/admin/modules/${moduleName}`, { method: "PUT", body });
 }
 
 // ── DNS Server Presets ─────────────────────────────────────────────────────
 
-export async function listDnsServers(
-  toolName: string,
-): Promise<{ tool: string; presets: DnsServerPreset[] }> {
+export async function listDnsServers(toolName: string): Promise<{ tool: string; presets: DnsServerPreset[] }> {
   return api(`/admin/modules/${toolName}/dns-servers`);
 }
 
@@ -166,17 +151,11 @@ export async function updateDnsServer(
   return api(`/admin/modules/${toolName}/dns-servers/${presetId}`, { method: "PUT", body });
 }
 
-export async function deleteDnsServer(
-  toolName: string,
-  presetId: string,
-): Promise<{ deleted: boolean }> {
+export async function deleteDnsServer(toolName: string, presetId: string): Promise<{ deleted: boolean }> {
   return api(`/admin/modules/${toolName}/dns-servers/${presetId}`, { method: "DELETE" });
 }
 
-export async function reorderDnsServers(
-  toolName: string,
-  order: string[],
-): Promise<{ reordered: boolean }> {
+export async function reorderDnsServers(toolName: string, order: string[]): Promise<{ reordered: boolean }> {
   return api(`/admin/modules/${toolName}/dns-servers/reorder`, { method: "PUT", body: { order } });
 }
 
@@ -232,8 +211,6 @@ export async function getSettings(): Promise<{ settings: GlobalSettings }> {
   return api("/admin/settings");
 }
 
-export async function updateSettings(
-  settings: Record<string, string>,
-): Promise<{ settings: Record<string, string> }> {
+export async function updateSettings(settings: Record<string, string>): Promise<{ settings: Record<string, string> }> {
   return api("/admin/settings", { method: "PUT", body: { settings } });
 }

@@ -11,9 +11,28 @@ export default function LoginPage() {
         <LoginForm />
 
         <div className="mt-4 text-center text-sm space-y-2">
-          <p><Link to="/reset-password" className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">{t("auth.forgot_password")}</Link></p>
-          <p className="text-[var(--color-text-secondary)]">{t("auth.no_account")} <Link to="/register" className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">{t("auth.sign_up")}</Link></p>
-          <p><Link to="/ping" className="underline text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">{t("auth.continue_as_guest")}</Link></p>
+          <p>
+            <Link
+              to="/reset-password"
+              className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              {t("auth.forgot_password")}
+            </Link>
+          </p>
+          <p className="text-[var(--color-text-secondary)]">
+            {t("auth.no_account")}{" "}
+            <Link
+              to="/register"
+              className="underline text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              {t("auth.sign_up")}
+            </Link>
+          </p>
+          <p>
+            <Link to="/ping" className="underline text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">
+              {t("auth.continue_as_guest")}
+            </Link>
+          </p>
         </div>
       </div>
     </main>

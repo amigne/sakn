@@ -24,25 +24,31 @@ export default function PrivacyPage() {
   return (
     <PageLayout>
       <div className="max-w-2xl mx-auto prose prose-sm dark:prose-invert">
-        <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4">
-          {t("privacy.title")}
-        </h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4">{t("privacy.title")}</h1>
 
         <section className="mb-6">
-          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">
-            {t("privacy.cookies.title")}
-          </h2>
+          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">{t("privacy.cookies.title")}</h2>
           <div className="space-y-3 text-sm text-[var(--color-text-secondary)]">
             <p>{t("privacy.cookies.intro")}</p>
 
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard-accessible scrollable region per WCAG (axe-core scrollable-region-focusable, #220) */}
+            {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-label on scrollable region wrapper */}
             <div className="overflow-x-auto" tabIndex={0} aria-label={t("privacy.cookies.table_label")}>
               <table className="w-full text-start border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
-                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">{t("privacy.cookies.cookie_header")}</th>
-                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">{t("privacy.cookies.purpose_header")}</th>
-                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">{t("privacy.cookies.duration_header")}</th>
-                    <th scope="col" className="py-2 text-xs font-semibold uppercase">{t("privacy.cookies.access_header")}</th>
+                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">
+                      {t("privacy.cookies.cookie_header")}
+                    </th>
+                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">
+                      {t("privacy.cookies.purpose_header")}
+                    </th>
+                    <th scope="col" className="py-2 pe-4 text-xs font-semibold uppercase">
+                      {t("privacy.cookies.duration_header")}
+                    </th>
+                    <th scope="col" className="py-2 text-xs font-semibold uppercase">
+                      {t("privacy.cookies.access_header")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="align-top">
@@ -67,9 +73,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mb-6">
-          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">
-            {t("privacy.data_stored.title")}
-          </h2>
+          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">{t("privacy.data_stored.title")}</h2>
           <div className="text-sm text-[var(--color-text-secondary)] space-y-2">
             <p>{t("privacy.data_stored.intro")}</p>
             <ul className="list-disc ps-5 space-y-1">
@@ -78,35 +82,39 @@ export default function PrivacyPage() {
               <li>{t("privacy.data_stored.item_preferences")}</li>
               <li>{t("privacy.data_stored.item_sessions")}</li>
             </ul>
-            <p>
-              {t("privacy.data_stored.retention", { days: retentionDays ?? 90 })}
-            </p>
+            <p>{t("privacy.data_stored.retention", { days: retentionDays ?? 90 })}</p>
           </div>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">
-            {t("privacy.rights.title")}
-          </h2>
+          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">{t("privacy.rights.title")}</h2>
           <div className="text-sm text-[var(--color-text-secondary)] space-y-2">
             <p>{t("privacy.rights.intro")}</p>
             <ul className="list-disc ps-5 space-y-1">
-              <li><strong>{t("privacy.rights.access")}</strong></li>
-              <li><strong>{t("privacy.rights.rectify")}</strong></li>
-              <li><strong>{t("privacy.rights.delete")}</strong></li>
-              <li><strong>{t("privacy.rights.portability")}</strong></li>
+              <li>
+                <strong>{t("privacy.rights.access")}</strong>
+              </li>
+              <li>
+                <strong>{t("privacy.rights.rectify")}</strong>
+              </li>
+              <li>
+                <strong>{t("privacy.rights.delete")}</strong>
+              </li>
+              <li>
+                <strong>{t("privacy.rights.portability")}</strong>
+              </li>
             </ul>
             <p>{t("privacy.rights.contact")}</p>
           </div>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">
-            {t("privacy.controller.title")}
-          </h2>
+          <h2 className="text-base font-medium text-[var(--color-text)] mb-2">{t("privacy.controller.title")}</h2>
           <p className="text-sm text-[var(--color-text-secondary)]">
-            Yann GAUTERON<br />
-            {t("privacy.controller.email")}: yann@gauteron.me<br />
+            Yann GAUTERON
+            <br />
+            {t("privacy.controller.email")}: yann@gauteron.me
+            <br />
             {t("privacy.controller.hosting")}
           </p>
         </section>

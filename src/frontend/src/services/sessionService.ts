@@ -1,5 +1,5 @@
-import { api } from "./api";
 import type { Session } from "@/types/user";
+import { api } from "./api";
 
 export async function listSessions(): Promise<{ sessions: Session[] }> {
   return api("/sessions");

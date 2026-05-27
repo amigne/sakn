@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import TraceroutePage from "@/pages/tools/TraceroutePage";
 import { useToolStore } from "@/stores/toolStore";
 
@@ -26,7 +26,7 @@ vi.mock("@/stores/toolStore", () => {
       vi.fn((selector: (s: unknown) => unknown) => {
         return typeof selector === "function" ? selector(store) : store;
       }),
-      { getState: vi.fn(() => store), setState: vi.fn() }
+      { getState: vi.fn(() => store), setState: vi.fn() },
     ),
   };
 });
@@ -64,11 +64,7 @@ describe("TraceroutePage", () => {
     mockUseWebSocket.mockReturnValue({
       ...defaultWsReturn,
       status: "completed",
-      results: [
-        makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [
-          { rtt_ms: 20.456, status: "ok" },
-        ] }),
-      ],
+      results: [makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [{ rtt_ms: 20.456, status: "ok" }] })],
       summary: { hops_probed: 1, destination_reached: true, total_time_ms: 20.456 },
       terminatedBy: "completed",
       duration: 20.456,
@@ -85,9 +81,7 @@ describe("TraceroutePage", () => {
       status: "completed",
       results: [
         makeHop({ ip: "[hidden]", hostname: null, probes: undefined }),
-        makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [
-          { rtt_ms: 20.456, status: "ok" },
-        ] }),
+        makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [{ rtt_ms: 20.456, status: "ok" }] }),
       ],
       summary: { hops_probed: 2, destination_reached: true, total_time_ms: 25.0 },
       terminatedBy: "completed",
@@ -103,25 +97,22 @@ describe("TraceroutePage", () => {
   it("renders text mode without crash when hop has no probes array (issue #212)", () => {
     const mockSetDisplayMode = vi.fn();
     // Override toolStore mock for this test
-    vi.mocked(useToolStore).mockImplementation(
-      ((selector: (s: unknown) => unknown) => {
-        const store = {
-          displayMode: { traceroute: "text" as const },
-          setDisplayMode: mockSetDisplayMode,
-          setActiveTool: vi.fn(),
-        };
-        return typeof selector === "function" ? selector(store) : store;
-      }) as any
-    );
+    vi.mocked(useToolStore).mockImplementation(((selector: (s: unknown) => unknown) => {
+      const store = {
+        displayMode: { traceroute: "text" as const },
+        setDisplayMode: mockSetDisplayMode,
+        setActiveTool: vi.fn(),
+      };
+      return typeof selector === "function" ? selector(store) : store;
+      // biome-ignore lint/suspicious/noExplicitAny: zustand selector mock cast
+    }) as any);
 
     mockUseWebSocket.mockReturnValue({
       ...defaultWsReturn,
       status: "completed",
       results: [
         makeHop({ ip: "[hidden]", hostname: null, probes: undefined }),
-        makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [
-          { rtt_ms: 20.456, status: "ok" },
-        ] }),
+        makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [{ rtt_ms: 20.456, status: "ok" }] }),
       ],
       summary: { hops_probed: 2, destination_reached: true, total_time_ms: 25.0 },
       terminatedBy: "completed",

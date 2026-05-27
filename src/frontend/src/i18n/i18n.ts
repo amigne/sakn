@@ -45,6 +45,7 @@ export function setLanguage(lang: string): void {
   if (!SUPPORTED_LANGUAGES.includes(lang as (typeof SUPPORTED_LANGUAGES)[number])) return;
   i18n.changeLanguage(lang);
   const secureFlag = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  // biome-ignore lint/suspicious/noDocumentCookie: persist i18n language preference client-side (1-year cookie)
   document.cookie = `lang=${lang};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax${secureFlag}`;
   document.documentElement.lang = lang;
   document.documentElement.dir = getDirForLang(lang);

@@ -37,9 +37,7 @@ export default function Modal({ open, onClose, title, children, footer }: ModalP
         </div>
         <div className="px-4 py-4 text-sm text-[var(--color-text)]">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] px-4 py-3">
-            {footer}
-          </div>
+          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] px-4 py-3">{footer}</div>
         )}
       </div>
     </div>

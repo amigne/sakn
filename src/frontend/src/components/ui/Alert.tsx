@@ -30,8 +30,17 @@ const iconClasses: Record<string, string> = {
 
 export default function Alert({ variant, title, children, dismissible, onDismiss, className = "" }: AlertProps) {
   return (
-    <div className={`flex items-start gap-3 rounded-md border p-3 ${variantClasses[variant]} ${className}`} role="alert">
-      <svg className={`h-5 w-5 mt-0.5 shrink-0 ${iconClasses[variant]}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <div
+      className={`flex items-start gap-3 rounded-md border p-3 ${variantClasses[variant]} ${className}`}
+      role="alert"
+    >
+      <svg
+        className={`h-5 w-5 mt-0.5 shrink-0 ${iconClasses[variant]}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
         <path strokeLinecap="round" strokeLinejoin="round" d={variantIcons[variant]} />
       </svg>
       <div className="flex-1 min-w-0">
@@ -39,7 +48,11 @@ export default function Alert({ variant, title, children, dismissible, onDismiss
         <div className="text-sm text-[var(--color-text-secondary)]">{children}</div>
       </div>
       {dismissible && (
-        <button onClick={onDismiss} className="focus-ring shrink-0 rounded p-0.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]" aria-label="Dismiss">
+        <button
+          onClick={onDismiss}
+          className="focus-ring shrink-0 rounded p-0.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+          aria-label="Dismiss"
+        >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>

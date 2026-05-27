@@ -112,12 +112,17 @@ export interface AuditLog {
 
 export function auditActionLabel(action: string): string {
   const map: Record<string, string> = {
-    "user.block": "Block User", "user.unblock": "Unblock User",
-    "user.lock": "Lock User", "user.unlock": "Unlock User",
-    "user.promote": "Promote to Admin", "user.demote": "Demote from Admin",
-    "user.delete": "Delete User", "user.notes": "Update Notes",
+    "user.block": "Block User",
+    "user.unblock": "Unblock User",
+    "user.lock": "Lock User",
+    "user.unlock": "Unlock User",
+    "user.promote": "Promote to Admin",
+    "user.demote": "Demote from Admin",
+    "user.delete": "Delete User",
+    "user.notes": "Update Notes",
     "user.verify_email": "Verify Email",
-    "tool.update": "Toggle Tool", "module.update": "Toggle Module",
+    "tool.update": "Toggle Tool",
+    "module.update": "Toggle Module",
     "permission.update": "Update Permission",
     "rate_limit.update": "Update Rate Limit",
     "settings.update": "Update Setting",
@@ -136,12 +141,25 @@ export function auditDetail(log: AuditLog): string {
   if (action === "permission.update" && nv) {
     return `Role ${nv.role} tool ${nv.tool_id?.toString().slice(-8)} allowed=${nv.allowed}`;
   }
-  if ((action === "user.block" || action === "user.unblock" || action === "user.lock" || action === "user.unlock" || action === "user.promote" || action === "user.demote") && nv) {
-    const changed = Object.entries(nv).filter(([k, v]) => ov && ov[k] !== v).map(([k, v]) => `${k}=${v}`).join(", ");
+  if (
+    (action === "user.block" ||
+      action === "user.unblock" ||
+      action === "user.lock" ||
+      action === "user.unlock" ||
+      action === "user.promote" ||
+      action === "user.demote") &&
+    nv
+  ) {
+    const changed = Object.entries(nv)
+      .filter(([k, v]) => ov && ov[k] !== v)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
     return changed || `${action.replace("user.", "")} user`;
   }
   if (action === "settings.update" && nv) {
-    return Object.entries(nv).map(([k, v]) => `${k}=${v}`).join(", ");
+    return Object.entries(nv)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(", ");
   }
   if (nv && Object.keys(nv).length > 0) {
     return JSON.stringify(nv);

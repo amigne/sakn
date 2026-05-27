@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
-import { Select, RadioButton, TextInput } from "@/components/ui";
-import { useThemeStore } from "@/stores/themeStore";
-import { useAuthStore } from "@/stores/authStore";
-import type { ThemeMode } from "@/types/user";
+import { RadioButton, Select, TextInput } from "@/components/ui";
 import { ApiError } from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
+import { useThemeStore } from "@/stores/themeStore";
+import type { ThemeMode } from "@/types/user";
 
 const ALL_LOCALES: { value: string; label: string }[] = [
   { value: "af-ZA", label: "Afrikaans (South Africa)" },
@@ -107,7 +107,9 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, []);
 
   const trim = (s: string) => s.trim();
@@ -146,49 +148,72 @@ export default function ProfilePage() {
     }
   }, [firstName, lastName, updateProfile]);
 
-  const saveLanguage = useCallback(async (lang: string) => {
-    setLanguage(lang);
-    try {
-      await savePreferences({ language: lang });
-      flash(t("account.language_saved"));
-    } catch (_err) {}
-  }, [savePreferences]);
+  const saveLanguage = useCallback(
+    async (lang: string) => {
+      setLanguage(lang);
+      try {
+        await savePreferences({ language: lang });
+        flash(t("account.language_saved"));
+      } catch (_err) {}
+    },
+    [savePreferences],
+  );
 
-  const saveLocale = useCallback(async (loc: string) => {
-    setLocale(loc);
-    try {
-      await savePreferences({ locale: loc });
-      flash(t("account.locale_saved"));
-    } catch (_err) {}
-  }, [savePreferences]);
+  const saveLocale = useCallback(
+    async (loc: string) => {
+      setLocale(loc);
+      try {
+        await savePreferences({ locale: loc });
+        flash(t("account.locale_saved"));
+      } catch (_err) {}
+    },
+    [savePreferences],
+  );
 
-  const handleThemeChange = useCallback(async (m: ThemeMode) => {
-    setMode(m);
-    try {
-      await savePreferences({ theme: m });
-      flash(t("account.theme_saved"));
-    } catch (_err) {}
-  }, [setMode, savePreferences]);
+  const handleThemeChange = useCallback(
+    async (m: ThemeMode) => {
+      setMode(m);
+      try {
+        await savePreferences({ theme: m });
+        flash(t("account.theme_saved"));
+      } catch (_err) {}
+    },
+    [setMode, savePreferences],
+  );
 
   return (
     <PageLayout>
       <div className="max-w-lg">
         <div className="flex items-center gap-3 mb-4">
           <h1 className="text-lg font-semibold text-[var(--color-text)]">{t("account.profile")}</h1>
-          {saved && (
-            <span className="text-xs text-green-600 dark:text-green-400 animate-pulse">{saved}</span>
-          )}
+          {saved && <span className="text-xs text-green-600 dark:text-green-400 animate-pulse">{saved}</span>}
         </div>
 
         <div className="card p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.first_name")}</span>
-              <TextInput type="text" value={firstName} onChange={(e) => { setFirstName(e.target.value); setNameError(null); }} onBlur={() => saveNames()} />
+              <TextInput
+                type="text"
+                value={firstName}
+                onChange={(e) => {
+                  setFirstName(e.target.value);
+                  setNameError(null);
+                }}
+                onBlur={() => saveNames()}
+              />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-[var(--color-text)]">{t("auth.last_name")}</span>
-              <TextInput type="text" value={lastName} onChange={(e) => { setLastName(e.target.value); setNameError(null); }} onBlur={() => saveNames()} />
+              <TextInput
+                type="text"
+                value={lastName}
+                onChange={(e) => {
+                  setLastName(e.target.value);
+                  setNameError(null);
+                }}
+                onBlur={() => saveNames()}
+              />
             </label>
           </div>
           {nameError && <p className="text-xs text-red-600 -mt-2">{nameError}</p>}

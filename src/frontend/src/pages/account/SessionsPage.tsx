@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
-import { Button, Badge, Modal } from "@/components/ui";
+import { Badge, Button, Modal } from "@/components/ui";
 import * as sessionService from "@/services/sessionService";
 import type { Session } from "@/types/user";
 
@@ -25,7 +25,9 @@ export default function SessionsPage() {
     }
   };
 
-  useEffect(() => { fetchSessions(); }, []);
+  useEffect(() => {
+    fetchSessions();
+  }, []);
 
   const handleRevoke = async (id: string) => {
     try {
@@ -39,7 +41,11 @@ export default function SessionsPage() {
   };
 
   const formatDate = (d: string) => {
-    try { return new Date(d).toLocaleString(); } catch { return d; }
+    try {
+      return new Date(d).toLocaleString();
+    } catch {
+      return d;
+    }
   };
 
   return (
@@ -59,25 +65,59 @@ export default function SessionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--color-border)]">
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.ip_address")}</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("account.browser")}</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("account.last_activity")}</th>
-                    <th scope="col" className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase">{t("admin.status")}</th>
-                    <th scope="col" className="px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20" />
+                    <th
+                      scope="col"
+                      className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                    >
+                      {t("admin.ip_address")}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                    >
+                      {t("account.browser")}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                    >
+                      {t("account.last_activity")}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 text-start text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
+                    >
+                      {t("admin.status")}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20"
+                    />
                   </tr>
                 </thead>
                 <tbody>
                   {sessions.map((s) => (
                     <tr key={s.id} className="border-b border-[var(--color-border)]">
                       <td className="px-3 py-2 font-mono text-[var(--color-text)]">{s.ip_address}</td>
-                      <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={s.user_agent}>{s.user_agent?.split(" ").slice(0, 2).join(" ") || "—"}</td>
+                      <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={s.user_agent}>
+                        {s.user_agent?.split(" ").slice(0, 2).join(" ") || "—"}
+                      </td>
                       <td className="px-3 py-2 text-[var(--color-text-secondary)]">{formatDate(s.last_activity_at)}</td>
                       <td className="px-3 py-2">
-                        {s.current ? <Badge variant="info">{t("account.current_session")}</Badge> : <span className="text-xs text-[var(--color-text-secondary)]">—</span>}
+                        {s.current ? (
+                          <Badge variant="info">{t("account.current_session")}</Badge>
+                        ) : (
+                          <span className="text-xs text-[var(--color-text-secondary)]">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         {!s.current && (
-                          <button onClick={() => setRevokeTarget(s.id)} className="text-xs text-error-600 hover:text-error-700">{t("account.revoke")}</button>
+                          <button
+                            onClick={() => setRevokeTarget(s.id)}
+                            className="text-xs text-error-600 hover:text-error-700"
+                          >
+                            {t("account.revoke")}
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -94,8 +134,12 @@ export default function SessionsPage() {
           title={t("account.revoke_session")}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setRevokeTarget(null)}>{t("common.cancel")}</Button>
-              <Button variant="danger" onClick={() => revokeTarget && handleRevoke(revokeTarget)}>{t("account.revoke")}</Button>
+              <Button variant="secondary" onClick={() => setRevokeTarget(null)}>
+                {t("common.cancel")}
+              </Button>
+              <Button variant="danger" onClick={() => revokeTarget && handleRevoke(revokeTarget)}>
+                {t("account.revoke")}
+              </Button>
             </>
           }
         >

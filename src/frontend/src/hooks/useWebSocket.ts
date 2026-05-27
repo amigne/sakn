@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ExecutionStatus } from "@/types/tool";
 
 interface UseWebSocketOptions {
@@ -21,9 +21,10 @@ interface CompleteData<TSummary> {
   terminated_by: string;
 }
 
-export function useWebSocket<TResult = unknown, TSummary = unknown>(
-  { toolName, resultKey = "seq" }: UseWebSocketOptions,
-) {
+export function useWebSocket<TResult = unknown, TSummary = unknown>({
+  toolName,
+  resultKey = "seq",
+}: UseWebSocketOptions) {
   const [status, setStatus] = useState<ExecutionStatus>("idle");
   const [results, setResults] = useState<TResult[]>([]);
   const [summary, setSummary] = useState<TSummary | null>(null);
@@ -66,10 +67,7 @@ export function useWebSocket<TResult = unknown, TSummary = unknown>(
           switch (msg.type) {
             case "result":
               if (cancelledRef.current) return;
-              setResults((prev) => [
-                ...prev,
-                msg.data as TResult,
-              ]);
+              setResults((prev) => [...prev, msg.data as TResult]);
               break;
             case "complete": {
               const completeData = msg.data as CompleteData<TSummary>;

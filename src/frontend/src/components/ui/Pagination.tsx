@@ -42,7 +42,12 @@ export default function Pagination({ offset, limit, total, onChange }: Paginatio
         </button>
         {start > 1 && (
           <>
-            <button onClick={() => onChange(0)} className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">1</button>
+            <button
+              onClick={() => onChange(0)}
+              className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            >
+              1
+            </button>
             {start > 2 && <span className="px-1 text-[var(--color-text-secondary)]">...</span>}
           </>
         )}
@@ -63,7 +68,12 @@ export default function Pagination({ offset, limit, total, onChange }: Paginatio
         {end < totalPages && (
           <>
             {end < totalPages - 1 && <span className="px-1 text-[var(--color-text-secondary)]">...</span>}
-            <button onClick={() => onChange((totalPages - 1) * limit)} className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">{totalPages}</button>
+            <button
+              onClick={() => onChange((totalPages - 1) * limit)}
+              className="focus-ring rounded px-2 py-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            >
+              {totalPages}
+            </button>
           </>
         )}
         <button

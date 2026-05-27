@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type { User, Preferences } from "@/types/user";
 import * as authService from "@/services/authService";
 import * as preferencesService from "@/services/preferencesService";
+import type { Preferences, User } from "@/types/user";
 
 interface AuthState {
   user: User | null;
@@ -10,7 +10,13 @@ interface AuthState {
   isInitialized: boolean;
 
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, passwordConfirm: string, firstName: string, lastName: string) => Promise<string>;
+  register: (
+    email: string,
+    password: string,
+    passwordConfirm: string,
+    firstName: string,
+    lastName: string,
+  ) => Promise<string>;
   updateProfile: (firstName: string, lastName: string) => Promise<void>;
   savePreferences: (updates: Record<string, string>) => Promise<void>;
   loadPreferences: () => Promise<void>;

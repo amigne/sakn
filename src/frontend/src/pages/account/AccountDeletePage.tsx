@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import PageLayout from "@/components/layout/PageLayout";
-import { TextInput, Button, Alert, Modal } from "@/components/ui";
+import { Alert, Button, Modal, TextInput } from "@/components/ui";
+import { type ApiError, api } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
-import { api, ApiError } from "@/services/api";
 
 export default function AccountDeletePage() {
   const { t } = useTranslation();
@@ -45,14 +45,25 @@ export default function AccountDeletePage() {
             <strong>{t("account.warning_label")}:</strong> {t("account.delete_warning")}
           </Alert>
 
-          {error && <Alert variant="error" className="mb-4">{error}</Alert>}
+          {error && (
+            <Alert variant="error" className="mb-4">
+              {error}
+            </Alert>
+          )}
 
           <label className="flex flex-col gap-1 mb-4">
             <span className="text-sm font-medium text-[var(--color-text)]">{t("account.enter_password_confirm")}</span>
-            <TextInput type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <TextInput
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </label>
 
-          <Button variant="danger" onClick={() => setConfirmOpen(true)}>{t("account.delete_my_account")}</Button>
+          <Button variant="danger" onClick={() => setConfirmOpen(true)}>
+            {t("account.delete_my_account")}
+          </Button>
         </div>
 
         <Modal
@@ -61,8 +72,12 @@ export default function AccountDeletePage() {
           title={t("account.confirm_deletion")}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setConfirmOpen(false)}>{t("common.cancel")}</Button>
-              <Button variant="danger" onClick={handleDelete} loading={loading}>{t("account.delete_permanently")}</Button>
+              <Button variant="secondary" onClick={() => setConfirmOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} loading={loading}>
+                {t("account.delete_permanently")}
+              </Button>
             </>
           }
         >

@@ -20,7 +20,20 @@ interface SelectProps {
 }
 
 const Select = forwardRef<HTMLButtonElement, SelectProps>(
-  ({ options, value, defaultValue, onChange, placeholder = i18n.t("common.select"), disabled, error, className = "", ariaLabel }, ref) => {
+  (
+    {
+      options,
+      value,
+      defaultValue,
+      onChange,
+      placeholder = i18n.t("common.select"),
+      disabled,
+      error,
+      className = "",
+      ariaLabel,
+    },
+    ref,
+  ) => {
     return (
       <div className="flex flex-col gap-1">
         <RadixSelect.Root value={value} defaultValue={defaultValue} onValueChange={onChange} disabled={disabled}>
@@ -31,7 +44,12 @@ const Select = forwardRef<HTMLButtonElement, SelectProps>(
           >
             <RadixSelect.Value placeholder={placeholder} />
             <RadixSelect.Icon>
-              <svg className="h-4 w-4 text-[var(--color-text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                className="h-4 w-4 text-[var(--color-text-secondary)]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </RadixSelect.Icon>
