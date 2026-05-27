@@ -23,7 +23,7 @@ test.describe("Admin Pages", () => {
       });
     });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+
   });
 
   test("admin section appears in sidebar", async ({ page }) => {
@@ -43,7 +43,7 @@ test.describe("Admin Pages", () => {
   for (const [route, expected] of adminPages) {
     test(`admin page ${route} shows correct heading`, async ({ page }) => {
       await page.goto(route, { waitUntil: "networkidle" });
-      await page.waitForTimeout(300);
+  
       await expect(page.locator("h1")).toHaveText(expected);
     });
   }
@@ -52,7 +52,7 @@ test.describe("Admin Pages", () => {
 test.describe("Visitor Mode", () => {
   test("admin section is hidden in visitor mode", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(300);
+
 
     // Default unauthenticated state is "visitor" (useAuth: role ?? "visitor")
     const navText = await page.textContent("nav");

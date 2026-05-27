@@ -5,7 +5,6 @@ test.describe("Theme", () => {
     // Force initial state to light for deterministic behavior
     await page.addInitScript(() => localStorage.setItem("theme", "light"));
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     const card = page.locator(".card").first();
     const lightBg = await card.evaluate((el) =>
@@ -27,7 +26,6 @@ test.describe("Theme", () => {
 
   test("cycles theme: system -> light -> dark", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     const themeBtn = page.locator('button[aria-label*="Theme"]');
     const initialLabel = await themeBtn.getAttribute("aria-label");
@@ -37,37 +35,32 @@ test.describe("Theme", () => {
 
     // Click once: system -> light or light -> dark
     await themeBtn.click();
-    await page.waitForTimeout(300);
-    const label1 = await themeBtn.getAttribute("aria-label");
-    expect(label1).not.toBe(initialLabel);
+    await expect.poll(async () => {
+      return await themeBtn.getAttribute("aria-label");
+    }).not.toBe(initialLabel);
 
     // Click twice
     await themeBtn.click();
-    await page.waitForTimeout(300);
     const label2 = await themeBtn.getAttribute("aria-label");
     // After two clicks, we should be in a different state from initial
-    const darkAfter2 = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark"),
-    );
-    expect(darkAfter2).not.toBe(initialDark);
+    await expect.poll(() =>
+      page.evaluate(() => document.documentElement.classList.contains("dark"))
+    ).not.toBe(initialDark);
   });
 
   test("number input uses correct color-scheme in dark mode", async ({
     page,
   }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     // Switch to dark mode
     const themeBtn = page.locator('button[aria-label*="Theme"]');
     await themeBtn.click();
     await themeBtn.click();
-    await page.waitForTimeout(300);
 
-    const isDark = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark"),
-    );
-    expect(isDark).toBe(true);
+    await expect.poll(() =>
+      page.evaluate(() => document.documentElement.classList.contains("dark"))
+    ).toBe(true);
 
     const countInput = page.locator('input[type="number"]').first();
     const colorScheme = await countInput.evaluate((el) =>
