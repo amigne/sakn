@@ -1,4 +1,3 @@
-# ruff: noqa: I001
 import logging
 
 from fastapi import APIRouter, Depends, Request, Response

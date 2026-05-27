@@ -63,6 +63,9 @@ ignore = ["B008"]
 "app/tools/ssl_viewer.py" = ["E402"]
 "app/api/v1/endpoints/auth.py" = ["E402"]
 
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
