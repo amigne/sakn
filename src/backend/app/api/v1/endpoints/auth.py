@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 import logging
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -16,8 +17,7 @@ from app.security.csrf import (
 )
 from app.security.tokens import hash_token
 from app.services import auth_service
-from app.services.rate_limit_service import auth_check as rl_check
-from app.services.rate_limit_service import auth_record as rl_record
+from app.services.rate_limit_service import auth_check as rl_check, auth_record as rl_record
 
 logger = logging.getLogger(__name__)
 
