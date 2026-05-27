@@ -6,7 +6,6 @@ test.describe("Responsive", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     const headerHam = await page
       .locator("header button[aria-label='Toggle sidebar']")
@@ -26,21 +25,16 @@ test.describe("Responsive", () => {
   test("desktop: can collapse sidebar via hamburger", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     await page.click('button[aria-label="Toggle sidebar"]');
-    await page.waitForTimeout(400);
-
-    const navWidth = await page
-      .locator("nav")
-      .evaluate((el) => el.offsetWidth);
-    expect(navWidth).toBeLessThan(100); // collapsed
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeLessThan(100); // collapsed
   });
 
   test("tablet: sidebar collapsed by default", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     const navWidth = await page
       .locator("nav")
@@ -51,15 +45,11 @@ test.describe("Responsive", () => {
   test("tablet: can expand sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     await page.click('button[aria-label="Toggle sidebar"]');
-    await page.waitForTimeout(400);
-
-    const navWidth = await page
-      .locator("nav")
-      .evaluate((el) => el.offsetWidth);
-    expect(navWidth).toBeGreaterThan(100);
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeGreaterThan(100);
   });
 
   test("tablet: resize within breakpoint keeps sidebar state", async ({
@@ -67,19 +57,17 @@ test.describe("Responsive", () => {
   }) => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     await page.locator("nav button[aria-label='Toggle sidebar']").click();
-    await page.waitForTimeout(400);
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeGreaterThan(100);
 
     // Resize within tablet range
     await page.setViewportSize({ width: 850, height: 800 });
-    await page.waitForTimeout(400);
-
-    const navWidth = await page
-      .locator("nav")
-      .evaluate((el) => el.offsetWidth);
-    expect(navWidth).toBeGreaterThan(100); // stays expanded
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeGreaterThan(100); // stays expanded
   });
 
   test("mobile: hamburger in header, sidebar hidden initially", async ({
@@ -87,25 +75,20 @@ test.describe("Responsive", () => {
   }) => {
     await page.setViewportSize({ width: 500, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     const headerHam = await page
       .locator("header button[aria-label='Toggle sidebar']")
       .count();
     expect(headerHam).toBe(1);
 
-    const navVisible = await page.locator("nav").isVisible();
-    expect(navVisible).toBe(false);
+    await expect(page.locator("nav")).not.toBeVisible();
   });
 
   test("mobile: hamburger opens overlay sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 500, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     await page.click("header button[aria-label='Toggle sidebar']");
-    await page.waitForTimeout(400);
-
     await expect(page.locator("nav")).toBeVisible();
   });
 
@@ -114,7 +97,6 @@ test.describe("Responsive", () => {
   }) => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     let navWidth = await page
       .locator("nav")
@@ -122,10 +104,9 @@ test.describe("Responsive", () => {
     expect(navWidth).toBeLessThan(100); // collapsed on tablet
 
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.waitForTimeout(600);
-
-    navWidth = await page.locator("nav").evaluate((el) => el.offsetWidth);
-    expect(navWidth).toBeGreaterThan(100); // auto-expanded on desktop
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeGreaterThan(100); // auto-expanded on desktop
   });
 
   test("desktop-to-tablet transition auto-collapses sidebar", async ({
@@ -133,7 +114,6 @@ test.describe("Responsive", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     let navWidth = await page
       .locator("nav")
@@ -141,31 +121,26 @@ test.describe("Responsive", () => {
     expect(navWidth).toBeGreaterThan(100); // expanded on desktop
 
     await page.setViewportSize({ width: 900, height: 800 });
-    await page.waitForTimeout(600);
-
-    navWidth = await page.locator("nav").evaluate((el) => el.offsetWidth);
-    expect(navWidth).toBeLessThan(100); // auto-collapsed on tablet
+    await expect.poll(async () => {
+      return await page.locator("nav").evaluate((el) => el.offsetWidth);
+    }).toBeLessThan(100); // auto-collapsed on tablet
   });
 
   test("mobile-to-tablet transitions cleanly", async ({ page }) => {
     await page.setViewportSize({ width: 500, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     // Open mobile sidebar
     await page.click("header button[aria-label='Toggle sidebar']");
-    await page.waitForTimeout(300);
-    expect(await page.locator("nav").isVisible()).toBe(true);
+    await expect(page.locator("nav")).toBeVisible();
 
     // Transition to tablet
     await page.setViewportSize({ width: 900, height: 800 });
-    await page.waitForTimeout(600);
+    await expect(page.locator("nav")).toBeVisible();
 
-    const navVisible = await page.locator("nav").isVisible();
     const headerHam = await page
       .locator("header button[aria-label='Toggle sidebar']")
       .count();
-    expect(navVisible).toBe(true);
     expect(headerHam).toBe(0); // hamburger moves to sidebar
   });
 });

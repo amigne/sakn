@@ -23,7 +23,7 @@ test.describe("Sidebar", () => {
       });
     });
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+
 
     const navText = await page.textContent("nav");
     expect(navText).toContain("Administration");
