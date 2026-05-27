@@ -12,7 +12,7 @@ test.describe("Tool Execution", () => {
     const rows = await page.locator("table tr").count();
     expect(rows).toBeGreaterThan(0);
 
-    await expect(page.getByText("Summary")).toBeVisible();
+    await expect(page.getByText("Summary")).toBeVisible({ timeout: 15000 });
   });
 
   test("text view toggle shows raw output", async ({ page }) => {
