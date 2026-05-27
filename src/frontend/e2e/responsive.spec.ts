@@ -138,9 +138,6 @@ test.describe("Responsive", () => {
     await page.setViewportSize({ width: 900, height: 800 });
     await expect(page.locator("nav")).toBeVisible();
 
-    const headerHam = await page
-      .locator("header button[aria-label='Toggle sidebar']")
-      .count();
-    expect(headerHam).toBe(0); // hamburger moves to sidebar
+    await expect(page.locator("header button[aria-label='Toggle sidebar']")).toHaveCount(0);
   });
 });
