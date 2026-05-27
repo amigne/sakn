@@ -65,10 +65,10 @@ describe("RegisterForm — i18n field errors", () => {
     fireEvent.change(screen.getByPlaceholderText("user@example.com"), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getAllByPlaceholderText("••••••••")[0], {
+    fireEvent.change(screen.getAllByPlaceholderText("••••••••")[0]!, {
       target: { value: "StrongP@ss1" },
     });
-    fireEvent.change(screen.getAllByPlaceholderText("••••••••")[1], {
+    fireEvent.change(screen.getAllByPlaceholderText("••••••••")[1]!, {
       target: { value: "StrongP@ss1" },
     });
     // Fill first/last name (required fields)
@@ -77,8 +77,8 @@ describe("RegisterForm — i18n field errors", () => {
       (el) => el.getAttribute("autocomplete") === "given-name" || el.getAttribute("autocomplete") === "family-name",
     );
     if (nameInputs.length >= 2) {
-      fireEvent.change(nameInputs[0], { target: { value: "Jean" } });
-      fireEvent.change(nameInputs[1], { target: { value: "Dupont" } });
+      fireEvent.change(nameInputs[0]!, { target: { value: "Jean" } });
+      fireEvent.change(nameInputs[1]!, { target: { value: "Dupont" } });
     }
 
     fireEvent.click(screen.getByRole("button", { name: /create account|créer un compte/i }));
