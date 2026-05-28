@@ -1,4 +1,4 @@
-name: Migration Check
+name: Backend Checks
 
 on:
   push:
@@ -7,6 +7,10 @@ on:
     paths:
       - 'src/backend/alembic/**'
       - 'src/backend/app/models/**'
+      - 'src/backend/Dockerfile'
+      - 'src/backend/pyproject.toml'
+      - 'src/backend/uv.lock'
+      - '.github/workflows/migration-check.yml'
 
 permissions:
   contents: read
@@ -56,3 +60,11 @@ jobs:
           echo "=== alembic upgrade head (re-apply) ==="
           uv run alembic upgrade head
           echo "=== All migrations are reversible ==="
+
+  docker-smoke:
+    name: Docker build smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend Docker image
+        run: docker build -t sakn-backend:ci-test -f src/backend/Dockerfile src/backend/
