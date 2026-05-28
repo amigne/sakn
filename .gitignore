@@ -4,6 +4,7 @@ src/frontend/node_modules/
 
 # Build output
 src/frontend/dist/
+*.tsbuildinfo
 
 # Bytecode
 __pycache__/
