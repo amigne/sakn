@@ -75,12 +75,12 @@ describe("TraceroutePage", () => {
     expect(screen.getByText("dns.google")).toBeInTheDocument();
   });
 
-  it("renders without crash when hop has no probes array (issue #212)", () => {
+  it("renders table with masked hops (empty probes)", () => {
     mockUseWebSocket.mockReturnValue({
       ...defaultWsReturn,
       status: "completed",
       results: [
-        makeHop({ ip: "[hidden]", hostname: null, probes: undefined }),
+        makeHop({ ip: "[hidden]", hostname: null, probes: [] }),
         makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [{ rtt_ms: 20.456, status: "ok" }] }),
       ],
       summary: { hops_probed: 2, destination_reached: true, total_time_ms: 25.0 },
@@ -94,7 +94,7 @@ describe("TraceroutePage", () => {
     expect(screen.getByText("8.8.8.8")).toBeInTheDocument();
   });
 
-  it("renders text mode without crash when hop has no probes array (issue #212)", () => {
+  it("renders text mode with masked hops (empty probes)", () => {
     const mockSetDisplayMode = vi.fn();
     // Override toolStore mock for this test
     vi.mocked(useToolStore).mockImplementation(((selector: (s: unknown) => unknown) => {
@@ -111,7 +111,7 @@ describe("TraceroutePage", () => {
       ...defaultWsReturn,
       status: "completed",
       results: [
-        makeHop({ ip: "[hidden]", hostname: null, probes: undefined }),
+        makeHop({ ip: "[hidden]", hostname: null, probes: [] }),
         makeHop({ ip: "8.8.8.8", hostname: "dns.google", probes: [{ rtt_ms: 20.456, status: "ok" }] }),
       ],
       summary: { hops_probed: 2, destination_reached: true, total_time_ms: 25.0 },
