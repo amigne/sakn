@@ -1,13 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import i18n from "@/i18n/i18n";
 
-const mockSetLanguage = vi.fn();
+const { mockSetLanguage } = vi.hoisted(() => ({
+  mockSetLanguage: vi.fn(),
+}));
 vi.mock("@/i18n/i18n", async () => {
   const actual = await vi.importActual<typeof import("@/i18n/i18n")>("@/i18n/i18n");
   return { ...actual, setLanguage: mockSetLanguage, getLanguage: () => "en" };
 });
+
+import i18n from "@/i18n/i18n";
 
 const mockSavePreferences = vi.fn();
 const mockLoadPreferences = vi.fn(async () => {});
@@ -45,6 +48,11 @@ vi.mock("@/stores/themeStore", () => ({
   useThemeStore: vi.fn(() => ({ mode: "light", setMode: vi.fn() })),
 }));
 
+// Isolate from TopBar — PageLayout renders children directly
+vi.mock("@/components/layout/PageLayout", () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 import ProfilePage from "@/pages/account/ProfilePage";
 
 describe("ProfilePage — bug #214 #2 (saveLanguage calls i18n.setLanguage)", () => {
@@ -69,12 +77,12 @@ describe("ProfilePage — bug #214 #2 (saveLanguage calls i18n.setLanguage)", ()
       </MemoryRouter>,
     );
 
-    // Open the language select (Radix renders a button trigger inside a <label>)
-    const trigger = screen.getByRole("button", { name: /language/i });
+    // The Radix Select trigger has role="combobox" and is inside a <label>
+    // with text "Language" (t("account.language")).
+    const trigger = screen.getByRole("combobox", { name: /language/i });
     fireEvent.click(trigger);
 
-    // Select the French option. The option is rendered in a Radix portal.
-    // Its label is "Français" (t("account.locale_fr")).
+    // Select "Français" from the Radix dropdown (rendered in a portal)
     await waitFor(() => {
       const frOption = screen.getByRole("option", { name: "Français" });
       fireEvent.click(frOption);

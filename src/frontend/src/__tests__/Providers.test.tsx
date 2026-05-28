@@ -1,8 +1,21 @@
 import { render, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockSetLanguage = vi.fn();
+// jsdom polyfill — not available in test environment
+window.matchMedia =
+  window.matchMedia ??
+  (() =>
+    ({
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }) as unknown as MediaQueryList);
+
+const { mockSetLanguage } = vi.hoisted(() => ({
+  mockSetLanguage: vi.fn(),
+}));
 vi.mock("@/i18n/i18n", async () => {
   const actual = await vi.importActual<typeof import("@/i18n/i18n")>("@/i18n/i18n");
   return { ...actual, setLanguage: mockSetLanguage, getLanguage: () => "en" };
@@ -46,8 +59,20 @@ vi.mock("@/stores/authStore", () => ({
 }));
 
 vi.mock("@/stores/themeStore", () => ({
-  useThemeStore: vi.fn(() => ({ mode: "system", setMode: mockSetMode, applyTheme: vi.fn() })),
+  useThemeStore: Object.assign(
+    vi.fn(() => ({ mode: "system", setMode: mockSetMode, applyTheme: vi.fn() })),
+    {
+      getState: vi.fn(() => ({ mode: "system", setMode: mockSetMode })),
+      setState: vi.fn(),
+    },
+  ),
 }));
+
+// Providers already includes a BrowserRouter — mock it to avoid nesting
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, BrowserRouter: ({ children }: { children: React.ReactNode }) => children };
+});
 
 import Providers from "@/Providers";
 
@@ -62,11 +87,9 @@ describe("Providers AuthInitializer — bug #214 #1 (restore language from prefs
 
   it("calls setLanguage with prefs.language (not prefs.locale) on init", async () => {
     render(
-      <MemoryRouter>
-        <Providers>
-          <div data-testid="child" />
-        </Providers>
-      </MemoryRouter>,
+      <Providers>
+        <div data-testid="child" />
+      </Providers>,
     );
 
     await waitFor(() => {
