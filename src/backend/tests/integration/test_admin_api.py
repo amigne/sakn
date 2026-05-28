@@ -349,3 +349,30 @@ class TestAdminModules:
         # Every module must have the has_settings key
         for m in modules:
             assert "has_settings" in m
+
+    @pytest.mark.asyncio
+    async def test_module_with_dns_preset_has_settings_true(self, client: AsyncClient, db_session):
+        """Issue #278: a module with DnsServerPreset entries (but no GlobalSetting)
+        must report has_settings=true so the admin UI shows the gear icon."""
+        from tests.factories import create_dns_server_preset, create_tool_module
+
+        mod = await create_tool_module(db_session, name="dns_lookup_test", enabled=True)
+        await create_dns_server_preset(
+            db_session,
+            tool_module_id=mod.id,
+            ip_address="1.1.1.1",
+            description="Cloudflare DNS",
+            sort_order=0,
+        )
+
+        admin_id, token = await _create_admin_session(client, db_session)
+        response = await client.get(
+            "/api/v1/admin/modules",
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 200
+        modules = response.json()["modules"]
+        dns_mod = next(m for m in modules if m["name"] == "dns_lookup_test")
+        assert dns_mod["has_settings"] is True, (
+            f"Expected has_settings=True for module with DnsServerPreset, got {dns_mod['has_settings']}"
+        )
