@@ -50,6 +50,15 @@ async def list_modules(
         mod_name = rest.split(".")[0]
         settings_modules.add(mod_name)
 
+    # Also include modules with DnsServerPreset entries (not stored in GlobalSetting)
+    preset_rows = await session.execute(
+        select(ToolModule.name)
+        .join(DnsServerPreset, DnsServerPreset.tool_module_id == ToolModule.id)
+        .distinct()
+    )
+    for (mod_name,) in preset_rows.all():
+        settings_modules.add(mod_name)
+
     return {
         "modules": [
             {
