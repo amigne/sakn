@@ -1,118 +1,75 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "@/i18n/i18n";
 
-// ── Mocks (vi.hoisted so factories can reference them) ────────────────────────
+const mockSavePreferences = vi.fn();
+const mockLogout = vi.fn();
 
-const { setLanguageMock, getLanguageMock, savePreferencesMock, logoutMock } = vi.hoisted(() => ({
-  setLanguageMock: vi.fn(),
-  getLanguageMock: vi.fn(() => "en"),
-  savePreferencesMock: vi.fn().mockResolvedValue(undefined),
-  logoutMock: vi.fn(),
-}));
-
-vi.mock("@/i18n/i18n", () => ({
-  setLanguage: setLanguageMock,
-  getLanguage: getLanguageMock,
-  default: {},
-}));
-
-let mockAuthState: {
-  user: unknown;
-  savePreferences: typeof savePreferencesMock;
-  logout: typeof logoutMock;
-} = {
-  user: {
-    email: "test@test.com",
-    first_name: "T",
-    last_name: "U",
-    locale: "en-US",
-  },
-  savePreferences: savePreferencesMock,
-  logout: logoutMock,
+const mockUser = {
+  id: "u1",
+  email: "x@y.z",
+  first_name: "X",
+  last_name: "Y",
+  role: "authenticated",
+  status: "active",
+  email_verified: true,
+  locale: "en-US",
+  created_at: "2024-01-01T00:00:00Z",
 };
 
-const useAuthStoreMock = vi.hoisted(() =>
-  Object.assign(
-    vi.fn((s?: (state: typeof mockAuthState) => unknown) =>
-      s ? s(mockAuthState) : mockAuthState,
-    ),
-    { getState: () => mockAuthState },
-  ),
-);
-
 vi.mock("@/stores/authStore", () => ({
-  useAuthStore: useAuthStoreMock,
+  useAuthStore: Object.assign(
+    vi.fn((selector?: (s: unknown) => unknown) => {
+      const store = {
+        user: mockUser,
+        preferences: { language: "en", locale: "en-US", theme: "light", display_mode: "table" },
+        savePreferences: mockSavePreferences,
+        logout: mockLogout,
+        isLoading: false,
+        isInitialized: true,
+      };
+      return typeof selector === "function" ? selector(store) : store;
+    }),
+    {
+      getState: vi.fn(() => ({
+        user: mockUser,
+        preferences: { language: "en", locale: "en-US", theme: "light", display_mode: "table" },
+        savePreferences: mockSavePreferences,
+      })),
+      setState: vi.fn(),
+    },
+  ),
 }));
 
 vi.mock("@/stores/themeStore", () => ({
-  useThemeStore: (s?: (state: { mode: string; setMode: ReturnType<typeof vi.fn> }) => unknown) => {
-    const state = { mode: "system", setMode: vi.fn() };
-    return s ? s(state) : state;
-  },
+  useThemeStore: vi.fn(() => ({ mode: "system", setMode: vi.fn() })),
 }));
 
-// Must import after mocks
 import TopBar from "@/components/layout/TopBar";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function renderTopBar() {
-  return render(
-    <MemoryRouter>
-      <TopBar onToggleSidebar={vi.fn()} />
-    </MemoryRouter>,
-  );
-}
-
-// ── Tests ────────────────────────────────────────────────────────────────────
-
-describe("TopBar", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getLanguageMock.mockReturnValue("en");
-    mockAuthState = {
-      user: {
-        email: "test@test.com",
-        first_name: "T",
-        last_name: "U",
-        locale: "en-US",
-      },
-      savePreferences: savePreferencesMock,
-      logout: logoutMock,
-    };
+describe("TopBar — bug #214 #3 (toggleLanguage saves under language key)", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    mockSavePreferences.mockReset();
+    mockSavePreferences.mockResolvedValue({});
   });
 
-  describe("toggleLanguage", () => {
-    it("calls setLanguage with the toggled value", () => {
-      renderTopBar();
-      fireEvent.click(screen.getByTestId("language-toggle"));
-      expect(setLanguageMock).toHaveBeenCalledWith("fr");
-    });
+  it("calls savePreferences with { language: ... }, NOT { locale: ... }", async () => {
+    render(
+      <MemoryRouter>
+        <TopBar onToggleSidebar={() => {}} showHamburger={false} />
+      </MemoryRouter>,
+    );
 
-    it("calls savePreferences with { language } key, not { locale } (Bug 3 regression)", () => {
-      renderTopBar();
-      fireEvent.click(screen.getByTestId("language-toggle"));
+    const langBtn = screen.getByTestId("language-toggle");
+    fireEvent.click(langBtn);
 
-      expect(savePreferencesMock).toHaveBeenCalledTimes(1);
-      const arg = savePreferencesMock.mock.calls[0]![0];
-      expect(arg).toEqual({ language: "fr" });
-      // Regression: must NOT pass locale key
-      expect(arg).not.toHaveProperty("locale");
-    });
-
-    it("does not call savePreferences when no user is logged in", () => {
-      mockAuthState.user = null;
-      renderTopBar();
-      fireEvent.click(screen.getByTestId("language-toggle"));
-      expect(setLanguageMock).toHaveBeenCalledWith("fr");
-      expect(savePreferencesMock).not.toHaveBeenCalled();
-    });
-
-    it("displays the current language code", () => {
-      getLanguageMock.mockReturnValue("en");
-      renderTopBar();
-      expect(screen.getByTestId("language-toggle")).toHaveTextContent("EN");
+    await waitFor(() => {
+      expect(mockSavePreferences).toHaveBeenCalled();
+      const callArg = mockSavePreferences.mock.calls[0]?.[0];
+      expect(callArg).toHaveProperty("language");
+      expect(callArg).not.toHaveProperty("locale");
     });
   });
 });

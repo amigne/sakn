@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { getLanguage, setLanguage } from "@/i18n/i18n";
+import i18n, { getLanguage, setLanguage } from "@/i18n/i18n";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { ThemeMode } from "@/types/user";
@@ -30,6 +30,14 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
   }, []);
 
   const [currentLang, setCurrentLang] = useState(() => getLanguage());
+
+  useEffect(() => {
+    const handler = (lng: string) => setCurrentLang(lng);
+    i18n.on("languageChanged", handler);
+    return () => {
+      i18n.off("languageChanged", handler);
+    };
+  }, []);
 
   const toggleTheme = () => {
     const order: ThemeMode[] = ["light", "dark", "system"];

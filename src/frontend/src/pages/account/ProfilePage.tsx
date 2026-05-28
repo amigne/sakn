@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { RadioButton, Select, TextInput } from "@/components/ui";
@@ -8,53 +8,67 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { ThemeMode } from "@/types/user";
 
-const ALL_LOCALES: { value: string; label: string }[] = [
-  { value: "af-ZA", label: "Afrikaans (South Africa)" },
-  { value: "ar-SA", label: "Arabic (Saudi Arabia)" },
-  { value: "bg-BG", label: "Bulgarian (Bulgaria)" },
-  { value: "ca-ES", label: "Catalan (Spain)" },
-  { value: "cs-CZ", label: "Czech (Czechia)" },
-  { value: "da-DK", label: "Danish (Denmark)" },
-  { value: "de-DE", label: "German (Germany)" },
-  { value: "el-GR", label: "Greek (Greece)" },
-  { value: "en-AU", label: "English (Australia)" },
-  { value: "en-CA", label: "English (Canada)" },
-  { value: "en-GB", label: "English (UK)" },
-  { value: "en-IE", label: "English (Ireland)" },
-  { value: "en-IN", label: "English (India)" },
-  { value: "en-NZ", label: "English (New Zealand)" },
-  { value: "en-US", label: "English (US)" },
-  { value: "es-ES", label: "Spanish (Spain)" },
-  { value: "es-MX", label: "Spanish (Mexico)" },
-  { value: "fi-FI", label: "Finnish (Finland)" },
-  { value: "fr-BE", label: "French (Belgium)" },
-  { value: "fr-CA", label: "French (Canada)" },
-  { value: "fr-CH", label: "French (Switzerland)" },
-  { value: "fr-FR", label: "French (France)" },
-  { value: "he-IL", label: "Hebrew (Israel)" },
-  { value: "hi-IN", label: "Hindi (India)" },
-  { value: "hr-HR", label: "Croatian (Croatia)" },
-  { value: "hu-HU", label: "Hungarian (Hungary)" },
-  { value: "id-ID", label: "Indonesian (Indonesia)" },
-  { value: "it-IT", label: "Italian (Italy)" },
-  { value: "ja-JP", label: "Japanese (Japan)" },
-  { value: "ko-KR", label: "Korean (South Korea)" },
-  { value: "nl-NL", label: "Dutch (Netherlands)" },
-  { value: "no-NO", label: "Norwegian (Norway)" },
-  { value: "pl-PL", label: "Polish (Poland)" },
-  { value: "pt-BR", label: "Portuguese (Brazil)" },
-  { value: "pt-PT", label: "Portuguese (Portugal)" },
-  { value: "ro-RO", label: "Romanian (Romania)" },
-  { value: "ru-RU", label: "Russian (Russia)" },
-  { value: "sk-SK", label: "Slovak (Slovakia)" },
-  { value: "sv-SE", label: "Swedish (Sweden)" },
-  { value: "th-TH", label: "Thai (Thailand)" },
-  { value: "tr-TR", label: "Turkish (Turkey)" },
-  { value: "uk-UA", label: "Ukrainian (Ukraine)" },
-  { value: "vi-VN", label: "Vietnamese (Vietnam)" },
-  { value: "zh-CN", label: "Chinese (Simplified)" },
-  { value: "zh-TW", label: "Chinese (Traditional)" },
+const LOCALE_CODES = [
+  "af-ZA",
+  "ar-SA",
+  "bg-BG",
+  "ca-ES",
+  "cs-CZ",
+  "da-DK",
+  "de-DE",
+  "el-GR",
+  "en-AU",
+  "en-CA",
+  "en-GB",
+  "en-IE",
+  "en-IN",
+  "en-NZ",
+  "en-US",
+  "es-ES",
+  "es-MX",
+  "fi-FI",
+  "fr-BE",
+  "fr-CA",
+  "fr-CH",
+  "fr-FR",
+  "he-IL",
+  "hi-IN",
+  "hr-HR",
+  "hu-HU",
+  "id-ID",
+  "it-IT",
+  "ja-JP",
+  "ko-KR",
+  "nl-NL",
+  "no-NO",
+  "pl-PL",
+  "pt-BR",
+  "pt-PT",
+  "ro-RO",
+  "ru-RU",
+  "sk-SK",
+  "sv-SE",
+  "th-TH",
+  "tr-TR",
+  "uk-UA",
+  "vi-VN",
+  "zh-CN",
+  "zh-TW",
 ];
+
+function buildLocaleLabels(displayLang: string) {
+  const langNames = new Intl.DisplayNames([displayLang], { type: "language" });
+  const regionNames = new Intl.DisplayNames([displayLang], { type: "region" });
+  return LOCALE_CODES.map((code) => {
+    const [lang, region] = code.split("-");
+    const langName = langNames.of(lang!) ?? lang!;
+    const regionName = region ? (regionNames.of(region) ?? region) : null;
+    return {
+      value: code,
+      label: regionName ? `${langName} (${regionName})` : langName,
+    };
+  });
+}
 
 export default function ProfilePage() {
   const { t } = useTranslation();
@@ -72,6 +86,7 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState(initialLast);
   const [language, setLanguage] = useState(getLanguage());
   const [locale, setLocale] = useState(preferences?.locale || user?.locale || "en-US");
+  const allLocales = useMemo(() => buildLocaleLabels(language), [language]);
   const [saved, setSaved] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -260,7 +275,7 @@ export default function ProfilePage() {
           <div>
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-[var(--color-text)]">{t("account.locale")}</span>
-              <Select options={ALL_LOCALES} value={locale} onChange={saveLocale} ariaLabel={t("account.locale")} />
+              <Select options={allLocales} value={locale} onChange={saveLocale} ariaLabel={t("account.locale")} />
             </label>
           </div>
         </div>
