@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n/i18n";
 import AdminModulesPage from "@/pages/admin/AdminModulesPage";
 import type { AccessPermission, ToolModule } from "@/types/admin";
+import type { UserRole } from "@/types/user";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -43,11 +44,7 @@ function makeModule(overrides: Partial<ToolModule> = {}): ToolModule {
   return { name: "ping", enabled: true, has_settings: false, ...overrides };
 }
 
-function makePermission(
-  toolName: string,
-  role: string,
-  overrides: Partial<AccessPermission> = {},
-): AccessPermission {
+function makePermission(toolName: string, role: UserRole, overrides: Partial<AccessPermission> = {}): AccessPermission {
   return { id: `${toolName}-${role}`, tool_name: toolName, role, allowed: true, ...overrides };
 }
 
@@ -166,13 +163,9 @@ describe("AdminModulesPage", () => {
       const pingRow = rows[1]!;
 
       // DNS Lookup has has_settings=true → gear button visible
-      expect(
-        within(dnsRow).getByRole("button", { name: "Settings" }),
-      ).toBeInTheDocument();
+      expect(within(dnsRow).getByRole("button", { name: "Settings" })).toBeInTheDocument();
       // Ping has has_settings=false → no gear button
-      expect(
-        within(pingRow).queryByRole("button", { name: "Settings" }),
-      ).not.toBeInTheDocument();
+      expect(within(pingRow).queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
     });
   });
 

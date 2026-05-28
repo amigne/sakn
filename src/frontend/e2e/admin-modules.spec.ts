@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 const ADMIN_USER = {
   user: {
@@ -88,23 +88,23 @@ test.describe("Admin Modules Page", () => {
     expect(headersLower).toContain("authenticated");
     expect(headersLower).toContain("visitor");
 
-    // Verify all 4 modules are listed
-    await expect(page.locator("text=Ping")).toBeVisible();
-    await expect(page.locator("text=Traceroute")).toBeVisible();
-    await expect(page.locator("text=DNS Lookup")).toBeVisible();
-    await expect(page.locator("text=TLS Certificate Viewer")).toBeVisible();
+    // Verify all 4 modules are listed (scoped to table — sidebar also contains tool names)
+    const table = page.locator("tbody");
+    await expect(table.getByText("Ping")).toBeVisible();
+    await expect(table.getByText("Traceroute")).toBeVisible();
+    await expect(table.getByText("DNS Lookup")).toBeVisible();
+    await expect(table.getByText("TLS Certificate Viewer")).toBeVisible();
   });
 
-  test("disables role toggles when module enabled is turned off", async ({
-    page,
-  }) => {
+  test("disables role toggles when module enabled is turned off", async ({ page }) => {
     await page.goto("/admin/modules", { waitUntil: "networkidle" });
 
-    await expect(page.locator("text=Ping")).toBeVisible();
+    // Check page renders (use .first() — "Ping" is both in sidebar and table)
+    await expect(page.locator("text=Ping").first()).toBeVisible();
 
     // Find the DNS Lookup row (it has enabled: false in our fixture)
     const rows = page.locator("tbody tr");
-    const dnsRow = rows.filter({ has: page.locator("text=DNS Lookup") });
+    const dnsRow = rows.filter({ has: page.getByText("DNS Lookup") });
 
     // The role toggles in the DNS Lookup row should be disabled
     await dnsRow.first().waitFor({ state: "visible" });
