@@ -7,9 +7,15 @@ const mockSavePreferences = vi.fn();
 const mockLogout = vi.fn();
 
 const mockUser = {
-  id: "u1", email: "x@y.z", first_name: "X", last_name: "Y",
-  role: "authenticated", status: "active", email_verified: true,
-  locale: "en-US", created_at: "2024-01-01T00:00:00Z",
+  id: "u1",
+  email: "x@y.z",
+  first_name: "X",
+  last_name: "Y",
+  role: "authenticated",
+  status: "active",
+  email_verified: true,
+  locale: "en-US",
+  created_at: "2024-01-01T00:00:00Z",
 };
 
 vi.mock("@/stores/authStore", () => ({
@@ -25,11 +31,14 @@ vi.mock("@/stores/authStore", () => ({
       };
       return typeof selector === "function" ? selector(store) : store;
     }),
-    { getState: vi.fn(() => ({
-      user: mockUser,
-      preferences: { language: "en", locale: "en-US", theme: "light", display_mode: "table" },
-      savePreferences: mockSavePreferences,
-    })), setState: vi.fn() },
+    {
+      getState: vi.fn(() => ({
+        user: mockUser,
+        preferences: { language: "en", locale: "en-US", theme: "light", display_mode: "table" },
+        savePreferences: mockSavePreferences,
+      })),
+      setState: vi.fn(),
+    },
   ),
 }));
 

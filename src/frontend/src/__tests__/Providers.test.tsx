@@ -26,7 +26,17 @@ vi.mock("@/stores/authStore", () => ({
     }),
     {
       getState: vi.fn(() => ({
-        user: { id: "u1", email: "x@y.z", first_name: "X", last_name: "Y", role: "authenticated", status: "active", email_verified: true, locale: "en-US", created_at: "2024-01-01T00:00:00Z" },
+        user: {
+          id: "u1",
+          email: "x@y.z",
+          first_name: "X",
+          last_name: "Y",
+          role: "authenticated",
+          status: "active",
+          email_verified: true,
+          locale: "en-US",
+          created_at: "2024-01-01T00:00:00Z",
+        },
         preferences: { language: "fr", locale: "fr-FR", theme: "light", display_mode: "table" },
         loadPreferences: mockLoadPreferences,
       })),
@@ -53,7 +63,9 @@ describe("Providers AuthInitializer — bug #214 #1 (restore language from prefs
   it("calls setLanguage with prefs.language (not prefs.locale) on init", async () => {
     render(
       <MemoryRouter>
-        <Providers><div data-testid="child" /></Providers>
+        <Providers>
+          <div data-testid="child" />
+        </Providers>
       </MemoryRouter>,
     );
 

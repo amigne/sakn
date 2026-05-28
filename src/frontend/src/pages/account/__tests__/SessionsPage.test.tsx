@@ -26,9 +26,15 @@ vi.mock("@/stores/authStore", () => ({
     vi.fn((selector?: (s: unknown) => unknown) => {
       const store = {
         user: {
-          id: "u1", email: "x@y.z", first_name: "X", last_name: "Y",
-          role: "authenticated", status: "active", email_verified: true,
-          locale: "fr-FR", created_at: "2024-01-01T00:00:00Z",
+          id: "u1",
+          email: "x@y.z",
+          first_name: "X",
+          last_name: "Y",
+          role: "authenticated",
+          status: "active",
+          email_verified: true,
+          locale: "fr-FR",
+          created_at: "2024-01-01T00:00:00Z",
         },
         preferences: { language: "fr", locale: "fr-FR", theme: "light", display_mode: "table" },
       };

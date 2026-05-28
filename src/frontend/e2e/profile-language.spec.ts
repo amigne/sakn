@@ -45,28 +45,27 @@ test.describe("Profile Language — i18n flow", () => {
         });
       }
     });
-    // Allow CSRF token fetch
     await page.route("**/api/v1/auth/csrf", (route) => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({}) });
     });
   });
 
-  test("changing the language in profile updates UI immediately and persists across reload", async ({ page }) => {
+  test("changing language via TopBar toggle persists across reload", async ({ page }) => {
     await page.goto("/account/preferences", { waitUntil: "networkidle" });
 
-    // The language dropdown trigger button is inside a label "Language"
-    const langTrigger = page.getByRole("button", { name: /language/i });
-    await expect(langTrigger).toBeVisible();
-    await langTrigger.click();
+    // Wait for the page to fully render (English heading "Profile")
+    await expect(page.getByRole("heading", { name: /profile/i })).toBeVisible({ timeout: 5000 });
 
-    // Select "Français" from the dropdown
-    const frOption = page.getByRole("option", { name: "Français" });
-    await frOption.click();
+    // Use the TopBar language toggle
+    const langBtn = page.getByTestId("language-toggle");
+    await expect(langBtn).toHaveText("EN");
+    await langBtn.click();
+    await expect(langBtn).toHaveText("FR");
 
-    // After switching to French, the heading should show "Profil" (French translation)
+    // After switching to French, the heading should show "Profil"
     await expect(page.getByRole("heading", { name: /profil/i })).toBeVisible({ timeout: 5000 });
 
-    // Reload and verify FR is still active (language persisted to server)
+    // Reload and verify FR is still active
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: /profil/i })).toBeVisible({ timeout: 5000 });
   });
