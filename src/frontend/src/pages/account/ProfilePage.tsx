@@ -237,6 +237,7 @@ export default function ProfilePage() {
                 ]}
                 value={language}
                 onChange={saveLanguage}
+                ariaLabel={t("account.language")}
               />
             </label>
           </div>
@@ -259,7 +260,7 @@ export default function ProfilePage() {
           <div>
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-[var(--color-text)]">{t("account.locale")}</span>
-              <Select options={ALL_LOCALES} value={locale} onChange={saveLocale} />
+              <Select options={ALL_LOCALES} value={locale} onChange={saveLocale} ariaLabel={t("account.locale")} />
             </label>
           </div>
         </div>
