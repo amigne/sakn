@@ -15,11 +15,9 @@ _PYDANTIC_ERROR_MESSAGE_KEYS: dict[str, str] = {
     "bool_type": "errors.invalid_type",
     "list_type": "errors.invalid_type",
     "dict_type": "errors.invalid_type",
-    "value_error.email": "errors.invalid_email",
     "string_too_short": "errors.too_short",
     "string_too_long": "errors.too_long",
     "value_error": "errors.invalid_value",
-    "extra": "errors.forbidden_field",
 }
 
 # Human-readable fallback messages for each Pydantic error type
@@ -31,11 +29,9 @@ _PYDANTIC_ERROR_MESSAGES: dict[str, str] = {
     "bool_type": "Invalid type.",
     "list_type": "Invalid type.",
     "dict_type": "Invalid type.",
-    "value_error.email": "Invalid email address.",
     "string_too_short": "Too short.",
     "string_too_long": "Too long.",
     "value_error": "Invalid value.",
-    "extra": "Unknown field.",
 }
 
 
