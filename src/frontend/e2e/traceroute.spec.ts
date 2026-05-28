@@ -22,7 +22,8 @@ test.describe("Traceroute", () => {
     await probesInput.fill("5");
 
     await page.click('button:has-text("Reset")');
-    // Re-select TCP after reset (reset reverts form to UDP default)
+    // Re-fill target and re-select TCP after reset (reset clears the form)
+    await page.getByPlaceholder("8.8.8.8").fill("1.1.1.1");
     await page.getByRole("combobox").first().click();
     await page.getByRole("option", { name: "TCP" }).click();
     await page.click('button:has-text("Trace")');
