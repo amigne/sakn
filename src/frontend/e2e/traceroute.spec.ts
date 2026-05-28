@@ -4,16 +4,12 @@ test.describe("Traceroute", () => {
   test("executes with configurable probe count and resets", async ({
     page,
   }) => {
-    // Traceroute uses UDP probes by default. GitHub Actions runners block
-    // outbound UDP to high ports, so the tool never receives replies and
-    // the WebSocket never emits a "complete" message — the test times out.
-    // The test passes locally with a real backend. Follow-up: issue #257
-    // (investigate TCP-based traceroute or move to docker-compose CI).
-    test.skip(!!process.env.CI, "UDP outbound blocked in CI — see #257");
-
     await page.goto("/traceroute", { waitUntil: "networkidle" });
 
     await page.getByPlaceholder("8.8.8.8").fill("1.1.1.1");
+    // Use TCP probes — UDP is blocked on GitHub Actions runners
+    await page.getByRole("combobox").first().click();
+    await page.getByRole("option", { name: "TCP" }).click();
     // Run with default probe count
     await page.click('button:has-text("Trace")');
     await expect(page.locator("th").first()).toBeVisible({ timeout: 25000 });
@@ -26,6 +22,10 @@ test.describe("Traceroute", () => {
     await probesInput.fill("5");
 
     await page.click('button:has-text("Reset")');
+    // Re-fill target and re-select TCP after reset (reset clears the form)
+    await page.getByPlaceholder("8.8.8.8").fill("1.1.1.1");
+    await page.getByRole("combobox").first().click();
+    await page.getByRole("option", { name: "TCP" }).click();
     await page.click('button:has-text("Trace")');
     await expect(page.locator("th").first()).toBeVisible({ timeout: 25000 });
 
