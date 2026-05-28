@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.services.rate_limit_service import (
     AUTH_LIMITS,
     DEFAULT_LIMITS,
@@ -14,16 +15,16 @@ from app.services.rate_limit_service import (
 
 class TestDefaultLimits:
     def test_visitor_defaults(self):
-        assert DEFAULT_LIMITS["visitor"]["soft"] == 1
-        assert DEFAULT_LIMITS["visitor"]["hard"] == 200
+        assert DEFAULT_LIMITS[ROLE_VISITOR]["soft"] == 1
+        assert DEFAULT_LIMITS[ROLE_VISITOR]["hard"] == 200
 
     def test_authenticated_defaults(self):
-        assert DEFAULT_LIMITS["authenticated"]["soft"] == 1
-        assert DEFAULT_LIMITS["authenticated"]["hard"] == 500
+        assert DEFAULT_LIMITS[ROLE_AUTHENTICATED]["soft"] == 1
+        assert DEFAULT_LIMITS[ROLE_AUTHENTICATED]["hard"] == 500
 
     def test_administrator_defaults(self):
-        assert DEFAULT_LIMITS["administrator"]["soft"] == 0
-        assert DEFAULT_LIMITS["administrator"]["hard"] == 3600
+        assert DEFAULT_LIMITS[ROLE_ADMINISTRATOR]["soft"] == 0
+        assert DEFAULT_LIMITS[ROLE_ADMINISTRATOR]["hard"] == 3600
 
 
 class TestAuthLimits:
@@ -97,7 +98,7 @@ class TestEffectiveLimits:
         mock_result.scalar_one_or_none.return_value = None
         db.execute.return_value = mock_result
 
-        limits = await get_effective_limits(db, "visitor")
+        limits = await get_effective_limits(db, ROLE_VISITOR)
         assert limits["soft_limit"] == 1
         assert limits["hard_limit"] == 200
         assert limits["window_seconds"] == 3600
@@ -110,7 +111,7 @@ class TestEffectiveLimits:
         mock_result.scalar_one_or_none.return_value = None
         db.execute.return_value = mock_result
 
-        limits = await get_effective_limits(db, "administrator")
+        limits = await get_effective_limits(db, ROLE_ADMINISTRATOR)
         # soft=0 means no limit, hard=3600
         assert limits["soft_limit"] == 0
         assert limits["hard_limit"] == 3600

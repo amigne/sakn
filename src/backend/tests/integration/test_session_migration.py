@@ -5,6 +5,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.models import Session, User
 from app.models.base import new_uuid7, utcnow
 from app.security.password import hash_password
@@ -22,7 +23,7 @@ async def test_hmac_session_works(
         id=new_uuid7(),
         email="hmac@example.com",
         password_hash=hash_password(STRONG_PW),
-        role="authenticated",
+        role=ROLE_AUTHENTICATED,
         status="active",
         email_verified_at=utcnow(),
     )

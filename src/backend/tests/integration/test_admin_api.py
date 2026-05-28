@@ -7,6 +7,7 @@ views logs, and manages tool modules.
 import pytest
 from httpx import AsyncClient
 
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.security.password import hash_password
 from app.security.tokens import generate_token, hash_token
 from tests.factories import create_user
@@ -31,7 +32,7 @@ async def _create_admin_session(client: AsyncClient, db) -> tuple[str, str]:
             db,
             email="admin@test.com",
             password_hash=hash_password("adminpass"),
-            role="administrator",
+            role=ROLE_ADMINISTRATOR,
         )
 
     session_token = generate_token()
@@ -122,7 +123,7 @@ class TestAdminUserActions:
         from app.models.base import utcnow
 
         user = await create_user(
-            db_session, email="regular@test.com", role="authenticated"
+            db_session, email="regular@test.com", role=ROLE_AUTHENTICATED
         )
         reg_token = generate_token()
         session = Session(

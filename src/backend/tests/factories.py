@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.models import (
     DnsServerPreset,
     EmailVerification,
@@ -26,7 +27,7 @@ async def create_user(
     *,
     email: str = "test@example.com",
     password_hash: str = "hashed_password",
-    role: str = "authenticated",
+    role: str = ROLE_AUTHENTICATED,
     status: str = "active",
     email_verified: bool = True,
 ) -> User:
@@ -84,7 +85,7 @@ async def create_tool_module(
 async def create_role_permission(
     db: AsyncSession,
     *,
-    role: str = "authenticated",
+    role: str = ROLE_AUTHENTICATED,
     tool_id: str,
     allowed: bool = True,
 ) -> RoleToolPermission:
@@ -102,7 +103,7 @@ async def create_role_permission(
 async def create_rate_limit_config(
     db: AsyncSession,
     *,
-    role: str = "authenticated",
+    role: str = ROLE_AUTHENTICATED,
     tool_id: str | None = None,
     soft_limit: int = 0,
     hard_limit: int = 0,

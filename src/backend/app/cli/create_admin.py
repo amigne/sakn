@@ -4,6 +4,7 @@ import sys
 import click
 from sqlalchemy import select
 
+from app.constants.roles import ROLE_ADMINISTRATOR
 from app.database import async_session_factory
 from app.models import User
 from app.models.base import new_uuid7, utcnow
@@ -50,7 +51,7 @@ def create_admin(email: str, password: str, first_name: str, last_name: str):
                 password_hash=hash_password(password),
                 first_name=first_name.strip(),
                 last_name=last_name.strip(),
-                role="administrator",
+                role=ROLE_ADMINISTRATOR,
                 status="active",
                 email_verified_at=utcnow(),
             )

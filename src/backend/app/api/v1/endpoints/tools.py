@@ -13,6 +13,7 @@ from app.api.v1.endpoints.ws_codes import (
     WS_CLOSE_UNKNOWN_TOOL,
 )
 from app.config import settings
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.database import async_session_factory, get_session
 from app.tools.registry import ToolRegistry
 
@@ -38,7 +39,7 @@ def get_registry(request: Request) -> ToolRegistry:
 
 @router.get("/available-for/{role}")
 async def list_tools_for_role(
-    role: Literal["visitor", "authenticated", "administrator"],
+    role: Literal[ROLE_VISITOR, ROLE_AUTHENTICATED, ROLE_ADMINISTRATOR],
     session=Depends(get_session),
 ):
     """Public: list tools available to a given role (for the no-tools page)."""
@@ -71,7 +72,7 @@ async def list_tools(
     from app.models import ToolModule
     from app.models.tool_module import RoleToolPermission
 
-    role = getattr(request.state, "role", "visitor")
+    role = getattr(request.state, "role", ROLE_VISITOR)
 
     # Load enabled tool names from DB
     row = await session.execute(
@@ -109,7 +110,7 @@ async def list_tool_dns_servers(
         select(ToolModule)
         .where(ToolModule.name == tool_name, ToolModule.enabled.is_(True))
         .join(RoleToolPermission, RoleToolPermission.tool_id == ToolModule.id)
-        .where(RoleToolPermission.role == "visitor", RoleToolPermission.allowed.is_(True))
+        .where(RoleToolPermission.role == ROLE_VISITOR, RoleToolPermission.allowed.is_(True))
     )
     tool = row.scalar_one_or_none()
     if tool is None:
@@ -190,7 +191,7 @@ async def tool_stream(websocket: WebSocket, tool_name: str):
     # Resolve session and check access BEFORE accepting
     session_token, _ = _read_session_from_ws(websocket)
     user_id = None
-    role = "visitor"
+    role = ROLE_VISITOR
 
     try:
         from app.database import async_session_factory, is_db_available
@@ -316,7 +317,7 @@ async def _check_tool_access(
     from app.models import ToolModule
     from app.models.tool_module import RoleToolPermission
 
-    role = getattr(request.state, "role", "visitor")
+    role = getattr(request.state, "role", ROLE_VISITOR)
 
     # Check enabled
     row = await session.execute(
@@ -411,7 +412,7 @@ async def execute_tool(
         user_id=user_id,
         session_id=session_id,
         source_ip=source_ip,
-        role=getattr(request.state, "role", "visitor"),
+        role=getattr(request.state, "role", ROLE_VISITOR),
         request_id=getattr(request.state, "request_id", ""),
     )
 

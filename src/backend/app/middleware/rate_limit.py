@@ -13,6 +13,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.constants.roles import ROLE_VISITOR
 from app.database import async_session_factory, is_db_available
 from app.services.rate_limit_service import check_tool_rate_limit
 
@@ -74,14 +75,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Resolve identity from request state (set by SessionMiddleware)
-        role = getattr(request.state, "role", "visitor")
+        role = getattr(request.state, "role", ROLE_VISITOR)
         user_id = getattr(request.state, "user_id", None)
         session_id = getattr(request.state, "session_id", "unknown")
         source_ip = request.client.host if request.client else "unknown"
 
         # If session middleware didn't resolve the user but a cookie is present,
         # try to resolve it directly from the DB
-        if role == "visitor" and user_id is None:
+        if role == ROLE_VISITOR and user_id is None:
             from app.security.cookies import get_session_token
 
             session_token = get_session_token(request)

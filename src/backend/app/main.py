@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import settings
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.database import engine
 
 # Setup structured logging early
@@ -123,7 +124,7 @@ async def lifespan(app: FastAPI) -> Any:
                     tool_ids[definition.name] = existing.id
 
                 # Seed default RoleToolPermission rows (all roles → all tools allowed)
-                all_roles = ["visitor", "authenticated", "administrator"]
+                all_roles = [ROLE_VISITOR, ROLE_AUTHENTICATED, ROLE_ADMINISTRATOR]
                 for role in all_roles:
                     for _tool_name, tool_id in tool_ids.items():
                         row = await db.execute(
@@ -137,9 +138,9 @@ async def lifespan(app: FastAPI) -> Any:
 
                 # Seed default RateLimitConfig rows
                 default_limits = {
-                    "visitor": (1, 200, 3600),
-                    "authenticated": (1, 500, 3600),
-                    "administrator": (0, 3600, 3600),
+                    ROLE_VISITOR: (1, 200, 3600),
+                    ROLE_AUTHENTICATED: (1, 500, 3600),
+                    ROLE_ADMINISTRATOR: (0, 3600, 3600),
                 }
                 for role, (soft, hard, window) in default_limits.items():
                     row = await db.execute(

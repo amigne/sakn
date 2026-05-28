@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.constants.roles import ROLE_AUTHENTICATED
 from app.models.base import Base, TimestampMixin, UUID7Mixin
 
 
@@ -11,7 +12,7 @@ class User(Base, UUID7Mixin, TimestampMixin):
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="authenticated")
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default=ROLE_AUTHENTICATED)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     failed_login_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
