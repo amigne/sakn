@@ -137,7 +137,6 @@ class TestWebSocketRateLimit:
             _engine, class_=AsyncSession, expire_on_commit=False
         )
         monkeypatch.setattr(db_module, "async_session_factory", test_factory)
-        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
         monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
@@ -217,7 +216,6 @@ class TestWebSocketRedisSessionException:
             await seed_db.commit()
 
         monkeypatch.setattr(db_module, "async_session_factory", test_factory)
-        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
         monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
@@ -284,7 +282,6 @@ class TestWebSocketRedisSessionException:
             _engine, class_=AsyncSession, expire_on_commit=False
         )
         monkeypatch.setattr(db_module, "async_session_factory", test_factory)
-        monkeypatch.setattr(tools_mod, "async_session_factory", test_factory)
         monkeypatch.setattr(db_module, "is_db_available", lambda: True)
 
         try:
