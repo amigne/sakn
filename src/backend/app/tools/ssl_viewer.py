@@ -451,17 +451,17 @@ class SslViewerTool(BaseTool):
             except Exception:
                 full_chain = [ssock.getpeercert(binary_form=True)]
 
-                leaf_der = full_chain[0] if full_chain else ssock.getpeercert(binary_form=True)
-                intermediates = full_chain[1:] if len(full_chain) > 1 else []
+            leaf_der = full_chain[0] if full_chain else ssock.getpeercert(binary_form=True)
+            intermediates = full_chain[1:] if len(full_chain) > 1 else []
 
-                # If the last cert is not self-signed, try to find its issuer
-                # (the root CA) in the system trust store and append it.
-                last_der = intermediates[-1] if intermediates else leaf_der
-                root_der = SslViewerTool._find_root_in_store(last_der)
-                if root_der is not None:
-                    intermediates = intermediates + [root_der]
+            # If the last cert is not self-signed, try to find its issuer
+            # (the root CA) in the system trust store and append it.
+            last_der = intermediates[-1] if intermediates else leaf_der
+            root_der = SslViewerTool._find_root_in_store(last_der)
+            if root_der is not None:
+                intermediates = intermediates + [root_der]
 
-        return leaf_der, intermediates, tls_version, cipher_suite
+            return leaf_der, intermediates, tls_version, cipher_suite
 
     @classmethod
     def _load_system_ca_certs(cls) -> list[x509.Certificate]:
