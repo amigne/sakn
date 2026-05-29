@@ -383,6 +383,105 @@ class TestHostnameMatching:
         assert _hostname_matches("deep.sub.example.com", ["*.example.com"], "") is False
 
 
+class TestConnectPermissive:
+    """Direct tests for _connect_permissive to prevent regressions of the indentation bug (#288)."""
+
+    @staticmethod
+    def _make_mock_ssock(chain, version="TLSv1.3", cipher_name="TLS_AES_256_GCM_SHA384"):
+        """Create a mock SSLSocket with the given certificate chain.
+
+        The mock is set up so that ``with ctx.wrap_socket(...) as ssock:``
+        binds the mock itself (not its ``__enter__`` return value).
+        """
+        from unittest.mock import MagicMock
+
+        mock = MagicMock()
+        mock.version.return_value = version
+        mock.cipher.return_value = (cipher_name, "TLSv1.3", 256)
+
+        if isinstance(chain, Exception):
+            mock.get_unverified_chain.side_effect = chain
+        else:
+            mock.get_unverified_chain.return_value = list(chain)
+
+        # The mock is used as a context manager in the ``with`` statement;
+        # __enter__ must return the mock itself so that ``as ssock`` binds it.
+        mock.__enter__.return_value = mock
+
+        return mock
+
+    @staticmethod
+    def _configure_mocks(mock_connect, mock_ctx_class, mock_ssock):
+        """Wire up the socket + SSL context mocks for _connect_permissive."""
+        # socket.create_connection(...) as sock → sock = raw_sock
+        raw_sock = mock_connect.return_value
+        raw_sock.__enter__.return_value = raw_sock
+
+        # ssl.SSLContext(...) → mock_ctx
+        mock_ctx = mock_ctx_class.return_value
+        # ctx.wrap_socket(sock, ...) → mock_ssock
+        mock_ctx.wrap_socket.return_value = mock_ssock
+
+    def test_happy_path_extracts_leaf_and_intermediates(self):
+        """When get_unverified_chain succeeds, leaf and intermediates are correctly split."""
+        leaf = _fake_leaf_cert()
+        ca = _fake_ca_cert()
+        chain = [leaf, ca]
+        mock_ssock = self._make_mock_ssock(chain)
+
+        with (
+            patch("app.tools.ssl_viewer.socket.create_connection") as mock_connect,
+            patch("app.tools.ssl_viewer.ssl.SSLContext") as mock_ctx_class,
+        ):
+            self._configure_mocks(mock_connect, mock_ctx_class, mock_ssock)
+            leaf_der, intermediates, tls_ver, cipher = SslViewerTool._connect_permissive(
+                "example.com", 443, "example.com"
+            )
+
+        assert leaf_der == leaf
+        assert intermediates == [ca]
+        assert tls_ver == "TLSv1.3"
+        assert cipher == "TLS_AES_256_GCM_SHA384"
+
+    def test_fallback_when_get_unverified_chain_fails(self):
+        """When get_unverified_chain raises, fall back to getpeercert(binary_form=True)."""
+        leaf = _fake_leaf_cert()
+        mock_ssock = self._make_mock_ssock(RuntimeError("not available"))
+        mock_ssock.getpeercert.return_value = leaf
+
+        with (
+            patch("app.tools.ssl_viewer.socket.create_connection") as mock_connect,
+            patch("app.tools.ssl_viewer.ssl.SSLContext") as mock_ctx_class,
+        ):
+            self._configure_mocks(mock_connect, mock_ctx_class, mock_ssock)
+            leaf_der, intermediates, tls_ver, cipher = SslViewerTool._connect_permissive(
+                "example.com", 443, "example.com"
+            )
+
+        assert leaf_der == leaf
+        assert intermediates == []
+        assert tls_ver == "TLSv1.3"
+        mock_ssock.getpeercert.assert_called_with(binary_form=True)
+
+    def test_empty_chain_falls_back_to_getpeercert(self):
+        """When get_unverified_chain returns an empty list, fall back to getpeercert."""
+        leaf = _fake_leaf_cert()
+        mock_ssock = self._make_mock_ssock([])
+        mock_ssock.getpeercert.return_value = leaf
+
+        with (
+            patch("app.tools.ssl_viewer.socket.create_connection") as mock_connect,
+            patch("app.tools.ssl_viewer.ssl.SSLContext") as mock_ctx_class,
+        ):
+            self._configure_mocks(mock_connect, mock_ctx_class, mock_ssock)
+            leaf_der, intermediates, tls_ver, _ = SslViewerTool._connect_permissive(
+                "example.com", 443, "example.com"
+            )
+
+        assert leaf_der == leaf
+        assert intermediates == []
+
+
 class TestNormalizeKeyAlgorithm:
     def test_rsa(self):
         assert _normalize_key_algorithm("RSA") == "RSA"
