@@ -2,16 +2,17 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.session_service as session_service
 from app.config import settings
 from app.constants.roles import ROLE_AUTHENTICATED
 from app.models import EmailVerification, PasswordReset, SecurityEventLog, Session, User, UserPreference
-from app.models.base import new_uuid7, utcnow
+from app.models.base import ensure_aware, new_uuid7, utcnow
 from app.security.password import hash_password, validate_password_strength, verify_password
 from app.security.tokens import generate_token, hash_token
 from app.services.email_service import send_email
@@ -20,11 +21,6 @@ logger = logging.getLogger(__name__)
 
 VERIFICATION_TOKEN_TTL = timedelta(hours=24)
 RESET_TOKEN_TTL = timedelta(hours=1)
-
-
-def _now_naive() -> datetime:
-    """Return timezone-naive UTC now, for comparison with DB-stored values (SQLite compat)."""
-    return utcnow().replace(tzinfo=None)
 
 
 def _hash_email_for_log(email: str) -> str:
@@ -113,18 +109,11 @@ async def register_user(
     if not valid:
         return err_key, "Password is too weak."
 
-    # Check if email already exists
-    result = await db.execute(select(User).where(User.email == email))
-    existing = result.scalar_one_or_none()
-    if existing:
-        # Enumeration-safe: return same success message
-        await _log_security_event(
-            db, "registration_duplicate", source_ip,
-            details={"email_hash": _hash_email_for_log(email)},
-        )
-        return "auth.registration_success", "Registration successful. Check your email to verify your account."
-
-    # Create user
+    # Create user — the UNIQUE constraint on email acts as the atomic guard.
+    # If two concurrent requests (same email) both reach this point, one INSERT
+    # will succeed and the other will raise IntegrityError at flush time.
+    # The SELECT-before-INSERT check is intentionally omitted: it is not atomic
+    # across multiple workers and would create a TOCTOU race window.
     user = User(
         id=new_uuid7(),
         email=email,
@@ -135,7 +124,17 @@ async def register_user(
         last_name=last_name.strip() if last_name else None,
     )
     db.add(user)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Race detected — another request (possibly in a different worker)
+        # committed the same email first. The UNIQUE constraint wins.
+        await db.rollback()
+        await _log_security_event(
+            db, "registration_duplicate", source_ip,
+            details={"email_hash": _hash_email_for_log(email)},
+        )
+        return "auth.registration_success", "Registration successful. Check your email to verify your account."
 
     # Create verification token
     token = generate_token()
@@ -149,6 +148,11 @@ async def register_user(
     await db.flush()
 
     await _log_security_event(db, "registration", source_ip, user_id=user.id)
+
+    # Commit before sending email to close the TOCTOU race window
+    # where a concurrent request could pass the duplicate-email check
+    # before this transaction is visible.
+    await db.commit()
 
     # Send verification email (non-blocking on failure)
     verification_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email?token={token}"
@@ -173,7 +177,7 @@ async def verify_email(db: AsyncSession, *, token: str) -> tuple[bool, str, str]
     if verification is None or verification.used:
         return False, "errors.token_used", "Invalid or expired verification token."
 
-    if verification.expires_at < _now_naive():
+    if ensure_aware(verification.expires_at) < utcnow():
         return False, "errors.token_expired", "Verification token has expired."
 
     # Mark verification as used
@@ -392,6 +396,9 @@ async def request_password_reset(
 
     await _log_security_event(db, "password_reset_request", source_ip, user_id=user.id)
 
+    # Commit before sending email (same TOCTOU fix as register_user)
+    await db.commit()
+
     reset_url = f"{settings.CORS_ORIGINS.split(',')[0]}/reset-password?token={token}"
     await send_email(
         email,
@@ -427,7 +434,7 @@ async def reset_password(
     if reset is None or reset.used:
         return False, "errors.token_used", "Invalid or expired reset token."
 
-    if reset.expires_at < _now_naive():
+    if ensure_aware(reset.expires_at) < utcnow():
         return False, "errors.token_expired", "Reset token has expired."
 
     # Mark token as used
@@ -475,6 +482,9 @@ async def resend_verification(
     )
     db.add(verification)
     await db.flush()
+
+    # Commit before sending email (same TOCTOU fix as register_user)
+    await db.commit()
 
     verification_url = f"{settings.CORS_ORIGINS.split(',')[0]}/verify-email?token={token}"
     await send_email(

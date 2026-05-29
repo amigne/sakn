@@ -554,3 +554,220 @@ class TestFieldLevelValidation:
         assert resp.status_code == 200
         data = resp.json()
         assert "message_key" in data
+
+
+class TestVerifyEmailTokenExpiry:
+    """Regression guards for issue #292: timezone comparison TypeError in verify_email()."""
+
+    @pytest.mark.asyncio
+    async def test_expired_token_returns_410(self, client: AsyncClient, db_session: AsyncSession):
+        """An expired verification token returns 410, not 500."""
+        from datetime import UTC, datetime, timedelta
+
+        # Register
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": "expired-verify@example.com",
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp.status_code == 201
+
+        # Get the verification token and expire it
+        result = await db_session.execute(
+            select(User).where(User.email == "expired-verify@example.com")
+        )
+        user = result.scalar_one_or_none()
+        assert user is not None
+
+        result = await db_session.execute(
+            select(EmailVerification).where(
+                EmailVerification.user_id == user.id,
+                EmailVerification.used == False,
+            )
+        )
+        verification = result.scalar_one_or_none()
+        assert verification is not None
+
+        # Set expires_at to 1 hour ago and create a known token
+        token = generate_token()
+        verification.token_hash = hash_token(token)
+        verification.expires_at = datetime.now(UTC) - timedelta(hours=1)
+        await db_session.commit()
+
+        # Verify — must return 410, not 500
+        resp = await client.post("/api/v1/auth/verify-email", json={"token": token})
+        assert resp.status_code == 410
+        data = resp.json()
+        assert data["error"]["message_key"] == "errors.token_expired"
+
+    @pytest.mark.asyncio
+    async def test_valid_token_returns_200(self, client: AsyncClient, db_session: AsyncSession):
+        """A valid (non-expired) verification token returns 200 — comparison works."""
+        # Register
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": "valid-verify@example.com",
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp.status_code == 201
+
+        # Get the verification token
+        result = await db_session.execute(
+            select(User).where(User.email == "valid-verify@example.com")
+        )
+        user = result.scalar_one_or_none()
+        assert user is not None
+
+        result = await db_session.execute(
+            select(EmailVerification).where(
+                EmailVerification.user_id == user.id,
+                EmailVerification.used == False,
+            )
+        )
+        verification = result.scalar_one_or_none()
+        assert verification is not None
+
+        token = generate_token()
+        verification.token_hash = hash_token(token)
+        await db_session.commit()
+
+        # Verify — must return 200
+        resp = await client.post("/api/v1/auth/verify-email", json={"token": token})
+        assert resp.status_code == 200
+        assert resp.json()["message_key"] == "auth.email_verified"
+
+
+class TestResetPasswordTokenExpiry:
+    """Regression guard for issue #292: timezone comparison TypeError in reset_password()."""
+
+    @pytest.mark.asyncio
+    async def test_expired_reset_token_returns_410(self, client: AsyncClient, db_session: AsyncSession):
+        """An expired password reset token returns 410, not 500."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.models import PasswordReset
+
+        # Register and activate user
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": "expired-reset@example.com",
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp.status_code == 201
+
+        result = await db_session.execute(
+            select(User).where(User.email == "expired-reset@example.com")
+        )
+        user = result.scalar_one_or_none()
+        assert user is not None
+
+        # Create an expired password reset token
+        token = generate_token()
+        reset = PasswordReset(
+            id="reset-expired-01",
+            user_id=user.id,
+            token_hash=hash_token(token),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+            used=False,
+        )
+        db_session.add(reset)
+        await db_session.commit()
+
+        # Try to reset — must return 410, not 500
+        resp = await client.post("/api/v1/auth/reset-password", json={
+            "token": token,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+        })
+        assert resp.status_code == 410
+        data = resp.json()
+        assert data["error"]["message_key"] == "errors.token_expired"
+
+    @pytest.mark.asyncio
+    async def test_valid_reset_token_returns_200(self, client: AsyncClient, db_session: AsyncSession):
+        """A valid (non-expired) reset token returns 200 — comparison works."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.models import PasswordReset
+
+        # Register and activate user
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": "valid-reset@example.com",
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp.status_code == 201
+
+        result = await db_session.execute(
+            select(User).where(User.email == "valid-reset@example.com")
+        )
+        user = result.scalar_one_or_none()
+        assert user is not None
+
+        # Create a valid (future) password reset token
+        token = generate_token()
+        reset = PasswordReset(
+            id="reset-valid-01",
+            user_id=user.id,
+            token_hash=hash_token(token),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            used=False,
+        )
+        db_session.add(reset)
+        await db_session.commit()
+
+        # Reset — must return 200
+        resp = await client.post("/api/v1/auth/reset-password", json={
+            "token": token,
+            "password": "NewStr0ngPassword!",
+            "password_confirm": "NewStr0ngPassword!",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["message_key"] == "auth.password_reset_success"
+
+
+class TestRegisterCommitsBeforeResponse:
+    """Regression guard for issue #292: TOCTOU race — user must be committed before email is sent.
+
+    The fix adds an explicit await db.commit() before send_email() in register_user().
+    This test verifies the user row is durable (committed) after the API returns,
+    even if SMTP is not configured (send_email is a no-op in tests).
+    """
+
+    @pytest.mark.asyncio
+    async def test_user_committed_after_register(self, client: AsyncClient, db_session: AsyncSession):
+        """After /register returns 201, the user must be visible to other DB sessions."""
+        email = "committed@example.com"
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp.status_code == 201
+
+        # The user must be visible in a DIFFERENT DB session (db_session fixture
+        # has its own connection). If the user was only flushed (not committed),
+        # this query would return None.
+        result = await db_session.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        assert user is not None, (
+            "User must be committed after register returns. "
+            "If this fails, the TOCTOU race fix (commit before send_email) may be broken."
+        )
+        assert user.email == email
+        assert user.status == "pending"
+
+        # The verification token must also be committed
+        result = await db_session.execute(
+            select(EmailVerification).where(
+                EmailVerification.user_id == user.id,
+                EmailVerification.used == False,
+            )
+        )
+        verification = result.scalar_one_or_none()
+        assert verification is not None, "Verification token must be committed after register returns."
