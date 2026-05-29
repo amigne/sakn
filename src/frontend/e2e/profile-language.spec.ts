@@ -69,4 +69,19 @@ test.describe("Profile Language — i18n flow", () => {
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: /profil/i })).toBeVisible({ timeout: 5000 });
   });
+
+  test("TopBar indicator updates when language is changed via ProfilePage dropdown", async ({ page }) => {
+    await page.goto("/account/preferences", { waitUntil: "networkidle" });
+
+    // TopBar should initially show EN
+    await expect(page.getByTestId("language-toggle")).toHaveText("EN");
+
+    // Change language via the ProfilePage dropdown (NOT the TopBar toggle)
+    const langSelect = page.getByRole("combobox", { name: /language/i });
+    await langSelect.click();
+    await page.getByRole("option", { name: "Français" }).click();
+
+    // TopBar must reflect the change without clicking its own toggle
+    await expect(page.getByTestId("language-toggle")).toHaveText("FR");
+  });
 });
