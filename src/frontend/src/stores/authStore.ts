@@ -59,11 +59,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: result.user });
       // Load and apply preferences from server after login
       await get().loadPreferences();
-      // Apply theme from loaded preferences
+      // Apply theme and language from loaded preferences
       const prefs = get().preferences;
       if (prefs?.theme) {
         const { useThemeStore } = await import("@/stores/themeStore");
         useThemeStore.getState().setMode(prefs.theme);
+      }
+      if (prefs?.language) {
+        import("@/i18n/i18n").then(({ setLanguage }) => setLanguage(prefs.language!));
       }
     } finally {
       set({ isLoading: false });
@@ -95,12 +98,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   savePreferences: async (updates) => {
-    try {
-      const result = await preferencesService.updatePreferences(updates);
-      set({ preferences: result.preferences });
-    } catch {
-      // silently fail
-    }
+    const result = await preferencesService.updatePreferences(updates);
+    set({ preferences: result.preferences });
   },
 
   loadPreferences: async () => {
