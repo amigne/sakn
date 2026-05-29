@@ -26,6 +26,7 @@ export default function RegisterForm({ className = "" }: RegisterFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // Guard against double-submission while button disabled state propagates
     setError(null);
     setFieldErrors({});
     if (!email || !firstName || !lastName || !password || !passwordConfirm) {

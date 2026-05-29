@@ -1,10 +1,10 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
-from app.models.base import utcnow
+from app.models.base import ensure_aware, utcnow
 from app.models.preferences import GlobalSetting
 from app.redis.session_store import (
     _get_max_sessions,
@@ -19,8 +19,14 @@ from app.security.tokens import generate_token, hash_token
 SESSION_DURATION_HOURS = 24
 
 
-def _now_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+def _now_aware() -> datetime:
+    """Return timezone-aware UTC now.
+
+    Used in SQL WHERE clauses against TIMESTAMPTZ columns on PostgreSQL.
+    For Python-side comparisons, use ensure_aware() on the DB value first
+    to handle both PostgreSQL (aware) and SQLite (naive) backends.
+    """
+    return utcnow()
 
 
 async def _get_session_duration(db: AsyncSession) -> int:
@@ -85,7 +91,7 @@ async def create(
 async def get(db: AsyncSession, session_token: str) -> Session | None:
     """Resolve a session from its raw cookie token (HMAC-SHA256 only)."""
     token_hash = hash_token(session_token)
-    now = _now_naive()
+    now = _now_aware()
     return await _lookup_session(db, token_hash, now)
 
 
@@ -95,13 +101,13 @@ async def _lookup_session(db: AsyncSession, token_hash: str, now: datetime) -> S
     if redis_data:
         result = await db.execute(select(Session).where(Session.token_hash == token_hash))
         session = result.scalar_one_or_none()
-        if session and session.expires_at > now:
+        if session and ensure_aware(session.expires_at) > now:
             return session
         return None
 
     result = await db.execute(select(Session).where(Session.token_hash == token_hash))
     session = result.scalar_one_or_none()
-    if session and session.expires_at > now:
+    if session and ensure_aware(session.expires_at) > now:
         return session
     return None
 
@@ -126,7 +132,7 @@ async def revoke(db: AsyncSession, session_id: str) -> str | None:
 
 async def list_for_user(db: AsyncSession, user_id: str, current_token_hash: str | None = None) -> list[dict]:
     """List all active sessions for a user."""
-    now = _now_naive()
+    now = _now_aware()
     result = await db.execute(
         select(Session).where(
             Session.user_id == user_id,
