@@ -90,7 +90,9 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName] = useState(initialLast);
   const [language, setLanguage] = useState(getLanguage());
-  const [locale, setLocale] = useState(preferences?.locale || LANGUAGE_TO_DEFAULT_LOCALE[getLanguage()] || user?.locale || "en-US");
+  const [locale, setLocale] = useState(
+    preferences?.locale || LANGUAGE_TO_DEFAULT_LOCALE[getLanguage()] || user?.locale || "en-US",
+  );
   const allLocales = useMemo(() => buildLocaleLabels(language), [language]);
   const [saved, setSaved] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);

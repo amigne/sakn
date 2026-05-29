@@ -119,9 +119,15 @@ describe("ProfilePage — issue #294 (missing preference keys fallback)", () => 
     await i18n.changeLanguage("fr");
     mockGetLanguage.mockReturnValue("fr");
     Object.assign(mockStoreUser, {
-      id: "u1", email: "x@y.z", first_name: "Test", last_name: "User",
-      role: "authenticated", status: "active", email_verified: true,
-      locale: "fr-CH", created_at: "2024-01-01T00:00:00Z",
+      id: "u1",
+      email: "x@y.z",
+      first_name: "Test",
+      last_name: "User",
+      role: "authenticated",
+      status: "active",
+      email_verified: true,
+      locale: "fr-CH",
+      created_at: "2024-01-01T00:00:00Z",
     });
     Object.assign(mockStorePreferences, { theme: "light", display_mode: "table" });
     // simulate missing language and locale keys
