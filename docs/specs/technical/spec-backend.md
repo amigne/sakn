@@ -77,7 +77,7 @@ src/
 
       services/
         __init__.py
-        auth_service.py, session_service.py, tool_service.py
+        auth_service.py, session_service.py
         rate_limit_service.py, log_service.py, admin_service.py
         admin_modules.py, admin_settings.py, email_service.py
         preference_service.py
@@ -182,7 +182,7 @@ Base path: `/api/v1`
 | POST | `/auth/login` | Login, set session cookie | None |
 | POST | `/auth/logout` | Destroy session | Session |
 | POST | `/auth/verify-email` | Verify email with token | None |
-| POST | `/auth/resend-verification` | Resend verification email | Session |
+| POST | `/auth/resend-verification` | Resend verification email | Session (authenticated) |
 | POST | `/auth/request-password-reset` | Request password reset | None |
 | POST | `/auth/reset-password` | Reset password with token | None |
 

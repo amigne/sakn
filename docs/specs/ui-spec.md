@@ -48,7 +48,7 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 
 - **Sidebar**: Tool list (Ping | Traceroute | DNS Lookup | TLS/SSL). Admins see "Administration" pinned at bottom.
 - **Disabled tools**: removed from sidebar entirely (not grayed out).
-- **Admin sub-navigation**: horizontal tab bar within content area (Users | Access | Rate Limits | Modules | Settings | Logs).
+- **Admin sub-navigation**: horizontal tab bar within content area (Users | Rate Limits | Modules | Settings | Logs). Access rights are managed within the Modules page.
 
 ### 2.2 Routing
 
@@ -68,7 +68,7 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 | `/account/delete` | Account deletion | Authenticated |
 | `/admin/users` | User list | Admin |
 | `/admin/users/{id}` | User detail | Admin |
-| `/admin/access` | Access rights | Admin |
+| `/admin/modules` | Module activation & access rights | Admin |
 | `/admin/rate-limits` | Rate limits | Admin |
 | `/admin/modules` | Module activation | Admin |
 | `/admin/settings` | Global settings | Admin |
@@ -303,13 +303,15 @@ Same top bar + sidebar as main app. Admin sub-navigation via horizontal tab bar 
 
 **User Management**: searchable, filterable (status, role), sortable user table. Paginated (50/page). User detail: info card + action buttons (block/unblock, lock/unlock, delete) + internal notes (admin-only).
 
-**Access Rights**: matrix — rows = tools, columns = roles. Each cell = toggle switch. Changes save immediately.
+**Access Rights**: matrix — rows = tools, columns = roles. Each cell = toggle switch. Changes save immediately. Integrated into the Modules page.
 
 **Rate Limiting**: two tables.
   - *Global limits*: rows = roles, columns = Soft limit (/s) + Hard limit (/h). Soft limit = requests per second (short window, 1s). Hard limit = requests per hour (long window, 1h). Exceeding either blocks the user. Cells editable (click-to-edit, blur-to-save).
   - *Per-tool limits*: optional overrides for specific tools. Rows = role + tool pairs, with an add-row form at the top of the table. Role + tool pair must be unique. Columns = Role, Tool, Soft limit (/s), Hard limit (/h), Delete button. Validation: per-tool ≤ global for the same role. "Reset to defaults" button restores both tables.
 
 **Module Activation**: table — rows = tools, columns = Enabled toggle (centered), Settings gear icon (centered). DNS Lookup settings: editable table of DNS server presets (IP + Description), with add/edit/delete/reorder. IP addresses validated as IPv4 before saving. Adding a preset keeps the modal open to show the updated list. Defaults: Google (8.8.8.8), Cloudflare (1.1.1.1), Quad9 (9.9.9.9). Auto-save on each action.
+
+**Access Rights** (within Modules page): matrix — rows = tools, columns = roles. Each cell = toggle switch. Changes save immediately.
 
 **Log Viewer**: filterable (date range, user, tool, event type), paginated table. Click row to expand full details. Auto-refresh with pause toggle.
 
@@ -408,7 +410,7 @@ Admin screens follow this pattern: admin tabs (below top bar) + content area.
 +--------------+----------------------------------------------------+
 | [Logo/Brand] |                        [EN v] [    ] [User v]     |
 +--------------+----------------------------------------------------+
-| [Ping]       | [Users] - [Access] - [Rate Lim] - [Modules] - [Settings] - [Logs] |
+| [Ping]       | [Users] - [Rate Lim] - [Modules] - [Settings] - [Logs] |
 | [Traceroute] | User Management                                    |
 | [DNS]        |                                                    |
 | [TLS]        | Search: [________]  Status: [All v]  Role: [All v] |
