@@ -843,13 +843,18 @@ class TestRegisterDuplicateEmailRace:
         assert len(verifications) == 1, "Rollback must prevent a duplicate verification"
 
         # Security audit trail must have the 'registration_duplicate' event
+        # Filter by the hashed email to tie the assertion to this specific
+        # scenario rather than relying on a global count (session-scoped
+        # state may contain leftovers from other tests).
+        email_hash = _hash_email_for_log(email)
         result = await db_session.execute(
             select(SecurityEventLog).where(
-                SecurityEventLog.event_type == "registration_duplicate"
+                SecurityEventLog.event_type == "registration_duplicate",
+                SecurityEventLog.details.contains(email_hash),
             )
         )
         events = result.scalars().all()
-        assert len(events) >= 1, (
+        assert len(events) == 1, (
             "registration_duplicate must be logged on IntegrityError branch "
             "(enum-safety + audit trail)"
         )
