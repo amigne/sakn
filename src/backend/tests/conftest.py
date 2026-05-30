@@ -31,6 +31,15 @@ def event_loop() -> Any:
 @pytest_asyncio.fixture(scope="session")
 async def _engine():
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+
+    # Enable FK enforcement in SQLite so CASCADE/SET NULL behave like PostgreSQL
+    from sqlalchemy import event
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine

@@ -56,6 +56,11 @@ const LOCALE_CODES = [
   "zh-TW",
 ];
 
+const LANGUAGE_TO_DEFAULT_LOCALE: Record<string, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+};
+
 function buildLocaleLabels(displayLang: string) {
   const langNames = new Intl.DisplayNames([displayLang], { type: "language" });
   const regionNames = new Intl.DisplayNames([displayLang], { type: "region" });
@@ -85,7 +90,9 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName] = useState(initialLast);
   const [language, setLanguage] = useState(getLanguage());
-  const [locale, setLocale] = useState(preferences?.locale || user?.locale || "en-US");
+  const [locale, setLocale] = useState(
+    preferences?.locale || LANGUAGE_TO_DEFAULT_LOCALE[getLanguage()] || user?.locale || "en-US",
+  );
   const allLocales = useMemo(() => buildLocaleLabels(language), [language]);
   const [saved, setSaved] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -111,8 +118,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (preferences) {
-      setLanguage(preferences.language || "en");
-      setLocale(preferences.locale || user?.locale || "en-US");
+      setLanguage(preferences.language || getLanguage());
+      setLocale(preferences.locale || LANGUAGE_TO_DEFAULT_LOCALE[getLanguage()] || user?.locale || "en-US");
     }
   }, [preferences, user?.locale]);
 

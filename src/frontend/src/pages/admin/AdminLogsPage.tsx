@@ -143,12 +143,12 @@ export default function AdminLogsPage() {
     const n = parseInt(val, 10);
     setLimit(n);
     setOffset(0);
-    savePreferences({ [PREF_KEY_PAGE_SIZE]: val } as never);
+    savePreferences({ [PREF_KEY_PAGE_SIZE]: val } as never).catch(() => {});
   };
 
   const handleAutoRefreshChange = (v: boolean) => {
     setAutoRefresh(v);
-    savePreferences({ [PREF_KEY_AUTO_REFRESH]: v ? "true" : "false" } as never);
+    savePreferences({ [PREF_KEY_AUTO_REFRESH]: v ? "true" : "false" } as never).catch(() => {});
   };
 
   const tabLabels: Record<LogTab, string> = {

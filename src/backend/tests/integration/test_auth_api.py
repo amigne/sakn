@@ -99,13 +99,20 @@ class TestAuthFlow:
         assert resp.status_code == 200
         assert "preferences" in resp.json()
 
-        # 6. Update preferences
-        resp = await client.put("/api/v1/preferences", json={"theme": "dark"}, headers={
+        # 6. Update preferences (theme, language, locale)
+        resp = await client.put("/api/v1/preferences", json={
+            "theme": "dark",
+            "language": "fr",
+            "locale": "fr-CH",
+        }, headers={
             "Cookie": f"sakn_session={session_c}; sakn_csrf={csrf_c}",
             "X-CSRF-Token": csrf_c,
         })
         assert resp.status_code == 200
-        assert resp.json()["preferences"].get("theme") == "dark"
+        prefs_after_save = resp.json()["preferences"]
+        assert prefs_after_save.get("theme") == "dark"
+        assert prefs_after_save.get("language") == "fr"
+        assert prefs_after_save.get("locale") == "fr-CH"
 
         # 7. List sessions
         resp = await client.get("/api/v1/sessions", headers={
@@ -134,6 +141,19 @@ class TestAuthFlow:
         })
         assert resp.status_code == 200
         assert "user" in resp.json()
+
+        login2_cookies = _extract_cookies(resp)
+        session2_c = login2_cookies["sakn_session"]
+
+        # 11. Preferences must survive logout/login (regression guard for #294)
+        resp = await client.get("/api/v1/preferences", headers={
+            "Cookie": f"sakn_session={session2_c}",
+        })
+        assert resp.status_code == 200
+        prefs_after_relogin = resp.json()["preferences"]
+        assert prefs_after_relogin.get("theme") == "dark", "theme should survive logout"
+        assert prefs_after_relogin.get("language") == "fr", "language should survive logout"
+        assert prefs_after_relogin.get("locale") == "fr-CH", "locale should survive logout"
 
 
 class TestBruteForceProtection:
