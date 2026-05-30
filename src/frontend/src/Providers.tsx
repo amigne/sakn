@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
+import { setLanguage as setI18nLanguage } from "@/i18n/i18n";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
-import "@/i18n/i18n";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +47,7 @@ function AuthInitializer({ children }: { children: ReactNode }) {
           useThemeStore.getState().setMode(prefs.theme);
         }
         if (prefs?.language) {
-          import("@/i18n/i18n").then(({ setLanguage }) => setLanguage(prefs.language!));
+          setI18nLanguage(prefs.language);
         }
       }
     };

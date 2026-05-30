@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import PageLayout from "@/components/layout/PageLayout";
 import { RadioButton, Select, TextInput } from "@/components/ui";
-import { getLanguage } from "@/i18n/i18n";
+import { getLanguage, setLanguage as setI18nLanguage } from "@/i18n/i18n";
 import { ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
@@ -174,7 +174,7 @@ export default function ProfilePage() {
   const saveLanguage = useCallback(
     async (lang: string) => {
       setLanguage(lang);
-      import("@/i18n/i18n").then(({ setLanguage: setI18nLanguage }) => setI18nLanguage(lang));
+      setI18nLanguage(lang);
       try {
         await savePreferences({ language: lang });
         flash(t("account.language_saved"));
