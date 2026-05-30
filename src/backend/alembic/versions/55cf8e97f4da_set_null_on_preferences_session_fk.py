@@ -8,16 +8,14 @@ Change user_preferences.session_id FK from ON DELETE CASCADE to ON DELETE SET NU
 so that user preferences survive logout (session deletion).
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
-
 
 revision: str = "55cf8e97f4da"
-down_revision: Union[str, None] = "8a2a49d76d6a"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "8a2a49d76d6a"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

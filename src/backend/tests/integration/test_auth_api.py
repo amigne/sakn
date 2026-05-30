@@ -144,7 +144,6 @@ class TestAuthFlow:
 
         login2_cookies = _extract_cookies(resp)
         session2_c = login2_cookies["sakn_session"]
-        csrf2_c = login2_cookies["sakn_csrf"]
 
         # 11. Preferences must survive logout/login (regression guard for #294)
         resp = await client.get("/api/v1/preferences", headers={
