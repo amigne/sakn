@@ -29,10 +29,11 @@ vi.mock("@/stores/themeStore", () => ({
   },
 }));
 
-// NOTE: @/i18n/i18n is NOT mocked. login() uses a dynamic import("@/i18n/i18n")
-// which vitest does not intercept in non-component contexts. The i18n
-// restoration after login is covered by:
-// - ProfilePage.test.tsx (dynamic import works in component render)
+// NOTE: @/i18n/i18n is intentionally NOT mocked. login() imports setLanguage
+// statically and calls it after loading preferences; the real implementation
+// is a harmless no-throw side effect here, so we let it run. The i18n
+// restoration after login is covered explicitly by:
+// - ProfilePage.test.tsx (setLanguage applied on language change)
 // - Providers.test.tsx (AuthInitializer applies language)
 // - E2E profile-language.spec.ts (full login → profile flow)
 
