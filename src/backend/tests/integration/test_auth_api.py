@@ -791,3 +791,65 @@ class TestRegisterCommitsBeforeResponse:
         )
         verification = result.scalar_one_or_none()
         assert verification is not None, "Verification token must be committed after register returns."
+
+
+class TestRegisterDuplicateEmailRace:
+    """Regression guard for PR #293: the IntegrityError path must be enum-safe and audited.
+
+    Simulates the multi-worker race by issuing two sequential /register requests
+    with the same email. The second hits the IntegrityError branch (the UNIQUE
+    constraint is hit at flush time), rolls back, logs a 'registration_duplicate'
+    event, and returns the same enum-safe success response as the first.
+    """
+
+    @pytest.mark.asyncio
+    async def test_duplicate_email_returns_enum_safe_201_and_audits(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        email = "duplicate-race@example.com"
+
+        # First registration — succeeds
+        resp1 = await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        assert resp1.status_code == 201
+        assert resp1.json()["message_key"] == "auth.registration_success"
+
+        # Second registration with same email — must hit IntegrityError branch
+        resp2 = await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            **REGISTER_BODY,
+        })
+        # Enum-safe: same response as the legitimate success
+        assert resp2.status_code == 201
+        assert resp2.json()["message_key"] == "auth.registration_success"
+
+        # Only ONE user must exist (the rollback worked)
+        result = await db_session.execute(select(User).where(User.email == email))
+        users = result.scalars().all()
+        assert len(users) == 1, "Rollback must prevent a duplicate row"
+
+        # Only ONE verification token must exist (the rollback dropped the
+        # second flush's pending EmailVerification too)
+        result = await db_session.execute(
+            select(EmailVerification).where(EmailVerification.user_id == users[0].id)
+        )
+        verifications = result.scalars().all()
+        assert len(verifications) == 1, "Rollback must prevent a duplicate verification"
+
+        # Security audit trail must have the 'registration_duplicate' event
+        result = await db_session.execute(
+            select(SecurityEventLog).where(
+                SecurityEventLog.event_type == "registration_duplicate"
+            )
+        )
+        events = result.scalars().all()
+        assert len(events) >= 1, (
+            "registration_duplicate must be logged on IntegrityError branch "
+            "(enum-safety + audit trail)"
+        )
