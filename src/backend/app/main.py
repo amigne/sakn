@@ -264,6 +264,25 @@ async def lifespan(app: FastAPI) -> Any:
             except Exception:
                 logger.exception("Anonymous session cleanup failed")
 
+        @scheduler.scheduled_job("cron", hour=3, minute=40)
+        async def cleanup_orphan_preferences():
+            """Delete user_preferences rows orphaned by ON DELETE SET NULL on anonymous sessions.
+
+            When an anonymous session is deleted (SET NULL on session_id FK),
+            preferences with user_id=NULL become (NULL, NULL) — unreachable
+            by get_preferences/set_preferences. This job removes them.
+            """
+            try:
+                from app.services.preference_cleanup_service import cleanup_orphan_preferences as do_cleanup
+
+                async with async_session_factory() as db:
+                    count = await do_cleanup(db)
+                    await db.commit()
+                    if count:
+                        logger.info("Orphan preferences cleanup", extra={"deleted": count})
+            except Exception:
+                logger.exception("Orphan preferences cleanup failed")
+
         scheduler.start()
     except Exception:
         logger.exception("Scheduler initialization failed")
