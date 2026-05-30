@@ -20,4 +20,7 @@ async def cleanup_orphan_preferences(db: AsyncSession) -> int:
             UserPreference.session_id.is_(None),
         )
     )
+    # NOTE: result.rowcount is reliable with asyncpg and aiosqlite (the two
+    # supported backends). If the DB driver changes, verify rowcount semantics
+    # for Core-level DELETE statements on the new dialect.
     return result.rowcount
