@@ -1,8 +1,8 @@
 # Backend Specification — SAKN MVP
 
-> **Version:** 3.0 — Extracted from technical-spec v2.0
+> **Version:** 4.0 — Added MAC OUI, WHOIS, Secret Generator marker
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-21
 
 Server-side architecture: API, data model, security, rate limiting, logging, Docker, module system. Load with `spec-common.md` and `spec-api-contract.md`. For tool-specific logic, also load `spec-tools-live.md` or `spec-tools-instant.md`.
 
@@ -51,6 +51,7 @@ src/
         rate_limit_config.py, tool_execution_log.py, security_event_log.py
         audit_log.py, user_preference.py, email_verification.py
         password_reset.py, dns_server_preset.py, global_setting.py
+        mac_oui.py, mac_oui_history.py
 
       redis/
         __init__.py
@@ -80,7 +81,7 @@ src/
         auth_service.py, session_service.py, tool_service.py
         rate_limit_service.py, log_service.py, admin_service.py
         admin_modules.py, admin_settings.py, email_service.py
-        preference_service.py
+        preference_service.py, oui_sync_service.py
 
       security/
         __init__.py
@@ -93,7 +94,7 @@ src/
         __init__.py
         registry.py             # ToolRegistry (explicit registration)
         base.py                 # BaseTool, ToolDefinition, ExecutionContext, ToolResult
-        ping.py, traceroute.py, dns_lookup.py, ssl_viewer.py
+        ping.py, traceroute.py, dns_lookup.py, ssl_viewer.py, mac_oui_lookup.py, whois_lookup.py
         network/
           __init__.py
           executor.py           # Subprocess runner with sandboxing
@@ -262,6 +263,8 @@ URL prefix (`/api/v1/`). Deprecation: old version maintained 6+ months with `Dep
 - **RateLimitConfig** — keyed by `(role, tool_id)`; tool_id=NULL = global. Roles: `visitor-session`, `visitor-ip`, `authenticated`, `administrator`. See Section 6.
 - **ToolExecutionLog**, **SecurityEventLog**, **AuditLog** — immutable logs, default 90-day retention
 - **GlobalSetting** — key-value store (e.g., `log_retention_days`)
+- **MacOui** — MAC OUI prefix to vendor mapping, populated daily from IEEE files
+- **MacOuiHistory** — tracks organization name/address changes per OUI prefix over time
 
 **Account deletion**: Preferences hard-deleted. Logs anonymized (user_id/session_id → NULL; source_ip retained).
 
@@ -377,6 +380,42 @@ URL prefix (`/api/v1/`). Deprecation: old version maintained 6+ months with `Dep
 | old_value | JSONB NULLABLE |
 | new_value | JSONB NOT NULL |
 | created_at | TIMESTAMPTZ NOT NULL, indexed |
+
+#### MacOui
+
+| Field | Type | Constraints |
+|---|---|---|
+| id | UUIDv7 | PK |
+| oui | VARCHAR(12) | UNIQUE, NOT NULL — prefix in bare hex (uppercase, e.g., `001122`) |
+| oui_type | VARCHAR(4) | NOT NULL — `MA-L`, `MA-M`, or `MA-S` |
+| organization | VARCHAR(255) | NOT NULL — vendor/manufacturer name |
+| address | TEXT | NOT NULL — organization address as registered with IEEE |
+| first_seen | DATE | NOT NULL — date first observed in IEEE files by SAKN |
+| last_seen | DATE | NOT NULL — date last confirmed in IEEE files |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() |
+
+**Index**: `(oui)` unique for lookup. `(oui_type)` for filtering.
+
+**SQLite compat**: `sa.String(12)` for oui, `sa.String(4)` for oui_type, `sa.Text()` for address.
+
+#### MacOuiHistory
+
+| Field | Type | Constraints |
+|---|---|---|
+| id | UUIDv7 | PK |
+| oui_id | UUID | FK -> MacOui, NOT NULL |
+| oui | VARCHAR(12) | NOT NULL — denormalized for query convenience |
+| previous_organization | VARCHAR(255) | NOT NULL |
+| new_organization | VARCHAR(255) | NOT NULL |
+| previous_address | TEXT | NULLABLE |
+| new_address | TEXT | NULLABLE |
+| change_type | VARCHAR(20) | NOT NULL — `name_change`, `address_change`, `revoked`, `reassigned` |
+| detected_at | TIMESTAMPTZ | NOT NULL — date the daily sync detected the change |
+
+**Index**: `(oui_id)` for lookup by OUI. `(detected_at)` for time-range queries.
+
+**SQLite compat**: `sa.Text()` for address fields.
 
 ### 4.3 Migration Strategy
 
@@ -747,6 +786,8 @@ app/tools/
   traceroute.py     # TracerouteTool(BaseTool)
   dns_lookup.py     # DnsLookupTool(BaseTool)
   ssl_viewer.py     # SslViewerTool(BaseTool)
+  mac_oui_lookup.py # MacOuiLookupTool(BaseTool)
+  whois_lookup.py   # WhoisLookupTool(BaseTool)
   network/
     __init__.py
     executor.py     # SubprocessExecutor: sandboxed subprocess runner
@@ -768,3 +809,50 @@ app/tools/
 5. Write tests.
 
 No changes needed to core framework, API routing, auth, or rate limiting.
+
+### 9.6 OUI Database Sync Task
+
+A daily APScheduler job downloads and syncs the 3 IEEE OUI files:
+
+| Source | URL | OUI Type |
+|---|---|---|
+| MA-L | `http://standards-oui.ieee.org/oui/oui.txt` | 24-bit (6 hex chars) |
+| MA-M | `http://standards-oui.ieee.org/oui28/mam.txt` | 28-bit (7 hex chars) |
+| MA-S | `http://standards-oui.ieee.org/oui36/oui36.txt` | 36-bit (9 hex chars) |
+
+**Schedule**: daily at 03:00 UTC (configurable via `OUI_SYNC_HOUR` env var).
+
+**File format** (`oui.txt`):
+```
+00-11-22   (hex)		Cisco Systems, Inc.
+00-11-23   (hex)		Cisco Systems, Inc.
+...
+```
+
+Parsing rules:
+- Lines containing `(hex)` are parsed.
+- Format: `OUI (hex) \t Organization \t Address` (tab-separated).
+- OUI in the file uses hyphens; stored in bare hex (e.g., `001122`).
+- MA-M and MA-S files follow the same format with longer prefixes.
+
+**Sync logic** (`oui_sync_service.py`):
+1. Download each file via HTTP GET (timeout 120s).
+2. Parse entries. For each parsed entry:
+   - OUI exists with same org + address → update `last_seen = today`, `oui_type` = from file.
+   - OUI exists with different org or address → insert `MacOuiHistory` row with `change_type`, then update `organization`, `address`, `last_seen`.
+   - OUI not in DB → insert new `MacOui` row with `first_seen = today`, `last_seen = today`.
+3. OUIs not seen in any of the 3 files → no deletion. Their `last_seen` stays as the last date they were observed. This preserves forensic value.
+4. Log summary: `{added} new, {changed} changed, {confirmed} confirmed, {files_failed} failed`.
+
+**Error handling**:
+- File download failure → log warning, skip that file, continue with others.
+- Parse failure → log error, skip file.
+- Three consecutive daily failures for the same file → log CRITICAL (admin alert trigger).
+
+**Admin visibility**: sync status and last run time visible in the admin Modules section under the MAC OUI tool.
+
+### 9.7 Secret Generator — Frontend-Only Tool
+
+The Secret Generator is a **frontend-only tool** — no backend execution endpoint exists. It appears in the tool list (`GET /tools`) with a special marker `backend: false` so the frontend knows not to make API calls for it. It still has a `ToolModule` DB row for RBAC (enable/disable, role permissions) but has no `tool_name` execution endpoint.
+
+The frontend generates all secrets (passwords, URL-safe tokens, hex) using `crypto.getRandomValues()` (Web Crypto API). No secret is ever sent to the backend.

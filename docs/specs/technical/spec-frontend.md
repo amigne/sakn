@@ -1,8 +1,8 @@
 # Frontend Specification — SAKN MVP
 
-> **Version:** 3.0 — Extracted from technical-spec v2.0
+> **Version:** 4.0 — Added MAC OUI, WHOIS, Secret Generator pages
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-21
 
 Client-side architecture. Load with `spec-common.md` and `spec-api-contract.md`. For tool pages, also load the relevant tool spec (`spec-tools-live.md` or `spec-tools-instant.md`).
 
@@ -31,6 +31,9 @@ src/
           TraceroutePage.tsx
           DnsLookupPage.tsx
           SslViewerPage.tsx
+          MacOuiLookupPage.tsx
+          WhoisLookupPage.tsx
+          SecretGeneratorPage.tsx
         auth/
           LoginPage.tsx
           RegisterPage.tsx
@@ -129,13 +132,55 @@ For continuous tools (Ping, Traceroute). See `spec-tools-live.md` for the server
 
 ## 4. HTTP Tool Execution
 
-For instant tools (DNS Lookup, TLS/SSL Viewer). See `spec-tools-instant.md` for server-side details.
+For instant tools (DNS Lookup, TLS/SSL Viewer, MAC OUI Lookup, WHOIS Lookup). See `spec-tools-instant.md` for server-side details.
 
 1. Disable Execute button.
 2. POST to `/api/v1/tools/{tool_name}/execute` with `{"params": {...}}`.
 3. On 200: render result data.
 4. On error (4xx/5xx): render error message with i18n translation of `message_key`.
 5. Re-enable Execute button.
+
+### 4.1 MAC OUI Lookup — Textarea Input
+
+The MAC OUI Lookup page uses a `<textarea>` instead of a single-line `<input>`. The user can paste arbitrary text (ARP tables, CAM tables, etc.). The frontend sends the raw text as a single `text` parameter. The backend handles extraction and deduplication.
+
+### 4.2 Secret Generator — Frontend-Only Tool
+
+No API call is made. The tool is identified by `backend: false` in the `/tools` response. All logic runs client-side.
+
+The tool has 3 generation modes, selected via a tab bar or radio group:
+
+#### Mode 1: Password
+
+1. User configures length (slider, 8–128) and character sets (4 checkboxes: uppercase, lowercase, digits, symbols). At least one charset required.
+2. On "Generate" click: `crypto.getRandomValues()` fills a `Uint8Array`, mapped to selected character sets via rejection sampling (modulo bias-free uniform distribution).
+3. Entropy: `bits = length * log2(charset_size)`.
+
+#### Mode 2: Token (URL-safe)
+
+1. User configures length in characters (slider or numeric input, 16–256, default 43).
+2. Entropy per character: 6 bits (base64url charset = 64 symbols: A-Z, a-z, 0-9, `-`, `_`).
+3. Display shows: `"N caractères (X bits)"` where X = N * 6.
+4. On "Generate" click: `crypto.getRandomValues()` fills a `Uint8Array` of `ceil(length * 6 / 8)` bytes, encoded to base64url (RFC 4648 §5: `-` instead of `+`, `_` instead of `/`, no `=` padding). Output length may be ±1 char from requested; actual length and bits are shown.
+5. Equivalent to Python `secrets.token_urlsafe()` (for 43 chars: `secrets.token_urlsafe(32)`).
+
+#### Mode 3: Hex
+
+1. User configures length in characters (slider or numeric input, 16–512, default 64).
+2. Entropy per character: 4 bits (hex charset = 16 symbols: 0-9, a-f).
+3. Display shows: `"N caractères (X bits)"` where X = N * 4.
+4. On "Generate" click: `crypto.getRandomValues()` fills a `Uint8Array` of `ceil(length / 2)` bytes, encoded as lowercase hex. Output length is always even (2 hex chars per byte); odd length requests are rounded up to the next even number.
+5. Equivalent to Python `secrets.token_hex()` (for 64 chars: `secrets.token_hex(32)`) or `openssl rand -hex 32`.
+
+#### Shared behaviour (all modes)
+
+- Secret displayed in a read-only `<input type="text">` with monospace font.
+- "Copy" button writes to `navigator.clipboard.writeText()`. A 30s timeout auto-clears the clipboard by writing an empty string.
+- "Regenerate" button re-runs generation with the same mode and parameters.
+- A visual strength bar (red/yellow/green) maps to entropy thresholds (<40, 40–80, >80 bits).
+- Secrets are never stored in state management, never persisted, never sent to backend.
+- If `navigator.clipboard` is unavailable: "Copy" button hidden, fallback text "Select and copy manually".
+- The tool is still subject to RBAC (enable/disable, role permissions) via its `ToolModule` DB row.
 
 ---
 

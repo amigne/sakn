@@ -1,8 +1,8 @@
 # UI/UX Specification — SAKN
 
-> **Version:** 2.0 — Condensed
+> **Version:** 3.0 — Added MAC OUI, WHOIS, Secret Generator screens
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-21
 
 Defines visual design, layout, navigation, interaction patterns, responsive behavior, and accessibility. For the API contract between frontend and backend, see `docs/specs/technical/spec-api-contract.md`. For tool execution protocols, see `spec-tools-live.md` and `spec-tools-instant.md`.
 
@@ -46,7 +46,7 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 +-------------------------------------------------------------------+
 ```
 
-- **Sidebar**: Tool list (Ping | Traceroute | DNS Lookup | TLS/SSL). Admins see "Administration" pinned at bottom.
+- **Sidebar**: Tool list (Ping | Traceroute | DNS Lookup | TLS/SSL | MAC OUI | WHOIS | Secret Generator). Admins see "Administration" pinned at bottom.
 - **Disabled tools**: removed from sidebar entirely (not grayed out).
 - **Admin sub-navigation**: horizontal tab bar within content area (Users | Access | Rate Limits | Modules | Settings | Logs).
 
@@ -58,6 +58,9 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 | `/traceroute` | Traceroute | All (if enabled) |
 | `/dns` | DNS Lookup | All (if enabled) |
 | `/ssl` | TLS/SSL Certificate | All (if enabled) |
+| `/mac-oui` | MAC OUI Lookup | All (if enabled) |
+| `/whois` | WHOIS Lookup | All (if enabled) |
+| `/secret-generator` | Secret Generator | All (if enabled) |
 | `/login` | Login | Visitors only |
 | `/register` | Registration | Visitors only |
 | `/verify-email?token=...` | Email verification | Visitors |
@@ -92,6 +95,9 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 | SCR-02 | Traceroute Tool | Execute traceroute, view results |
 | SCR-03 | DNS Lookup Tool | Execute DNS lookup, view results |
 | SCR-04 | TLS/SSL Certificate Viewer | Fetch and display certificate chain |
+| SCR-26 | MAC OUI Lookup | Paste text, extract MAC/OUI, view vendor info and history |
+| SCR-27 | WHOIS Lookup | Query domain/IP ownership via RDAP or WHOIS |
+| SCR-28 | Secret Generator | Generate passwords, URL-safe tokens, and hex secrets client-side |
 | SCR-05 | Tool Not Available | Tool disabled or permission denied |
 | SCR-06 | 404 Not Found | Unknown route |
 | SCR-07 | 403 Forbidden | Admin area for non-admins |

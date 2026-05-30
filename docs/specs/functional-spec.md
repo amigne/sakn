@@ -1,8 +1,8 @@
 # Functional Specification — SAKN (Swiss Army Knife for Network Engineers)
 
-> **Version:** 2.0 — Condensed
+> **Version:** 3.0 — New modules (MAC OUI, WHOIS, Secret Generator)
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-21
 
 Defines **what** the application does: user roles, tool capabilities, business rules, and constraints. For **how** it is built, see `docs/specs/technical/`. For **how** it looks, see `docs/specs/ui-spec.md`.
 
@@ -12,7 +12,7 @@ Defines **what** the application does: user roles, tool capabilities, business r
 
 ### 1.1 Product Vision
 
-SAKN is a web application providing a unified interface for network diagnostic tools: Ping, Traceroute, DNS Lookup, and TLS/SSL Certificate Viewer. It replaces the need to install and switch between separate CLI tools.
+SAKN is a web application providing a unified interface for network diagnostic and information tools: Ping, Traceroute, DNS Lookup, TLS/SSL Certificate Viewer, MAC OUI Lookup, WHOIS, and a Secret Generator. It replaces the need to install and switch between separate CLI tools and utilities.
 
 ### 1.2 Target Users
 
@@ -186,6 +186,149 @@ Connect to an HTTPS server and display the TLS certificate chain with detailed p
 - TLS < 1.2 or SSL: connection succeeds, warning displayed.
 - Wildcard certificate: SANs include wildcard entries (e.g., `*.example.com`). Display as-is.
 
+### 3.5 MAC OUI Lookup
+
+#### 3.5.1 Description
+
+Extract MAC addresses and OUI prefixes from arbitrary text, then look up the vendor/manufacturer in a local database populated daily from the official IEEE OUI files.
+
+#### 3.5.2 Input Parameters
+
+| Parameter | Type | Default | Constraints |
+|---|---|---|---|
+| Text | string (textarea) | (required) | Max 50 000 characters. Accepts any text. |
+
+The user can paste raw output from network equipment: ARP tables, CAM tables, `show mac address-table`, etc. SAKN extracts all valid MAC addresses and OUI prefixes automatically.
+
+#### 3.5.3 Supported MAC/OUI Formats
+
+| Format | Example | Notes |
+|---|---|---|
+| Colon-separated pairs | `00:11:22:33:44:55` | Most common |
+| Hyphen-separated pairs | `00-11-22-33-44-55` | Windows-style |
+| Dot-separated quads | `0011.2233.4455` | Cisco-style |
+| No separator | `001122334455` | Bare hex |
+| OUI only | `00:11:22` or `001122` | First 3 bytes |
+
+All separators can be mixed in the input text. The extraction is case-insensitive.
+
+#### 3.5.4 Behaviour Rules
+
+- Valid MAC/OUI patterns are extracted from the input text via regex. Non-matching text is ignored.
+- Extracted prefixes are deduplicated before database lookup.
+- Each OUI is looked up against the 3 IEEE databases: MA-L (24-bit), MA-M (28-bit), MA-S (36-bit).
+- If a MAC address matches multiple OUI sizes (e.g., a 28-bit prefix that is also covered by a 24-bit prefix), the most specific match (longest prefix) is returned.
+- The OUI database is populated daily from the 3 official IEEE files:
+  - `http://standards-oui.ieee.org/oui/oui.txt` (MA-L, 24-bit)
+  - `http://standards-oui.ieee.org/oui28/mam.txt` (MA-M, 28-bit)
+  - `http://standards-oui.ieee.org/oui36/oui36.txt` (MA-S, 36-bit)
+- Organization changes are tracked historically: when an OUI changes organization name or address between two daily syncs, the change is recorded with a timestamp.
+- A "Copy to clipboard" button MUST be available for displayed results.
+
+#### 3.5.5 Edge Cases
+
+- No valid MAC/OUI found in input → empty result with message.
+- Input exceeds 50 000 characters → truncation warning.
+- OUI not yet in database (newly assigned) → "Unknown vendor" with the extracted prefix.
+- OUI has history of changes → expandable section showing previous organization names and dates.
+- IEEE files temporarily unavailable during daily sync → keep previous data, log warning, retry next day.
+- Duplicate OUIs in input → deduplicated, one result row per OUI.
+
+### 3.6 WHOIS Lookup
+
+#### 3.6.1 Description
+
+Query domain or IP ownership information using RDAP (Registration Data Access Protocol) with automatic fallback to classic WHOIS (port 43) when RDAP is unavailable.
+
+#### 3.6.2 Input Parameters
+
+| Parameter | Type | Default | Constraints |
+|---|---|---|---|
+| Target | string | (required) | Valid domain name or IP address. Max 255 characters. |
+| WHOIS Server | string | Automatic | Optional. Custom WHOIS server hostname or IP. Overrides automatic server selection. |
+
+#### 3.6.3 Behaviour Rules
+
+- RDAP is attempted first (HTTP `GET` to the appropriate RDAP bootstrap server).
+- If the TLD or IP registry does not support RDAP (HTTP 404, timeout, or connection refused), fall back to classic WHOIS on port 43.
+- Classic WHOIS response is returned as structured fields when possible, plus the raw text.
+- The protocol used (RDAP or WHOIS) is indicated in the result.
+- A "Copy to clipboard" button MUST be available for displayed results.
+
+#### 3.6.4 Edge Cases
+
+- Domain does not exist: "Domain not found."
+- IP address is private/internal: blocked by the same network address filter used by other tools (see §5.1 of `spec-backend.md`).
+- WHOIS server unreachable or timeout: timeout error after 15s.
+- TLD with no known WHOIS or RDAP server: unsupported TLD error.
+- Rate-limited by remote WHOIS server: error with "try again later" message.
+- Thin WHOIS registry (e.g., `.com`): the raw text response is displayed. Structured data extraction is best-effort.
+- GDPR-redacted contact fields: displayed as "[REDACTED]" — this is the expected output for most domains.
+
+### 3.7 Secret Generator
+
+#### 3.7.1 Description
+
+Generate cryptographically secure secrets directly in the browser. Three generation modes: human-readable passwords, URL-safe tokens (à la Python `secrets.token_urlsafe()`), and raw hexadecimal secrets. No backend execution — all generation happens client-side.
+
+#### 3.7.2 Input Parameters
+
+**Mode selection** (user chooses one of three):
+
+| Mode | Description | Equivalent CLI |
+|---|---|---|
+| Password | Character-based password with configurable charsets | — |
+| Token (URL-safe) | Base64url-encoded random bytes | `python -c "import secrets; print(secrets.token_urlsafe(N))"` |
+| Hex | Raw hexadecimal random bytes | `openssl rand -hex N` |
+
+**Password mode parameters:**
+
+| Parameter | Type | Default | Constraints |
+|---|---|---|---|
+| Length | integer | 20 | 8 to 128 |
+| Uppercase (A-Z) | boolean | true | At least one character set must be enabled |
+| Lowercase (a-z) | boolean | true | |
+| Digits (0-9) | boolean | true | |
+| Symbols (!@#...) | boolean | true | |
+
+**Token (URL-safe) mode parameters:**
+
+| Parameter | Type | Default | Constraints |
+|---|---|---|---|
+| Length | integer (chars) | 43 | 16 to 256. Each character encodes 6 bits (base64url, charset size = 64). |
+
+Entropy = `length * 6` bits. Default 43 chars → 258 bits. Equivalent to Python `secrets.token_urlsafe(32)`.
+
+**Hex mode parameters:**
+
+| Parameter | Type | Default | Constraints |
+|---|---|---|---|
+| Length | integer (chars) | 64 | 16 to 512. Each character encodes 4 bits (hexadecimal, charset size = 16). |
+
+Entropy = `length * 4` bits. Default 64 chars → 256 bits. Equivalent to `openssl rand -hex 32`.
+
+#### 3.7.3 Behaviour Rules
+
+- Uses `crypto.getRandomValues()` (Web Crypto API) for CSPRNG — never `Math.random()`.
+- The primary parameter in all 3 modes is the **output length in characters**. Entropy in bits is displayed alongside: `"N caractères (X bits)"`.
+- **Password mode**: uniform distribution via rejection sampling to avoid modulo bias. At least one character set must be enabled.
+- **Token mode**: generates `ceil(length * 6 / 8)` random bytes, encodes in base64url (RFC 4648 §5, `-` and `_`, no `=` padding). The output length may be 1 char shorter than requested if the byte count doesn't align exactly — in which case the actual length and bit count are displayed.
+- **Hex mode**: generates `ceil(length / 2)` random bytes, encodes as lowercase hexadecimal. Output length is always even (each byte = 2 hex chars); odd requested lengths are rounded up and the actual length is displayed.
+- Generated secret is displayed in a read-only monospace field.
+- A "Copy to clipboard" button copies the secret. The clipboard is auto-cleared after 30 seconds.
+- A "Regenerate" button generates a new secret with the same parameters.
+- No secret is ever sent to the backend — generation is 100% client-side.
+- A visual strength indicator (weak/fair/strong/very strong) is displayed based on entropy thresholds.
+
+#### 3.7.4 Edge Cases
+
+- Password mode: length = 8 with only digits → weak (8 chars, ~26 bits), red indicator.
+- Password mode: length = 128 with all sets → very strong (128 chars, ~832 bits), green indicator.
+- Token mode: length = 43 → 43 chars, 258 bits entropy.
+- Hex mode: length = 64 → 64 chars, 256 bits entropy.
+- Clipboard API unavailable (old browser, HTTP origin) → "Copy" button hidden, user must select and copy manually.
+- JavaScript disabled → tool unusable (server-rendered fallback message).
+
 ---
 
 ## 4. Authentication and Account Management
@@ -260,7 +403,7 @@ Key rule: per-tool limits can only tighten global limits (must be ≤ global for
 
 ### 6.1 Explicitly Out of Scope (MVP)
 
-Whois, MAC OUI lookup, IP/subnet calculator, VirusTotal integration, dashboards, public REST API, Electron desktop app, native mobile app, social login/OAuth, MFA, team accounts, saved tool history, real-time collaboration, automated scheduling, performance monitoring.
+IP/subnet calculator, VirusTotal integration, dashboards, public REST API, Electron desktop app, native mobile app, social login/OAuth, MFA, team accounts, saved tool history, real-time collaboration, automated scheduling, performance monitoring.
 
 ### 6.2 Resolved Open Questions
 

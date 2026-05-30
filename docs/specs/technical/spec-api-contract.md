@@ -1,8 +1,8 @@
 # API Contract — SAKN MVP
 
-> **Version:** 1.0 — New document
+> **Version:** 2.0 — Added MAC OUI, WHOIS, Secret Generator i18n keys and error codes
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-21
 
 The definitive contract between frontend and backend. Both agents MUST implement this exactly. Load with any other spec document when working on features that cross the network boundary.
 
@@ -416,13 +416,16 @@ GET /tools
           "constraints": {"max_length": 255}
         }
       ],
-      "enabled": true
+      "enabled": true,
+      "backend": true
     }
   ]
 }
 ```
 
 Only returns tools with `enabled: true` (for non-admin users) and with the user's role permission allowing it.
+
+`backend: true` means the tool executes via `POST /api/v1/tools/{tool_name}/execute`. `backend: false` means the tool is frontend-only (e.g., Secret Generator) and has no execution endpoint.
 
 ---
 
@@ -687,6 +690,9 @@ If a dependency is down: `"database": "unavailable"` — still returns 200 for t
 | `TOKEN_USED` | 410 | `errors.token_used` | Verification or reset token already used |
 | `NOT_FOUND` | 404 | `errors.not_found` | Entity not found |
 | `INTERNAL_ERROR` | 500 | `errors.internal_error` | Unexpected server error |
+| `WHOIS_UNSUPPORTED_TLD` | 422 | `errors.whois_unsupported_tld` | TLD not supported by any known WHOIS/RDAP server |
+| `WHOIS_CONNECTION_FAILED` | 502 | `errors.whois_connection_failed` | Could not connect to remote WHOIS/RDAP server |
+| `MAC_OUI_PARSE_EMPTY` | 422 | `errors.mac_oui_parse_empty` | No valid MAC address or OUI found in the provided text |
 | `EMAIL_ALREADY_EXISTS` | 409 | `errors.email_already_exists` | Registration duplicate (only used internally, same response as success) |
 
 ---
@@ -721,6 +727,9 @@ errors.password_too_weak
 errors.password_mismatch
 errors.invalid_params
 errors.ipv6_not_available
+errors.whois_unsupported_tld
+errors.whois_connection_failed
+errors.mac_oui_parse_empty
 ```
 
 ### 10.2 auth namespace
@@ -787,6 +796,77 @@ tools.ssl_viewer.name
 tools.ssl_viewer.description
 tools.ssl_viewer.param_url_label
 tools.ssl_viewer.param_url_desc
+
+tools.mac_oui.name
+tools.mac_oui.description
+tools.mac_oui.param_text_label
+tools.mac_oui.param_text_desc
+tools.mac_oui.result_vendor
+tools.mac_oui.result_address
+tools.mac_oui.result_type
+tools.mac_oui.result_first_seen
+tools.mac_oui.result_last_seen
+tools.mac_oui.history_title
+tools.mac_oui.history_previous
+tools.mac_oui.history_new
+tools.mac_oui.history_type
+tools.mac_oui.history_date
+tools.mac_oui.no_results
+tools.mac_oui.truncation_warning
+tools.mac_oui.unknown_vendor
+tools.mac_oui.parse_stats
+
+tools.whois.name
+tools.whois.description
+tools.whois.param_target_label
+tools.whois.param_target_desc
+tools.whois.param_server_label
+tools.whois.param_server_desc
+tools.whois.result_domain
+tools.whois.result_status
+tools.whois.result_registrar
+tools.whois.result_creation_date
+tools.whois.result_expiration_date
+tools.whois.result_updated_date
+tools.whois.result_nameservers
+tools.whois.result_registrant
+tools.whois.result_admin_contact
+tools.whois.result_tech_contact
+tools.whois.result_raw_text
+tools.whois.result_protocol
+tools.whois.protocol_rdap
+tools.whois.protocol_whois
+tools.whois.not_found
+tools.whois.redacted
+tools.whois.unsupported_tld
+
+tools.secret_generator.name
+tools.secret_generator.description
+tools.secret_generator.mode_password
+tools.secret_generator.mode_token
+tools.secret_generator.mode_hex
+tools.secret_generator.param_length_label
+tools.secret_generator.param_length_desc
+tools.secret_generator.param_length_token_label
+tools.secret_generator.param_length_token_desc
+tools.secret_generator.param_length_hex_label
+tools.secret_generator.param_length_hex_desc
+tools.secret_generator.param_uppercase_label
+tools.secret_generator.param_lowercase_label
+tools.secret_generator.param_digits_label
+tools.secret_generator.param_symbols_label
+tools.secret_generator.strength_weak
+tools.secret_generator.strength_fair
+tools.secret_generator.strength_strong
+tools.secret_generator.strength_very_strong
+tools.secret_generator.entropy
+tools.secret_generator.copy
+tools.secret_generator.regenerate
+tools.secret_generator.clipboard_unavailable
+tools.secret_generator.js_disabled
+tools.secret_generator.copied
+tools.secret_generator.no_charset_selected
+tools.secret_generator.auto_clear_notice
 
 tools.tls_warning
 tools.revocation_not_checked
