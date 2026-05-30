@@ -201,3 +201,51 @@ describe("ProfilePage — issue #294 (missing preference keys fallback)", () => 
     });
   });
 });
+
+describe("ProfilePage — issue #298 (locale fallback normalizes full language code)", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("fr");
+    // Simulate i18n.language returning a full locale code (e.g. "fr-CH")
+    mockGetLanguage.mockReturnValue("fr-CH");
+    Object.assign(mockStoreUser, {
+      id: "u1",
+      email: "x@y.z",
+      first_name: "Test",
+      last_name: "User",
+      role: "authenticated",
+      status: "active",
+      email_verified: true,
+      locale: "en-US", // wrong fallback — should not be used
+      created_at: "2024-01-01T00:00:00Z",
+    });
+    Object.assign(mockStorePreferences, { theme: "light", display_mode: "table" });
+    delete (mockStorePreferences as Record<string, unknown>).language;
+    delete (mockStorePreferences as Record<string, unknown>).locale;
+    mockSetLanguage.mockReset();
+    mockSavePreferences.mockReset();
+    mockLoadPreferences.mockReset();
+    mockLoadPreferences.mockResolvedValue(undefined);
+    mockSavePreferences.mockResolvedValue({});
+    mockUpdateProfile.mockResolvedValue({});
+  });
+
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("normalizes fr-CH to fr for LANGUAGE_TO_DEFAULT_LOCALE lookup", async () => {
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>,
+    );
+
+    // getLanguage() returns "fr-CH", getLanguageRoot() normalizes to "fr",
+    // so LANGUAGE_TO_DEFAULT_LOCALE["fr"] should resolve to "fr-FR",
+    // displayed as "français (France)" when the UI language is French.
+    await waitFor(() => {
+      const locTrigger = screen.getByLabelText(/locale|paramètres régionaux/i);
+      expect(locTrigger).toHaveTextContent("français (France)");
+    });
+  });
+});
