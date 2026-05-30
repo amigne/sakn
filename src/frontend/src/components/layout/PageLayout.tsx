@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import { version } from "../../../package.json";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 
@@ -94,7 +95,7 @@ export default function PageLayout({ children }: PageLayoutProps) {
         <main className="flex-1 overflow-auto p-4">{children}</main>
       </div>
       <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-1 text-center text-xs text-gray-500 dark:text-gray-400">
-        SAKN v0.0.2 — {t("common.footer.tagline")} — {t("common.footer.copyright", { year: 2026 })} ·{" "}
+        SAKN v{version} — {t("common.footer.tagline")} — {t("common.footer.copyright", { year: 2026 })} ·{" "}
         <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-2">
           {t("common.privacy")}
         </Link>

@@ -1,7 +1,7 @@
 [project]
 name = "sakn"
-version = "0.0.2"
-description = "Swiss Army Knife for Network Engineers — MVP"
+version = "0.1.0"
+description = "Swiss Army Knife for Network Engineers"
 
 requires-python = ">=3.14"
 license = { text = "MIT" }
