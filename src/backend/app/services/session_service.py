@@ -124,6 +124,24 @@ async def revoke(db: AsyncSession, session_id: str) -> str | None:
     if session is None:
         return None
     token_hash = session.token_hash
+
+    # For anonymous sessions, delete preferences before the session goes away.
+    # The FK is ON DELETE SET NULL, which preserves authenticated users'
+    # preferences across logout (PR #296), but for anonymous sessions
+    # (user_id=NULL) it would leave (NULL, NULL) orphan rows that are
+    # unreachable by get_preferences/set_preferences.
+    if session.user_id is None:
+        from sqlalchemy import delete as sa_delete
+
+        from app.models.preferences import UserPreference
+
+        await db.execute(
+            sa_delete(UserPreference).where(
+                UserPreference.session_id == session_id,
+                UserPreference.user_id.is_(None),
+            )
+        )
+
     await db.delete(session)
     await db.flush()
     await redis_delete_session(token_hash)
