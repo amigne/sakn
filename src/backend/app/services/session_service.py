@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
 from app.models.base import ensure_aware, utcnow
-from app.models.preferences import GlobalSetting
+from app.models.preferences import GlobalSetting, UserPreference
 from app.redis.session_store import (
     _get_max_sessions,
     create_session as redis_create_session,
@@ -131,10 +131,6 @@ async def revoke(db: AsyncSession, session_id: str) -> str | None:
     # (user_id=NULL) it would leave (NULL, NULL) orphan rows that are
     # unreachable by get_preferences/set_preferences.
     if session.user_id is None:
-        from sqlalchemy import delete as sa_delete
-
-        from app.models.preferences import UserPreference
-
         await db.execute(
             sa_delete(UserPreference).where(
                 UserPreference.session_id == session_id,
