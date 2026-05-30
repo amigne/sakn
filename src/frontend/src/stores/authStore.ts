@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { setLanguage as setI18nLanguage } from "@/i18n/i18n";
 import * as authService from "@/services/authService";
 import * as preferencesService from "@/services/preferencesService";
+import { useThemeStore } from "@/stores/themeStore";
 import type { Preferences, User } from "@/types/user";
 
 interface AuthState {
@@ -63,7 +64,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Apply theme and language from loaded preferences
       const prefs = get().preferences;
       if (prefs?.theme) {
-        const { useThemeStore } = await import("@/stores/themeStore");
         useThemeStore.getState().setMode(prefs.theme);
       }
       if (prefs?.language) {
