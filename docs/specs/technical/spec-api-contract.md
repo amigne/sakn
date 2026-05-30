@@ -169,7 +169,7 @@ POST /auth/login
 
 Sets cookies: `sakn_session` (httpOnly), `sakn_csrf` (JS-readable).
 
-**Rate limiting**: 10 per IP per 60s. Error response on failure always: `{"error": {"code": "INVALID_CREDENTIALS", "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}}` — identical timing whether email exists or not.
+**Rate limiting**: 10 per IP per 60s. Error response on failure always: `{"error": {"code": "INVALID_CREDENTIALS", "message_key": "errors.invalid_credentials", "message": "Invalid email or password."}}` — identical timing whether email exists or not. For enumeration protection, locked/blocked accounts also return `INVALID_CREDENTIALS` (HTTP 401) rather than exposing account status.
 
 ### 3.3 Logout
 
@@ -216,7 +216,7 @@ POST /auth/verify-email
 POST /auth/resend-verification
 ```
 
-No request body. Requires session cookie.
+No request body. Requires session cookie (authenticated user).
 
 **Response** (200):
 ```json
