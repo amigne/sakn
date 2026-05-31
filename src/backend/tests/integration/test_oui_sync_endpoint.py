@@ -6,11 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select as sa_select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.models.base import new_uuid7, utcnow
-from app.models.preferences import GlobalSetting
 from app.security.password import hash_password
 from app.security.tokens import generate_token, hash_token
 from tests.factories import create_user
@@ -122,9 +120,7 @@ async def test_concurrent_admin_posts_only_one_gets_202(
 
     async def acquire_lock(session):
         call_count[0] += 1
-        if call_count[0] == 1:
-            return True
-        return False
+        return call_count[0] == 1
 
     mock_oui_service._try_acquire_running_lock = acquire_lock
 
