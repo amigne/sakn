@@ -37,14 +37,26 @@ def _replace_session_fk_sqlite(ondelete: str) -> None:
     if create_sql is None:
         return
 
-    # Replace ON DELETE CASCADE / ON DELETE SET NULL with the target action
+    # Replace ON DELETE <action> with the target action.
+    # Enumerate ANSI SQL actions explicitly — \w+ does not capture
+    # multi-word actions (SET NULL, NO ACTION, SET DEFAULT).
     new_sql = re.sub(
-        r"REFERENCES\s+sessions\s*\(\s*id\s*\)\s*ON\s+DELETE\s+\w+",
+        r"REFERENCES\s+sessions\s*\(\s*id\s*\)\s*ON\s+DELETE\s+"
+        r"(?:CASCADE|RESTRICT|NO\s+ACTION|SET\s+NULL|SET\s+DEFAULT)",
         f"REFERENCES sessions(id) ON DELETE {ondelete}",
         create_sql,
         flags=re.IGNORECASE,
     )
+    if new_sql == create_sql:
+        raise RuntimeError(
+            "Failed to locate user_preferences.session_id FK clause in DDL "
+            f"(schema drift?). DDL:\n{create_sql}"
+        )
 
+    # PRAGMA foreign_keys is only effective outside a transaction.
+    # Alembic logs "Will assume non-transactional DDL" for SQLite,
+    # so these take effect, but they would be silently ignored if
+    # transaction_per_migration=True were ever set.
     op.execute("PRAGMA foreign_keys = OFF")
     op.execute("ALTER TABLE user_preferences RENAME TO _alembic_tmp_user_preferences")
     op.execute(text(new_sql))
@@ -65,7 +77,7 @@ def upgrade() -> None:
             "user_preferences_session_id_fkey"
         )
         op.create_foreign_key(
-            None,
+            "user_preferences_session_id_fkey",
             "user_preferences",
             "sessions",
             ["session_id"],
@@ -84,7 +96,7 @@ def downgrade() -> None:
             "user_preferences_session_id_fkey"
         )
         op.create_foreign_key(
-            None,
+            "user_preferences_session_id_fkey",
             "user_preferences",
             "sessions",
             ["session_id"],
