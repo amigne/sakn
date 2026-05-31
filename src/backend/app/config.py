@@ -160,5 +160,10 @@ class Settings(BaseSettings):
     # Health check token for /health/full (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
     HEALTH_FULL_TOKEN: str = ""
 
+    # ── MAC OUI Sync ──────────────────────────────────────────────────────────
+    OUI_SYNC_ENABLED: bool = True
+    OUI_SYNC_HOUR: int = 3  # 0-23 UTC
+    OUI_DOWNLOAD_TIMEOUT_SECONDS: int = 120
+
 
 settings = Settings()

@@ -191,6 +191,11 @@ async def lifespan(app: FastAPI) -> Any:
                     "max_concurrent_sessions": "10",
                     "visitor_ip_soft_limit": "5",
                     "visitor_ip_hard_limit": "500",
+                    # OUI sync failure counters (per-file)
+                    "oui_sync_failures_ma_l": "0",
+                    "oui_sync_failures_ma_m": "0",
+                    "oui_sync_failures_ma_s": "0",
+                    "oui_sync_running": "0",
                 }
                 for key, value in default_settings.items():
                     row = await db.execute(
@@ -284,6 +289,14 @@ async def lifespan(app: FastAPI) -> Any:
                 logger.exception("Orphan preferences cleanup failed")
 
         scheduler.start()
+        # Register OUI sync job (idempotent)
+        try:
+            from app.database import async_session_factory as asf
+            from app.scheduler.jobs.oui_sync_job import register_oui_sync_job
+
+            register_oui_sync_job(scheduler, asf)
+        except Exception:
+            logger.exception("OUI sync job registration failed")
     except Exception:
         logger.exception("Scheduler initialization failed")
 
