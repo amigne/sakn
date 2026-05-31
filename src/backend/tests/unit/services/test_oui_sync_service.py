@@ -2,6 +2,8 @@
 
 import logging
 import pathlib
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -13,7 +15,13 @@ from sqlalchemy.orm import Session
 from app.models.mac_oui import MacOui
 from app.models.mac_oui_history import MacOuiHistory
 from app.models.preferences import GlobalSetting
-from app.services.oui_sync_service import OuiSyncService, classify_change
+from app.services.oui_sync_service import (
+    OuiSyncService,
+    classify_change,
+    RUNNING_FLAG_KEY,
+    RUNNING_STARTED_AT_KEY,
+    RUNNING_TTL_SECONDS,
+)
 
 FIXTURES = pathlib.Path(__file__).parent.parent.parent / "fixtures" / "ieee"
 
@@ -33,6 +41,7 @@ async def _seed_settings(session_factory, **kwargs):
         "oui_sync_failures_ma_m": "0",
         "oui_sync_failures_ma_s": "0",
         "oui_sync_running": "0",
+        "oui_sync_started_at": "",
     }
     defaults.update(kwargs)
     async with session_factory() as session, session.begin():
@@ -93,19 +102,52 @@ def test_classify_revoked_empty():
     assert classify_change("Cisco", "   ", "a", "a") == "revoked"
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Mock helpers for HTTP streaming ──────────────────────────────────────────
 
 
-def _make_mock_response(status_code: int, text: str) -> MagicMock:
-    resp = MagicMock()
-    resp.status_code = status_code
-    resp.text = text
-    return resp
+class _MockStreamResponse:
+    """Simulates httpx streaming response for sync_one's http.stream()."""
+
+    def __init__(self, status_code: int, content: bytes, headers: dict | None = None):
+        self.status_code = status_code
+        self._content = content
+        self.headers = MagicMock()
+        self.headers.get = MagicMock(side_effect=lambda k, default=None: (headers or {}).get(k, default))
+
+    async def aiter_bytes(self, chunk_size: int = 64 * 1024):
+        for i in range(0, len(self._content), chunk_size):
+            yield self._content[i:i + chunk_size]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
 
 
-def _make_mock_http(get_side_effect=None) -> MagicMock:
+def _make_mock_http(stream_responses: dict | None = None):
+    """Create a mock httpx.AsyncClient that returns streaming responses from a dict keyed by URL.
+    Usage: _make_mock_http({"https://...": _MockStreamResponse(200, b"content")})"""
     http = MagicMock()
-    http.get = AsyncMock(side_effect=get_side_effect)
+
+    if stream_responses:
+
+        @asynccontextmanager
+        async def mock_stream(method, url, **kwargs):
+            resp = stream_responses.get(url)
+            if resp is None:
+                resp = _MockStreamResponse(404, b"")
+            yield resp
+
+        http.stream = mock_stream
+    else:
+
+        @asynccontextmanager
+        async def mock_stream(method, url, **kwargs):
+            yield _MockStreamResponse(200, b"")
+
+        http.stream = mock_stream
+
     http.aclose = AsyncMock()
     return http
 
@@ -124,15 +166,13 @@ async def test_sync_nominal_all_3_files_ok(_engine):
     mam_content = _read_fixture("mam-sample.txt")
     oui36_content = _read_fixture("oui36-sample.txt")
 
-    async def mock_get(url, **kwargs):
-        if "oui28" in url:
-            return _make_mock_response(200, mam_content)
-        elif "oui36" in url:
-            return _make_mock_response(200, oui36_content)
-        else:
-            return _make_mock_response(200, oui_content)
+    responses = {
+        "https://standards-oui.ieee.org/oui/oui.txt": _MockStreamResponse(200, oui_content.encode()),
+        "https://standards-oui.ieee.org/oui28/mam.txt": _MockStreamResponse(200, mam_content.encode()),
+        "https://standards-oui.ieee.org/oui36/oui36.txt": _MockStreamResponse(200, oui36_content.encode()),
+    }
+    mock_http = _make_mock_http(responses)
 
-    mock_http = _make_mock_http(get_side_effect=mock_get)
     service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
     report = await service.sync_all()
 
@@ -155,16 +195,18 @@ async def test_sync_idempotent(_engine):
     await _seed_settings(factory)
 
     content = _read_fixture("oui-sample.txt")
+    responses = {url: _MockStreamResponse(200, content.encode()) for url in [
+        "https://standards-oui.ieee.org/oui/oui.txt",
+        "https://standards-oui.ieee.org/oui28/mam.txt",
+        "https://standards-oui.ieee.org/oui36/oui36.txt",
+    ]}
 
-    async def mock_get(url, **kwargs):
-        return _make_mock_response(200, content)
-
-    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get))
+    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(responses))
     report1 = await s1.sync_all()
     assert report1.added == 17
     assert report1.changed == 0
 
-    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get))
+    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(responses))
     report2 = await s2.sync_all()
     assert report2.added == 0
     assert report2.changed == 0
@@ -180,17 +222,12 @@ async def test_name_change_detected(_engine):
 
     content1 = "00-00-01   (hex)\t\tOld Corp Name"
     content2 = "00-00-01   (hex)\t\tNew Corp Name"
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
 
-    async def mock_get1(url, **kwargs):
-        return _make_mock_response(200, content1)
-
-    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get1))
+    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content1.encode())}))
     await s1.sync_all()
 
-    async def mock_get2(url, **kwargs):
-        return _make_mock_response(200, content2)
-
-    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get2))
+    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content2.encode())}))
     report = await s2.sync_all()
 
     assert report.changed == 1
@@ -212,17 +249,12 @@ async def test_address_only_change(_engine):
 
     content1 = "00-00-01   (hex)\t\tSame Corp\n\t\t\t\tOld Address"
     content2 = "00-00-01   (hex)\t\tSame Corp\n\t\t\t\tNew Address"
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
 
-    async def mock_get1(url, **kwargs):
-        return _make_mock_response(200, content1)
-
-    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get1))
+    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content1.encode())}))
     await s1.sync_all()
 
-    async def mock_get2(url, **kwargs):
-        return _make_mock_response(200, content2)
-
-    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get2))
+    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content2.encode())}))
     report = await s2.sync_all()
 
     assert report.changed == 1
@@ -242,17 +274,12 @@ async def test_revoked_detected(_engine):
 
     content1 = "00-00-01   (hex)\t\tActive Corp"
     content2 = "00-00-01   (hex)\t\t----"
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
 
-    async def mock_get1(url, **kwargs):
-        return _make_mock_response(200, content1)
-
-    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get1))
+    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content1.encode())}))
     await s1.sync_all()
 
-    async def mock_get2(url, **kwargs):
-        return _make_mock_response(200, content2)
-
-    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get2))
+    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content2.encode())}))
     report = await s2.sync_all()
 
     assert report.changed == 1
@@ -273,16 +300,25 @@ async def test_file_fails_others_continue(_engine):
     mam_content = _read_fixture("mam-sample.txt")
     oui36_content = _read_fixture("oui36-sample.txt")
 
-    async def mock_get(url, **kwargs):
-        if "oui.txt" in url and "oui28" not in url and "oui36" not in url:
-            raise httpx.TimeoutException("Timeout")
-        elif "oui28" in url:
-            return _make_mock_response(200, mam_content)
-        elif "oui36" in url:
-            return _make_mock_response(200, oui36_content)
-        return _make_mock_response(404, "")
+    ma_l_url = "https://standards-oui.ieee.org/oui/oui.txt"
+    mam_url = "https://standards-oui.ieee.org/oui28/mam.txt"
+    oui36_url = "https://standards-oui.ieee.org/oui36/oui36.txt"
 
-    mock_http = _make_mock_http(get_side_effect=mock_get)
+    @asynccontextmanager
+    async def mock_stream(method, url, **kwargs):
+        if url == ma_l_url:
+            raise httpx.TimeoutException("Timeout")
+        elif url == mam_url:
+            yield _MockStreamResponse(200, mam_content.encode())
+        elif url == oui36_url:
+            yield _MockStreamResponse(200, oui36_content.encode())
+        else:
+            yield _MockStreamResponse(404, b"")
+
+    mock_http = MagicMock()
+    mock_http.stream = mock_stream
+    mock_http.aclose = AsyncMock()
+
     service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
     report = await service.sync_all()
 
@@ -299,10 +335,15 @@ async def test_three_consecutive_failures_alert(_engine, caplog):
     await _cleanup_oui_tables(factory)
     await _seed_settings(factory, oui_sync_failures_ma_l="2")
 
-    async def mock_get(url, **kwargs):
+    @asynccontextmanager
+    async def mock_stream(method, url, **kwargs):
         raise httpx.TimeoutException("Timeout")
+        yield  # unreachable, makes this an async generator for the contextmanager
 
-    mock_http = _make_mock_http(get_side_effect=mock_get)
+    mock_http = MagicMock()
+    mock_http.stream = mock_stream
+    mock_http.aclose = AsyncMock()
+
     caplog.set_level(logging.ERROR)
     service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
     await service.sync_all()
@@ -320,11 +361,9 @@ async def test_absent_oui_preserved(_engine):
 
     content1 = "00-00-01   (hex)\t\tCorp A\n00-00-02   (hex)\t\tCorp B"
     content2 = "00-00-01   (hex)\t\tCorp A"
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
 
-    async def mock_get1(url, **kwargs):
-        return _make_mock_response(200, content1)
-
-    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get1))
+    s1 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content1.encode())}))
     await s1.sync_all()
 
     async with factory() as session:
@@ -335,10 +374,7 @@ async def test_absent_oui_preserved(_engine):
         assert row is not None
         old_last_seen = row.last_seen
 
-    async def mock_get2(url, **kwargs):
-        return _make_mock_response(200, content2)
-
-    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http(get_side_effect=mock_get2))
+    s2 = OuiSyncService(db_session_factory=factory, http_client=_make_mock_http({url: _MockStreamResponse(200, content2.encode())}))
     report = await s2.sync_all()
 
     assert report.added == 0
@@ -362,15 +398,12 @@ async def test_overlap_ma_l_ma_m_inserts_both(_engine):
     content_ma_l = "8C-1F-64   (hex)\t\tIEEE Registration Authority\n\t\t\t\tSome address"
     content_ma_m = "8C-1F-64-0   (hex)\t\tAcme Corp"
 
-    async def mock_get(url, **kwargs):
-        if "oui28" in url:
-            return _make_mock_response(200, content_ma_m)
-        elif "oui36" in url:
-            return _make_mock_response(200, "")
-        else:
-            return _make_mock_response(200, content_ma_l)
-
-    mock_http = _make_mock_http(get_side_effect=mock_get)
+    responses = {
+        "https://standards-oui.ieee.org/oui/oui.txt": _MockStreamResponse(200, content_ma_l.encode()),
+        "https://standards-oui.ieee.org/oui28/mam.txt": _MockStreamResponse(200, content_ma_m.encode()),
+        "https://standards-oui.ieee.org/oui36/oui36.txt": _MockStreamResponse(200, b""),
+    }
+    mock_http = _make_mock_http(responses)
     service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
     await service.sync_all()
 
@@ -392,19 +425,76 @@ async def test_no_delete_ever(_engine):
     await _seed_settings(factory)
 
     content = "00-00-01   (hex)\t\tTest Corp"
-
-    async def mock_get(url, **kwargs):
-        return _make_mock_response(200, content)
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
 
     delete_calls = []
 
-    @event.listens_for(Session, "do_orm_execute")
     def block_deletes(orm_execute_state):
         if isinstance(orm_execute_state.statement, Delete):
             delete_calls.append(orm_execute_state.statement)
 
-    mock_http = _make_mock_http(get_side_effect=mock_get)
-    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
-    await service.sync_all()
+    event.listen(Session, "do_orm_execute", block_deletes)
+    try:
+        mock_http = _make_mock_http({url: _MockStreamResponse(200, content.encode())})
+        service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+        await service.sync_all()
+        assert len(delete_calls) == 0, f"UNEXPECTED DELETE during sync: {delete_calls}"
+    finally:
+        event.remove(Session, "do_orm_execute", block_deletes)
 
-    assert len(delete_calls) == 0, f"UNEXPECTED DELETE during sync: {delete_calls}"
+
+# ── New tests for auditor fixes ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stale_running_flag_ignored_after_ttl(_engine, monkeypatch):
+    """H1: Stale running flag (started_at > TTL) → sync proceeds normally."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    stale = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
+    await _seed_settings(factory, oui_sync_running="1", oui_sync_started_at=stale)
+
+    content = "00-00-01   (hex)\t\tTest Corp"
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
+    mock_http = _make_mock_http({url: _MockStreamResponse(200, content.encode())})
+
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+    report = await service.sync_all()
+
+    # Should proceed (not return early with "already running")
+    assert report.added == 1
+
+
+@pytest.mark.asyncio
+async def test_download_exceeds_cap_failure(_engine, monkeypatch):
+    """M4: Download exceeding OUI_MAX_DOWNLOAD_BYTES cap → file failed."""
+    monkeypatch.setattr("app.services.oui_sync_service.OUI_MAX_DOWNLOAD_BYTES", 100)
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    # Mock response with Content-Length > cap
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
+    mock_http = _make_mock_http({url: _MockStreamResponse(200, b"x" * 200, headers={"content-length": "200"})})
+
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+    report = await service.sync_all()
+
+    assert "MA-L" in report.files_failed
+    assert report.added == 0
+
+
+@pytest.mark.asyncio
+async def test_redirect_treated_as_failure(_engine):
+    """M5: HTTP 301 redirect → file failed (follow_redirects=False)."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    url = "https://standards-oui.ieee.org/oui/oui.txt"
+    mock_http = _make_mock_http({url: _MockStreamResponse(301, b"")})
+
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+    report = await service.sync_all()
+
+    assert "MA-L" in report.files_failed

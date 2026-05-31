@@ -1,5 +1,8 @@
 """Integration tests for POST /api/v1/admin/oui/sync."""
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select as sa_select
@@ -43,6 +46,20 @@ async def _create_session_for_role(db, role: str) -> str:
     return token
 
 
+@pytest.fixture
+def mock_oui_service():
+    """M1: Override get_oui_sync_service to inject a mock service."""
+    from app.api.v1.endpoints.admin_oui_sync import get_oui_sync_service
+    from app.main import app
+
+    service = MagicMock()
+    service._try_acquire_running_lock = AsyncMock(return_value=True)
+    service.sync_all = AsyncMock(return_value=None)
+    app.dependency_overrides[get_oui_sync_service] = lambda: service
+    yield service
+    app.dependency_overrides.pop(get_oui_sync_service, None)
+
+
 @pytest.mark.asyncio
 async def test_post_unauthenticated_403(client: AsyncClient):
     """Unauthenticated request → 403."""
@@ -63,8 +80,8 @@ async def test_post_non_admin_403(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_post_admin_202(client: AsyncClient, db_session):
-    """Admin session → 202 with task_id."""
+async def test_post_admin_202(client: AsyncClient, db_session, mock_oui_service):
+    """Admin session → 202 with task_id. M1: mock injected, no real HTTP call."""
     token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
     response = await client.post(
         "/api/v1/admin/oui/sync",
@@ -78,19 +95,9 @@ async def test_post_admin_202(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_post_when_running_409(client: AsyncClient, db_session, _engine):
-    """Sync already in progress → 409 with OUI_SYNC_ALREADY_RUNNING."""
-    # Seed the running flag using a separate session (avoids transaction issues)
-    test_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
-    async with test_factory() as seed_session, seed_session.begin():
-        row = await seed_session.execute(
-            sa_select(GlobalSetting).where(GlobalSetting.key == "oui_sync_running")
-        )
-        setting = row.scalar_one_or_none()
-        if setting:
-            setting.value = "1"
-        else:
-            seed_session.add(GlobalSetting(key="oui_sync_running", value="1"))
+async def test_post_when_running_409(client: AsyncClient, db_session, mock_oui_service):
+    """Sync already in progress → 409 with OUI_SYNC_ALREADY_RUNNING. M2: atomic lock rejects."""
+    mock_oui_service._try_acquire_running_lock.return_value = False
 
     token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
     response = await client.post(
@@ -101,3 +108,33 @@ async def test_post_when_running_409(client: AsyncClient, db_session, _engine):
     assert response.status_code == 409
     data = response.json()
     assert data["error"]["code"] == "OUI_SYNC_ALREADY_RUNNING"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_admin_posts_only_one_gets_202(
+    client: AsyncClient, db_session, mock_oui_service
+):
+    """M2: 5 concurrent POSTs → exactly 1 gets 202, rest get 409."""
+    token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
+
+    # Simulate _try_acquire_running_lock: first call succeeds, rest fail
+    call_count = [0]
+
+    async def acquire_lock(session):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return True
+        return False
+
+    mock_oui_service._try_acquire_running_lock = acquire_lock
+
+    async def post():
+        return await client.post(
+            "/api/v1/admin/oui/sync",
+            json={},
+            cookies={"sakn_session": token},
+        )
+
+    responses = await asyncio.gather(*(post() for _ in range(5)))
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses == [202, 409, 409, 409, 409]

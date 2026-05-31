@@ -32,7 +32,7 @@ def register_oui_sync_job(scheduler, async_session_factory) -> None:
         logger.info("oui_sync_job_started")
         http_client = httpx.AsyncClient(
             timeout=httpx.Timeout(settings.OUI_DOWNLOAD_TIMEOUT_SECONDS),
-            follow_redirects=True,
+            follow_redirects=False,
         )
         try:
             service = OuiSyncService(

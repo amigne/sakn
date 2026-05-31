@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -29,8 +29,11 @@ FAILURE_COUNTER_KEYS: dict[str, str] = {
 }
 
 RUNNING_FLAG_KEY = "oui_sync_running"
+RUNNING_STARTED_AT_KEY = "oui_sync_started_at"
+RUNNING_TTL_SECONDS = 3600  # 1 h, > max sync time
 
 BATCH_SIZE = 100
+OUI_MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @dataclass
@@ -69,7 +72,7 @@ class OuiSyncService:
         if self._http is None:
             self._http = httpx.AsyncClient(
                 timeout=httpx.Timeout(settings.OUI_DOWNLOAD_TIMEOUT_SECONDS),
-                follow_redirects=True,
+                follow_redirects=False,
             )
         return self._http
 
@@ -94,36 +97,86 @@ class OuiSyncService:
             session.add(GlobalSetting(key=key, value=str(count)))
 
     async def _is_running(self, session: AsyncSession) -> bool:
+        """Check if a sync is currently running, with TTL-based staleness detection."""
         row = await session.execute(
-            select(GlobalSetting).where(GlobalSetting.key == RUNNING_FLAG_KEY)
+            select(GlobalSetting).where(
+                GlobalSetting.key.in_([RUNNING_FLAG_KEY, RUNNING_STARTED_AT_KEY])
+            )
         )
-        setting = row.scalar_one_or_none()
-        return bool(setting and setting.value == "1")
+        rows = {s.key: s.value for s in row.scalars().all()}
+        if rows.get(RUNNING_FLAG_KEY) != "1":
+            return False
+        started_at_iso = rows.get(RUNNING_STARTED_AT_KEY)
+        if not started_at_iso:
+            return True  # fail-safe: flag positive without timestamp = consider running
+        try:
+            started_at = datetime.fromisoformat(started_at_iso)
+        except ValueError:
+            return True
+        if (datetime.now(UTC) - started_at).total_seconds() > RUNNING_TTL_SECONDS:
+            self._log.warning(
+                "oui_sync_running flag stale (TTL exceeded), ignoring",
+                extra={"started_at": started_at_iso},
+            )
+            return False
+        return True
 
     async def _set_running(self, session: AsyncSession, running: bool) -> None:
-        row = await session.execute(
-            select(GlobalSetting).where(GlobalSetting.key == RUNNING_FLAG_KEY)
-        )
-        setting = row.scalar_one_or_none()
-        if setting:
-            setting.value = "1" if running else "0"
-        else:
-            session.add(GlobalSetting(key=RUNNING_FLAG_KEY, value="1" if running else "0"))
+        """Set or clear the running flag and started_at timestamp."""
+        flag_value = "1" if running else "0"
+        started_at = datetime.now(UTC).isoformat() if running else ""
+        for key, val in ((RUNNING_FLAG_KEY, flag_value), (RUNNING_STARTED_AT_KEY, started_at)):
+            row = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
+            setting = row.scalar_one_or_none()
+            if setting:
+                setting.value = val
+            else:
+                session.add(GlobalSetting(key=key, value=val))
 
-    async def sync_all(self) -> SyncReport:
+    async def _try_acquire_running_lock(self, session: AsyncSession) -> bool:
+        """Atomic compare-and-set: returns True if we acquired the lock."""
+        result = await session.execute(
+            update(GlobalSetting)
+            .where(GlobalSetting.key == RUNNING_FLAG_KEY, GlobalSetting.value == "0")
+            .values(value="1")
+        )
+        if result.rowcount == 1:
+            await session.execute(
+                update(GlobalSetting)
+                .where(GlobalSetting.key == RUNNING_STARTED_AT_KEY)
+                .values(value=datetime.now(UTC).isoformat())
+            )
+            await session.commit()
+            return True
+        # Check TTL on existing flag
+        if not await self._is_running(session):
+            # Flag is stale, reclaim it
+            await session.execute(
+                update(GlobalSetting)
+                .where(GlobalSetting.key == RUNNING_FLAG_KEY)
+                .values(value="1")
+            )
+            await session.execute(
+                update(GlobalSetting)
+                .where(GlobalSetting.key == RUNNING_STARTED_AT_KEY)
+                .values(value=datetime.now(UTC).isoformat())
+            )
+            await session.commit()
+            return True
+        return False
+
+    async def sync_all(self, skip_lock_check: bool = False) -> SyncReport:
+        """Run sync for all 3 IEEE files. Set skip_lock_check=True if the caller
+        already acquired the lock via _try_acquire_running_lock."""
         report = SyncReport(started_at=datetime.now(UTC))
-        # Ensure HTTP client is initialized
         await self._get_http()
 
-        async with self._session_factory() as session:
-            # Check if already running
-            if await self._is_running(session):
-                self._log.warning("oui_sync_already_running")
-                report.finished_at = datetime.now(UTC)
-                return report
-
-            await self._set_running(session, True)
-            await session.commit()
+        if not skip_lock_check:
+            async with self._session_factory() as session:
+                if not await self._try_acquire_running_lock(session):
+                    self._log.warning("oui_sync_already_running")
+                    report.finished_at = datetime.now(UTC)
+                    return report
 
         try:
             for oui_type, url in OUI_SOURCES:
@@ -137,7 +190,6 @@ class OuiSyncService:
                 except Exception:
                     self._log.exception("oui_sync_unexpected_error file=%s", oui_type)
                     report.files_failed.append(oui_type)
-                    # Increment failure counter
                     async with self._session_factory() as session:
                         count = await self._get_failure_count(session, oui_type) + 1
                         await self._set_failure_count(session, oui_type, count)
@@ -169,17 +221,39 @@ class OuiSyncService:
         """Download, parse and upsert one IEEE file. Returns (added, changed, confirmed, failed)."""
         http = await self._get_http()
 
-        # Download
+        # Download with streaming + size cap
         try:
-            response = await http.get(url)
-            if response.status_code != 200:
-                self._log.error(
-                    "oui_download_failed",
-                    extra={"file": oui_type, "status_code": response.status_code},
-                )
-                await self._handle_failure(oui_type)
-                return 0, 0, 0, True
-            content = response.text
+            async with http.stream("GET", url) as response:
+                if response.status_code != 200:
+                    self._log.error(
+                        "oui_download_failed",
+                        extra={"file": oui_type, "status_code": response.status_code},
+                    )
+                    await self._handle_failure(oui_type)
+                    return 0, 0, 0, True
+
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > OUI_MAX_DOWNLOAD_BYTES:
+                    self._log.error(
+                        "oui_download_too_large",
+                        extra={"file": oui_type, "size": content_length},
+                    )
+                    await self._handle_failure(oui_type)
+                    return 0, 0, 0, True
+
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+                    total += len(chunk)
+                    if total > OUI_MAX_DOWNLOAD_BYTES:
+                        self._log.error(
+                            "oui_download_exceeded_cap",
+                            extra={"file": oui_type, "bytes_read": total},
+                        )
+                        await self._handle_failure(oui_type)
+                        return 0, 0, 0, True
+                    chunks.append(chunk)
+                content = b"".join(chunks).decode("utf-8", errors="replace")
         except httpx.TimeoutException:
             self._log.error("oui_download_timeout", extra={"file": oui_type})
             await self._handle_failure(oui_type)
@@ -196,7 +270,6 @@ class OuiSyncService:
 
         async with self._session_factory() as session:
             for entry in parse_ieee_file(content, oui_type):
-                # Lookup existing
                 row = await session.execute(
                     select(MacOui).where(
                         MacOui.oui == entry.oui, MacOui.oui_type == entry.oui_type
@@ -207,7 +280,6 @@ class OuiSyncService:
                 today = datetime.now(UTC).date()
 
                 if existing is None:
-                    # New OUI
                     session.add(
                         MacOui(
                             oui=entry.oui,
@@ -223,11 +295,9 @@ class OuiSyncService:
                     existing.organization == entry.organization
                     and existing.address == entry.address
                 ):
-                    # No change — just update last_seen
                     existing.last_seen = today
                     confirmed += 1
                 else:
-                    # Change detected — insert history row
                     change_type = classify_change(
                         existing.organization,
                         entry.organization,
@@ -246,7 +316,6 @@ class OuiSyncService:
                             detected_at=datetime.now(UTC),
                         )
                     )
-                    # Update MacOui with new values
                     existing.organization = entry.organization
                     existing.address = entry.address
                     existing.last_seen = today

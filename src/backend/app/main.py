@@ -196,6 +196,7 @@ async def lifespan(app: FastAPI) -> Any:
                     "oui_sync_failures_ma_m": "0",
                     "oui_sync_failures_ma_s": "0",
                     "oui_sync_running": "0",
+                    "oui_sync_started_at": "",
                 }
                 for key, value in default_settings.items():
                     row = await db.execute(
@@ -205,6 +206,20 @@ async def lifespan(app: FastAPI) -> Any:
                         db.add(GlobalSetting(key=key, value=value))
 
                 await db.commit()
+
+                # Reset stale running flag at startup (in case of previous crash/SIGKILL)
+                row = await db.execute(
+                    select(GlobalSetting).where(GlobalSetting.key == "oui_sync_running")
+                )
+                running_flag = row.scalar_one_or_none()
+                if running_flag and running_flag.value == "1":
+                    logger.warning(
+                        "oui_sync_running flag stale at startup, resetting",
+                        extra={"prior_value": running_flag.value},
+                    )
+                    running_flag.value = "0"
+                    await db.commit()
+
         except Exception:
             logger.exception("Seed data creation failed, continuing")
 
