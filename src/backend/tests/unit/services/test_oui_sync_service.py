@@ -1,8 +1,10 @@
 """Covers AC-MAC-OUI-050, 051, 052, 053, 081, 082, 083, 084, 087, 088."""
 
+import logging
 import pathlib
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from sqlalchemy import Delete, delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -11,11 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.mac_oui import MacOui
 from app.models.mac_oui_history import MacOuiHistory
 from app.models.preferences import GlobalSetting
-from app.services.oui_sync_service import (
-    FAILURE_COUNTER_KEYS,
-    OuiSyncService,
-    classify_change,
-)
+from app.services.oui_sync_service import OuiSyncService, classify_change
 
 FIXTURES = pathlib.Path(__file__).parent.parent.parent / "fixtures" / "ieee"
 
@@ -37,23 +35,21 @@ async def _seed_settings(session_factory, **kwargs):
         "oui_sync_running": "0",
     }
     defaults.update(kwargs)
-    async with session_factory() as session:
-        async with session.begin():
-            for key, value in defaults.items():
-                row = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
-                existing = row.scalar_one_or_none()
-                if existing:
-                    existing.value = value
-                else:
-                    session.add(GlobalSetting(key=key, value=value))
+    async with session_factory() as session, session.begin():
+        for key, value in defaults.items():
+            row = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
+            existing = row.scalar_one_or_none()
+            if existing:
+                existing.value = value
+            else:
+                session.add(GlobalSetting(key=key, value=value))
 
 
 async def _cleanup_oui_tables(session_factory):
     """Remove all MacOui and MacOuiHistory rows between tests."""
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(delete(MacOuiHistory))
-            await session.execute(delete(MacOui))
+    async with session_factory() as session, session.begin():
+        await session.execute(delete(MacOuiHistory))
+        await session.execute(delete(MacOui))
 
 
 # ── classify_change unit tests ────────────────────────────────────────────────
@@ -270,8 +266,6 @@ async def test_revoked_detected(_engine):
 @pytest.mark.asyncio
 async def test_file_fails_others_continue(_engine):
     """Covers AC-MAC-OUI-082 — MA-L fails, MA-M and MA-S continue."""
-    import httpx
-
     factory = await _make_test_factory(_engine)
     await _cleanup_oui_tables(factory)
     await _seed_settings(factory)
@@ -301,9 +295,6 @@ async def test_file_fails_others_continue(_engine):
 @pytest.mark.asyncio
 async def test_three_consecutive_failures_alert(_engine, caplog):
     """Covers AC-MAC-OUI-083 — log CRITICAL ALERT_OUI_SYNC_FAILED_3X."""
-    import logging
-    import httpx
-
     factory = await _make_test_factory(_engine)
     await _cleanup_oui_tables(factory)
     await _seed_settings(factory, oui_sync_failures_ma_l="2")

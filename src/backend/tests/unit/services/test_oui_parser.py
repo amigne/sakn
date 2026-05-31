@@ -1,6 +1,6 @@
 import pathlib
 
-from app.services.oui_parser import ParsedOuiEntry, parse_ieee_file
+from app.services.oui_parser import parse_ieee_file
 
 FIXTURES = pathlib.Path(__file__).parent.parent.parent / "fixtures" / "ieee"
 
