@@ -191,6 +191,12 @@ async def lifespan(app: FastAPI) -> Any:
                     "max_concurrent_sessions": "10",
                     "visitor_ip_soft_limit": "5",
                     "visitor_ip_hard_limit": "500",
+                    # OUI sync failure counters (per-file)
+                    "oui_sync_failures_ma_l": "0",
+                    "oui_sync_failures_ma_m": "0",
+                    "oui_sync_failures_ma_s": "0",
+                    "oui_sync_running": "0",
+                    "oui_sync_started_at": "",
                 }
                 for key, value in default_settings.items():
                     row = await db.execute(
@@ -200,6 +206,26 @@ async def lifespan(app: FastAPI) -> Any:
                         db.add(GlobalSetting(key=key, value=value))
 
                 await db.commit()
+
+                # Reset stale running flag + started_at at startup (in case of previous crash/SIGKILL)
+                row = await db.execute(
+                    select(GlobalSetting).where(
+                        GlobalSetting.key.in_(["oui_sync_running", "oui_sync_started_at"])
+                    )
+                )
+                stale_rows = {s.key: s for s in row.scalars().all()}
+                running_flag = stale_rows.get("oui_sync_running")
+                started_at = stale_rows.get("oui_sync_started_at")
+                if running_flag and running_flag.value == "1":
+                    logger.warning(
+                        "oui_sync_running flag stale at startup, resetting",
+                        extra={"prior_value": running_flag.value},
+                    )
+                    running_flag.value = "0"
+                    if started_at:
+                        started_at.value = ""
+                    await db.commit()
+
         except Exception:
             logger.exception("Seed data creation failed, continuing")
 
@@ -284,6 +310,14 @@ async def lifespan(app: FastAPI) -> Any:
                 logger.exception("Orphan preferences cleanup failed")
 
         scheduler.start()
+        # Register OUI sync job (idempotent)
+        try:
+            from app.database import async_session_factory as asf
+            from app.scheduler.jobs.oui_sync_job import register_oui_sync_job
+
+            register_oui_sync_job(scheduler, asf)
+        except Exception:
+            logger.exception("OUI sync job registration failed")
     except Exception:
         logger.exception("Scheduler initialization failed")
 

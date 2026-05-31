@@ -160,5 +160,15 @@ class Settings(BaseSettings):
     # Health check token for /health/full (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
     HEALTH_FULL_TOKEN: str = ""
 
+    # ── MAC OUI Sync ──────────────────────────────────────────────────────────
+    # Enable the daily IEEE OUI sync job (APScheduler). Set to False to disable.
+    OUI_SYNC_ENABLED: bool = True
+    # Hour of day to run the sync (0-23 UTC). Default 4:00 to avoid the 3:00-3:40
+    # window already used by log/session cleanup jobs.
+    OUI_SYNC_HOUR: int = 4
+    # Total timeout (seconds) for downloading one IEEE file. Each of the 3 files
+    # gets its own timeout. Default 120 s; MA-L is ~6.5 MB at <1 MB/s minimum.
+    OUI_DOWNLOAD_TIMEOUT_SECONDS: int = 120
+
 
 settings = Settings()
