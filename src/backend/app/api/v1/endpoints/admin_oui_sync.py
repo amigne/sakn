@@ -4,12 +4,10 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-import httpx
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AppError
-from app.config import settings
 from app.database import async_session_factory, get_session
 from app.middleware.admin import require_admin
 from app.services.oui_sync_service import OuiSyncService
@@ -20,15 +18,13 @@ router = APIRouter(prefix="/admin/oui", tags=["admin-oui-sync"])
 
 
 def get_oui_sync_service() -> OuiSyncService:
-    """Dependency: build an OuiSyncService with a real HTTP client.
-    Override in tests to inject a mock."""
-    return OuiSyncService(
-        db_session_factory=async_session_factory,
-        http_client=httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.OUI_DOWNLOAD_TIMEOUT_SECONDS),
-            follow_redirects=False,
-        ),
-    )
+    """Dependency: build an OuiSyncService that owns its HTTP client lifecycle.
+
+    The service creates the httpx client lazily on first use and closes it in
+    its `_cleanup` (called from `sync_all`'s finally). Pre-creating the client
+    here would set `_owns_http=False` and leak it on every request.
+    """
+    return OuiSyncService(db_session_factory=async_session_factory)
 
 
 @router.post("/sync", status_code=202)

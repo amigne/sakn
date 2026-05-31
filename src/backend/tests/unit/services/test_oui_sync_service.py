@@ -508,3 +508,55 @@ async def test_redirect_treated_as_failure(_engine):
     report = await service.sync_all()
 
     assert "MA-L" in report.files_failed
+
+
+@pytest.mark.asyncio
+async def test_owned_http_client_closed_after_sync(_engine, monkeypatch):
+    """M7: when the service owns the http client (lazy creation), _cleanup closes it."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    created_clients: list[MagicMock] = []
+
+    @asynccontextmanager
+    async def failing_stream(method, url, **kw):
+        # Trigger the except-branch in sync_one without doing real I/O
+        raise httpx.TimeoutException("test")
+        yield  # noqa: pragma: no cover — required marker for asynccontextmanager
+
+    def tracking_client_factory(**kwargs):
+        client = MagicMock()
+        client.aclose = AsyncMock()
+        client.stream = failing_stream
+        created_clients.append(client)
+        return client
+
+    monkeypatch.setattr(
+        "app.services.oui_sync_service.httpx.AsyncClient",
+        tracking_client_factory,
+    )
+
+    # Service without pre-built client → _owns_http=True
+    service = OuiSyncService(db_session_factory=factory)
+    await service.sync_all()
+
+    # One client created lazily, and it must have been closed
+    assert len(created_clients) == 1
+    created_clients[0].aclose.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pre_built_http_client_not_closed_by_service(_engine):
+    """M7 inverse: when an external client is passed, the service must NOT close it
+    (lifecycle is the caller's responsibility, e.g. scheduler job)."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    mock_http = _make_mock_http()
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+    await service.sync_all()
+
+    # Caller-owned client → service did not close it
+    mock_http.aclose.assert_not_called()
