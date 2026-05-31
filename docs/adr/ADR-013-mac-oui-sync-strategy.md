@@ -1,8 +1,8 @@
 # ADR-013 — MAC OUI Sync Strategy
 
 > **Status:** Proposed
-> **Date:** 2026-05-31
-> **Deciders:** Yann GAUTERON + assistant (review meeting required)
+> **Date:** 2026-05-31 (revised after Sprint 0 review)
+> **Deciders:** Yann GAUTERON + assistant
 > **References:** `functional-spec.md` §3.5, `spec-backend.md` §4.2/§9.6, `spec-tools-instant.md` §4.5
 
 ---
@@ -14,60 +14,72 @@ La fonctionnalité MAC OUI Lookup repose sur une base locale synchronisée quoti
 - MA-M (`mam.txt`) — préfixes 28-bit (7 hex digits)
 - MA-S (`oui36.txt`) — préfixes 36-bit (9 hex digits)
 
-Le sync service (`oui_sync_service.py`) télécharge ces fichiers, parse les entrées, et met à jour les tables `MacOui` et `MacOuiHistory`. Plusieurs décisions structurantes ne sont pas tranchées par les specs existantes :
+Le sync service (`oui_sync_service.py`) télécharge ces fichiers, parse les entrées, et met à jour les tables `MacOui` et `MacOuiHistory`. Quatre décisions structurantes ne sont pas tranchées par les specs existantes :
 
-1. **Stratégie d'upsert** : que faire quand un OUI change d'organisation entre 2 syncs ?
-2. **Classification automatique du `change_type`** : comment distinguer `name_change`, `address_change`, `revoked`, `reassigned` à partir de diffs textuels ?
-3. **Politique de rétention** : la spec dit « no deletion » — faut-il confirmer, nuancer, ou prévoir une purge future ?
-4. **Chevauchement entre fichiers** : un préfixe MA-M peut couvrir un sous-ensemble d'un préfixe MA-L. Que stocke-t-on ?
+1. **Protocole de téléchargement** : HTTP vs HTTPS.
+2. **Stratégie d'upsert** : que faire quand un OUI change d'organisation entre 2 syncs ?
+3. **Classification du `change_type`** : comment distinguer les types de changement à partir de diffs textuels ?
+4. **Politique de rétention** : la spec dit « no deletion » — règle stricte ou nuancée ?
+5. **Chevauchement entre fichiers** : un préfixe 24-bit peut apparaître à la fois en MA-L et comme préfixe d'assignations MA-M / MA-S. Que stocke-t-on ?
 
 ---
 
-## 2. Décision proposée
+## 2. Décisions
 
-### 2.1 Stratégie d'upsert
+### 2.1 Protocole : HTTPS confirmé
 
-**Décision : comparaison champ par champ avec historique.**
+**Décision : HTTPS pour tous les téléchargements IEEE.**
+
+Test effectué le 2026-05-31 : les 3 URLs (`https://standards-oui.ieee.org/oui/oui.txt`, `https://standards-oui.ieee.org/oui28/mam.txt`, `https://standards-oui.ieee.org/oui36/oui36.txt`) répondent en HTTP/1.1 200 OK avec TLS valide. `Content-Length` du fichier MA-L : 6 467 392 octets (~6,5 Mo).
+
+Les URLs `http://` mentionnées dans `spec-backend.md` §9.6 et `spec-tools-instant.md` §4.5 sont obsolètes. La spec sera corrigée au Sprint 2.
+
+### 2.2 Stratégie d'upsert
+
+**Décision : comparaison champ par champ avec historisation.**
 
 Pour chaque entrée parsée d'un fichier IEEE :
 
-1. Si l'OUI n'existe pas en base → `INSERT` dans `MacOui` avec `first_seen = today`, `last_seen = today`.
-2. Si l'OUI existe avec `organization` ET `address` identiques → `UPDATE last_seen = today`. Aucune ligne d'historique.
-3. Si l'OUI existe mais `organization` ou `address` diffère → `INSERT` dans `MacOuiHistory` avec le `change_type` approprié (voir §2.2), puis `UPDATE` les champs modifiés dans `MacOui` et `last_seen = today`.
-4. Pour les OUIs absents des 3 fichiers : aucune action (pas de `DELETE`, pas d'`UPDATE` de `last_seen`).
+1. Si l'OUI n'existe pas pour ce `oui_type` → `INSERT` dans `MacOui` avec `first_seen = today`, `last_seen = today`.
+2. Si l'OUI existe (`oui`, `oui_type`) avec `organization` ET `address` identiques → `UPDATE last_seen = today`. Aucune ligne d'historique.
+3. Si l'OUI existe mais `organization` ou `address` diffère → `INSERT` dans `MacOuiHistory` (cf. §2.3), puis `UPDATE` des champs modifiés dans `MacOui` + `last_seen = today`.
+4. Pour les OUIs absents des 3 fichiers : **aucune action** (pas de `DELETE`, pas d'`UPDATE` de `last_seen`).
 
-### 2.2 Classification du `change_type`
+### 2.3 Classification du `change_type`
 
-**Décision : heuristique conservative avec valeur par défaut explicite.**
+**Décision : 3 valeurs, hiérarchie claire.**
 
-| Condition | `change_type` |
+| Valeur | Condition de classification |
 |---|---|
-| `organization` inchangé, `address` modifié | `address_change` |
-| `organization` modifié, OUI présent dans le même fichier IEEE qu'avant | `name_change` |
-| `organization` modifié, OUI a changé de fichier IEEE (ex. était dans MA-L, maintenant dans MA-M) | `reassigned` |
-| OUI présent dans le fichier IEEE avec une mention de révocation (mot-clé `revoked` ou `----` dans le champ organisation) | `revoked` |
-| Toute autre modification | `name_change` (fallback conservateur) |
+| `revoked` | Mot-clé `revoked` détecté (insensible à la casse) dans `new_organization` OU `new_organization` réduit à `----` ou vide après trim |
+| `name_change` | `organization` modifié (avec ou sans modification d'adresse) — englobe le cas acquisition/fusion |
+| `address_change` | `organization` inchangé et `address` modifié uniquement |
 
-**Justification** :
-- `name_change` vs `reassigned` : la distinction fiable nécessiterait une connaissance métier externe (est-ce la même entité légale qui a changé de nom, ou un nouveau propriétaire ?). La comparaison du type de fichier IEEE (MA-L → MA-M) est un indicateur objectif mais pas infaillible.
-- `revoked` : détectable via le mot-clé IEEE standard dans le champ organisation.
-- Le fallback `name_change` est choisi comme valeur par défaut la moins engageante (elle n'affirme pas un changement de propriétaire).
+**La valeur `reassigned` est abandonnée.** Justification : distinguer une réassignation (transfert à une autre entité légale) d'un changement de nom (même entité, nouvelle raison sociale) nécessiterait une source métier externe que SAKN ne possède pas. Une heuristique automatique serait fragile, et une reclassification manuelle par l'admin n'est pas réaliste (les fabricants exotiques ou de niche échappent à la connaissance générale).
 
-### 2.3 Politique de rétention
-
-**Décision : « jamais de suppression automatique », avec purge manuelle admin.**
-
-- **Principe** : la spec §3.5.4 dit « no deletion — historical entries retained for forensic value ». On confirme cette règle.
-- **Nuance** : une commande admin manuelle (`sakn-cli oui-purge --older-than <date>`) permettra de purger les entrées non vues depuis N années, pour les déploiements contraints en espace disque. Cette commande n'est PAS automatique et nécessite une action admin explicite.
-- **Justification forensique** : un OUI qui disparaît des fichiers IEEE n'est pas « supprimé » — il peut réapparaître (rachat d'entreprise, réattribution). Le conserver permet de répondre à la question « à qui appartenait ce préfixe à la date T ? ».
+**Cas combiné « nom + adresse changent simultanément »** (ex. Aruba → HPE avec nouveau siège) : classé `name_change`. Les 4 champs `previous_organization`, `new_organization`, `previous_address`, `new_address` sont tous remplis. L'utilisateur voit l'ensemble du diff dans l'UI.
 
 ### 2.4 Chevauchement entre fichiers IEEE
 
-**Décision : 3 tables séparées (une par type OUI) n'est PAS retenu. Table unique `MacOui` avec colonne `oui_type`.**
+**Décision : table unique `MacOui` avec contrainte `UNIQUE(oui, oui_type)`.**
 
-- Un OUI est identifié par `(oui, oui_type)` — la colonne `oui` seule n'est pas UNIQUE, c'est la paire `(oui, oui_type)` qui est unique.
-- Exemple : `001122` peut exister en MA-L et `0011223` en MA-M. Ce sont deux lignes distinctes dans `MacOui`.
-- **Contrainte d'unicité** : `UNIQUE (oui, oui_type)`.
+Dans la base IEEE réelle, certains préfixes 24-bit appartiennent à *« IEEE Registration Authority »* et servent de **pool** pour des assignations MA-M / MA-S à de petits fabricants (ex. `8C:1F:64`). Le même préfixe 24-bit apparaît donc simultanément :
+- 1 fois dans `oui.txt` (`oui_type=MA-L`, organisation = IEEE Registration Authority),
+- N fois dans `mam.txt` / `oui36.txt` (`oui_type=MA-M` ou `MA-S`, organisations = petits fabricants).
+
+La contrainte `UNIQUE(oui, oui_type)` permet de stocker ces 3 occurrences sans duplication. Une simple `UNIQUE(oui)` (telle que la spec backend §4.2 initiale) bloquerait l'insertion.
+
+**Spec corrigée** : `spec-backend.md` §4.2 modifié au Sprint 0 pour refléter cette contrainte.
+
+**Conséquence UX** : si l'utilisateur saisit seulement `8C:1F:64` (sans MAC complète), il verra l'entrée MA-L (« IEEE Registration Authority ») avec une indication visuelle « OUI ambigu » l'invitant à fournir une MAC complète pour identifier le vrai fabricant. Voir AC-MAC-OUI dédiés.
+
+### 2.5 Rétention
+
+**Décision : aucune suppression, jamais.**
+
+- Aucun `DELETE` automatique.
+- Aucun outil ni commande CLI de purge. La valeur forensique des données prime sur le coût stockage.
+- Justification : la base `MacOui` croît lentement (~50 000 entrées aujourd'hui, ~500-2 000 mouvements par an). La table `MacOuiHistory` croît à ~2 500 lignes/an dans le pire cas. À 10 ans, le volume reste très inférieur au seuil où la purge deviendrait utile.
 
 ---
 
@@ -77,28 +89,31 @@ Pour chaque entrée parsée d'un fichier IEEE :
 
 | Approche | Avantages | Inconvénients |
 |---|---|---|
-| **3 tables** (`mac_oui_ma_l`, `mac_oui_ma_m`, `mac_oui_ma_s`) | Requêtes simples (pas de filtre `oui_type`), schéma explicite | 3 jeux de modèles/migrations/services, duplication de logique, jointures complexes pour le lookup « longest prefix » |
-| **Table unique + `oui_type`** (choisie) | Lookup unifié, une seule table à interroger, `UNIQUE(oui, oui_type)` empêche les doublons inter-fichiers tout en permettant les chevauchements | Filtrage `WHERE oui_type =` dans les requêtes admin, colonne `oui_type` obligatoire |
-
-**Raison du choix** : la spec `spec-backend.md` §4.2 a déjà modélisé une table unique. Le cas d'usage principal (lookup) est simplifié. La contrainte `UNIQUE(oui, oui_type)` est ajoutée par rapport à la spec actuelle qui a `UNIQUE(oui)` — ce point nécessite une correction de spec (documenté en §6).
+| 3 tables (`mac_oui_ma_l`, `mac_oui_ma_m`, `mac_oui_ma_s`) | Requêtes simples sans filtre | 3 jeux de modèles/migrations/services, duplication, jointures complexes pour le lookup longest-prefix |
+| **Table unique + `oui_type`** (choisie) | Lookup unifié, une seule table à interroger, `UNIQUE(oui, oui_type)` autorise les chevauchements légitimes | Filtrage `WHERE oui_type =` dans les requêtes admin |
 
 ### 3.2 Détection de changement : hash vs comparaison champ par champ
 
 | Approche | Avantages | Inconvénients |
 |---|---|---|
-| **Hash d'entrée** (`SHA-256(oui|org|address)`) | Comparaison O(1), simple à implémenter | Ne permet PAS de déterminer quel champ a changé → impossible de classifier `change_type`. Une modification mineure (espace, casse) produit un hash différent. |
-| **Comparaison champ par champ** (choisie) | Permet la classification du `change_type` (§2.2), insensible aux changements de casse/espaces si normalisé | Légèrement plus de code Python |
+| Hash d'entrée (`SHA-256(oui\|org\|address)`) | Comparaison O(1) | Impossible de classifier `change_type` (on ne sait pas quel champ a changé) |
+| **Comparaison champ par champ** (choisie) | Permet la classification `name_change` vs `address_change` | Légèrement plus de code |
 
-**Raison du choix** : le besoin de classifier `change_type` (`name_change`, `address_change`, etc.) impose de savoir quel champ a changé. Le hash seul ne le permet pas.
+### 3.3 `change_type` : 4 valeurs vs 3 vs avant/après seul
 
-### 3.3 Rétention : jamais de suppression vs purge après N années
+| Approche | Conséquence |
+|---|---|
+| 4 valeurs (`name_change`, `address_change`, `revoked`, `reassigned`) | Heuristique `reassigned` non fiable, valeur peu actionnable |
+| **3 valeurs** (choisie) | Compromis lisible. L'utilisateur voit `name_change` + le diff complet pour les acquisitions |
+| Avant/après seul, sans classification | Minimaliste, l'utilisateur doit interpréter à chaque fois |
 
-| Approche | Avantages | Inconvénients |
-|---|---|---|
-| **Jamais de suppression** (choisie, avec nuance manuelle) | Valeur forensique maximale, cohérent avec la spec §3.5.4 | Croissance illimitée de la table (environ 50 000 entrées aujourd'hui, croissance lente) |
-| **Purge automatique après N années** | Contrôle de la taille de la base | Perte de données forensiques, complexité (faut-il aussi purger l'historique ?), risque de supprimer un OUI qui sera réattribué |
+### 3.4 Rétention : jamais vs purge automatique vs purge manuelle
 
-**Raison du choix** : la croissance est lente (les OUI IEEE évoluent peu : quelques centaines d'ajouts/modifications par an). La table `MacOui` avec ~50 000 lignes reste petite. La valeur forensique l'emporte sur le gain d'espace. La commande manuelle offre une soupape sans automatiser la destruction de données.
+| Approche | Conséquence |
+|---|---|
+| Purge automatique après N années | Perte forensique, complexité, risque de supprimer un OUI qui sera réattribué |
+| Commande CLI manuelle (`sakn-cli oui-purge`) | Surface admin supplémentaire, peu de bénéfice |
+| **Jamais de suppression** (choisie) | Valeur forensique maximale, croissance maîtrisée |
 
 ---
 
@@ -106,34 +121,31 @@ Pour chaque entrée parsée d'un fichier IEEE :
 
 ### 4.1 Positives
 
-- **Traçabilité** : chaque changement d'organisation est documenté avec un `change_type` classifié automatiquement.
-- **Lookup unifié** : la table unique simplifie le cas d'usage principal (extraire un OUI → chercher dans une seule table).
+- **Traçabilité complète** : chaque changement d'organisation est documenté avec un `change_type` lisible.
+- **Lookup unifié** : table unique simplifie le cas d'usage principal.
 - **Pas de perte de données** : la politique « never delete » préserve la valeur forensique.
-- **Contrainte explicite** : `UNIQUE(oui, oui_type)` empêche les doublons inter-fichiers.
+- **Pas de mécanique admin spéciale** : pas de purge à coder, pas de reclassification `reassigned`.
 
 ### 4.2 Négatives
 
-- **`change_type` heuristique** : la classification automatique peut se tromper (ex. un `name_change` classé comme `reassigned` si l'OUI change de fichier IEEE). Une reclassification manuelle admin pourrait être nécessaire.
-- **Correction de spec nécessaire** : la spec `spec-backend.md` §4.2 a `UNIQUE` sur `oui` seul. Il faut la modifier en `UNIQUE(oui, oui_type)`.
-- **Pas de détection automatique des OUI « disparus »** : un OUI retiré des fichiers IEEE sans mention `revoked` reste en base avec son ancien `last_seen`, sans entrée d'historique. Un admin qui consulte la table ne peut pas distinguer un OUI actif d'un OUI disparu sans regarder `last_seen`.
-- **Croissance de `MacOuiHistory`** : la table d'historique grandit à chaque changement. Pour ~50 000 OUIs avec un taux de changement faible (< 5%/an), cela reste acceptable (~2 500 lignes/an).
+- **Pas de distinction `name_change` vs `reassigned`** : un utilisateur lisant l'historique d'une acquisition (ex. Aruba → HPE) voit `name_change` au lieu de `reassigned`. Mitigation : le diff complet est affiché, l'utilisateur peut interpréter.
+- **Croissance de `MacOuiHistory`** : ~2 500 lignes/an au maximum. À 10 ans : 25 000 lignes. Acceptable.
 
 ### 4.3 Impacts sur les sprints
 
 | Sprint | Impact |
 |---|---|
-| Sprint 1 (modèles) | Ajouter `UNIQUE(oui, oui_type)` au modèle `MacOui` |
-| Sprint 2 (sync) | Implémenter la comparaison champ par champ + heuristique `change_type` |
-| Sprint 6 (admin) | Ajouter la commande `sakn-cli oui-purge` et un endpoint `sync-status` |
+| Sprint 1 (modèles) | Contrainte `UNIQUE(oui, oui_type)` au lieu de `UNIQUE(oui)` |
+| Sprint 2 (sync) | HTTPS obligatoire ; comparaison champ par champ ; logique de classification en 3 valeurs |
+| Sprint 5 (admin) | Pas de commande de purge à exposer |
 
 ---
 
 ## 5. Implémentation (sketch)
 
-### 5.1 Contrainte d'unicité corrigée
+### 5.1 Contrainte d'unicité
 
 ```python
-# MacOui model (spec-backend.md §4.2, corrigé)
 class MacOui(Base):
     __tablename__ = "mac_oui"
     __table_args__ = (
@@ -150,57 +162,53 @@ class MacOui(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 ```
 
-### 5.2 Logique de sync (pseudo-code)
+### 5.2 Classification (pseudo-code)
 
 ```python
-def classify_change(old_org: str, new_org: str, old_addr: str, new_addr: str,
-                    old_file: str, new_file: str) -> str:
-    """Classify change_type from diff."""
-    if "revoked" in new_org.lower() or new_org.strip() == "----":
+REVOKED_MARKERS = ("revoked",)  # case-insensitive substring match
+def classify_change(old_org: str, new_org: str, old_addr: str, new_addr: str) -> str:
+    new_org_norm = new_org.strip()
+    if not new_org_norm or new_org_norm == "----" or "revoked" in new_org_norm.lower():
         return "revoked"
-    if old_org != new_org and old_file != new_file:
-        return "reassigned"
     if old_org != new_org:
-        return "name_change"
-    if old_addr != new_addr:
-        return "address_change"
-    return "name_change"  # fallback
+        return "name_change"  # covers acquisition/fusion (org + address may both change)
+    return "address_change"
+```
+
+### 5.3 URLs HTTPS
+
+```python
+OUI_SOURCES = (
+    ("MA-L", "https://standards-oui.ieee.org/oui/oui.txt"),
+    ("MA-M", "https://standards-oui.ieee.org/oui28/mam.txt"),
+    ("MA-S", "https://standards-oui.ieee.org/oui36/oui36.txt"),
+)
 ```
 
 ---
 
 ## 6. Doutes / arbitrages requis
 
-### 6.1 Correction de spec : `UNIQUE(oui)` → `UNIQUE(oui, oui_type)`
+Tous les doutes initiaux sont levés. Cette section reste pour traçabilité.
 
-La spec actuelle (`spec-backend.md` §4.2) définit `oui VARCHAR(12) UNIQUE`. Avec la décision de permettre le chevauchement MA-L/MA-M, cette contrainte doit devenir `UNIQUE(oui, oui_type)`. **Ceci est une modification de spec identifiée**, non appliquée (règle du sprint : pas de modification de spec). À valider en revue.
-
-### 6.2 Heuristique `reassigned` : fiabilité faible
-
-La détection de `reassigned` basée sur le changement de fichier IEEE (MA-L → MA-M) est fragile :
-- Un OUI peut changer de nom ET de fichier sans changer de propriétaire (réorganisation de la base IEEE).
-- Un OUI peut être réassigné à une autre entité tout en restant dans le même fichier.
-
-**Recommandation** : ajouter une colonne `change_type_confirmed BOOLEAN DEFAULT FALSE` dans `MacOuiHistory` pour permettre une reclassification manuelle par un admin. À discuter en revue.
-
-### 6.3 Mot-clé `revoked` : dépendance au format IEEE
+### 6.1 Mot-clé `revoked` : dépendance au format IEEE
 
 La détection du statut `revoked` dépend de la présence du mot `revoked` dans le champ organisation du fichier IEEE. Si IEEE change son format, cette détection cassera silencieusement (tous les `revoked` seront classés `name_change`). Pas de solution robuste sans source externe faisant autorité.
 
-### 6.4 Table unique : performance du « longest prefix »
+**Mitigation** : monitoring de l'évolution du format IEEE en Sprint 5 (observabilité). Si le format change, un mainteneur ajustera la liste `REVOKED_MARKERS`.
 
-Le lookup « longest prefix wins » sur une table unique nécessite de chercher le préfixe 9 digits, puis 7, puis 6, en s'arrêtant au premier hit. Pour 50 000 lignes avec un index sur `oui`, c'est O(log n) × 3 = négligeable. Mais si le nombre de OUIs dépasse 500 000 à l'avenir, il faudra re-benchmarker.
+### 6.2 Performance du « longest prefix » sur table unique
 
-### 6.5 Commande de purge manuelle : scope
+Le lookup « longest prefix wins » sur une table unique nécessite de chercher le préfixe 9 digits, puis 7, puis 6, en s'arrêtant au premier hit. Pour ~50 000 lignes avec un index sur `(oui)`, c'est O(log n) × 3 = négligeable.
 
-La commande `sakn-cli oui-purge` proposée en §2.3 n'est pas spécifiée dans les briefs de sprint actuels. Si elle est retenue, il faut l'ajouter au périmètre du Sprint 6 (admin). À défaut, la créer en tant qu'issue de suivi post-MVP.
+Stratégie d'optimisation : faire **une seule** requête `SELECT * FROM mac_oui WHERE oui IN (?, ?, ?) AND oui_type IN (?, ?, ?)` avec les 3 préfixes candidats par MAC, puis dédupliquer côté Python en privilégiant le plus long. Évite N requêtes par MAC.
 
 ---
 
 ## 7. Références
 
 - `docs/specs/functional-spec.md` §3.5.4 — « no deletion, historical entries retained for forensic value »
-- `docs/specs/technical/spec-backend.md` §4.2 — MacOui, MacOuiHistory models
+- `docs/specs/technical/spec-backend.md` §4.2 — MacOui, MacOuiHistory models (corrigé Sprint 0)
 - `docs/specs/technical/spec-backend.md` §9.6 — OUI sync logic
 - `docs/specs/technical/spec-tools-instant.md` §4.5 — OUI database sync
-- `docs/adr/ADR-014-mac-oui-extraction-regex.md` — extraction regex (ADR sœur, décisions liées)
+- `docs/adr/ADR-014-mac-oui-extraction.md` — extraction côté frontend (ADR sœur)

@@ -1,641 +1,722 @@
 # Acceptance Criteria — MAC OUI Lookup
 
-> **Version:** 0.1.0 (draft)
+> **Version:** 0.2.0 (révision Sprint 0 post-revue)
 > **Status:** Draft — pending review
 > **Date:** 2026-05-31
 > **Module:** MAC OUI Lookup (`mac_oui`)
-> **References:** `functional-spec.md` §3.5, `spec-tools-instant.md` §4, `spec-backend.md` §4.2/§9.6, `spec-api-contract.md` §9-10, `spec-frontend.md` §4.1, `ui-spec.md` SCR-26
+> **References:** `functional-spec.md` §3.5, `spec-tools-instant.md` §4, `spec-backend.md` §4.2/§9.6, `spec-api-contract.md` §9-10, `spec-frontend.md` §4.1, `ui-spec.md` SCR-26, ADR-013, ADR-014
+
+> **Architecture rappel** : le frontend extrait, normalise et envoie une liste d'OUI/MAC déjà formatée au backend. Le backend revalide en zero-trust, fait un lookup pur, retourne 200 OK avec résultats partiels et entrées rejetées (sanitisées). 422 réservé au JSON malformé. Voir ADR-014 §2.
 
 ---
 
-## 1. Extraction de patterns
+## 1. Extraction côté frontend (formats acceptés)
 
 ### AC-MAC-OUI-001 — MAC colon-separated (6 octets)
 
-**Given** the input text contains `00:11:22:33:44:55`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
-
----
+**Given** the textarea contains `00:11:22:33:44:55`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455`, normalizes to bare hex uppercase, and includes it in the API request payload
 
 ### AC-MAC-OUI-002 — MAC hyphen-separated (6 octets)
 
-**Given** the input text contains `00-11-22-33-44-55`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
+**Given** the textarea contains `00-11-22-33-44-55`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455` (same normalization)
 
----
+### AC-MAC-OUI-003 — MAC Cisco dot-separated (3 groups of 4)
 
-### AC-MAC-OUI-003 — MAC dot-separated Cisco-style (6 octets)
+**Given** the textarea contains `0011.2233.4455`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455`
 
-**Given** the input text contains `0011.2233.4455`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
+### AC-MAC-OUI-004 — MAC bare hex (12 digits, isolated)
 
----
+**Given** the textarea contains `001122334455` surrounded by whitespace
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455`
 
-### AC-MAC-OUI-004 — MAC bare hex (6 octets)
+### AC-MAC-OUI-005 — MAC bare hex (12 digits) NOT isolated
 
-**Given** the input text contains `001122334455`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
+**Given** the textarea contains `abc001122334455def` (no word boundary)
+**When** the user clicks Execute
+**Then** the frontend does NOT extract `001122334455` (the `\b` boundary blocks the match)
 
----
+### AC-MAC-OUI-006 — OUI 3 octets colon-separated
 
-### AC-MAC-OUI-005 — OUI-only colon-separated (3 octets)
+**Given** the textarea contains `00:11:22`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122` (6 hex digits, MA-L candidate)
 
-**Given** the input text contains `00:11:22`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
+### AC-MAC-OUI-007 — OUI 3 octets hyphen-separated
 
----
+**Given** the textarea contains `00-11-22`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122` (accepted format, tolerant policy)
 
-### AC-MAC-OUI-006 — OUI-only bare hex (3 octets)
+### AC-MAC-OUI-008 — OUI 3 octets Cisco 2-group
 
-**Given** the input text contains `001122`
-**When** the tool executes
-**Then** the OUI `00:11:22` is extracted and looked up
+**Given** the textarea contains `0011.22`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122`
 
----
+### AC-MAC-OUI-009 — OUI 3 octets bare hex
 
-### AC-MAC-OUI-007 — Mixed formats in same input
+**Given** the textarea contains `001122` isolated by word boundaries
+**When** the user clicks Execute
+**Then** the frontend extracts `001122`
 
-**Given** the input text contains `00:11:22:33:44:55` and `00-11-22-33-44-55` and `0011.2233.4455`
-**When** the tool executes
-**Then** all three OUIs (`00:11:22`) are extracted, deduplicated to a single result row
+### AC-MAC-OUI-010 — OUI MA-M (7 hex digits, all separators)
 
----
+**Given** the textarea contains `00:11:22:3`, `00-11-22-3`, `0011223`
+**When** the user clicks Execute
+**Then** the frontend extracts `0011223` for each variant
 
-### AC-MAC-OUI-008 — Case insensitivity
+### AC-MAC-OUI-011 — OUI MA-S (9 hex digits, all separators)
 
-**Given** the input text contains `0A:1B:2C:3D:4E:5F` and `0a:1b:2c:3d:4e:5f`
-**When** the tool executes
-**Then** both are extracted as the same OUI `0A:1B:2C` (deduplicated, one result)
+**Given** the textarea contains `00:11:22:33:4`, `0011.2233.4`, `001122334`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334` for each variant
 
----
+### AC-MAC-OUI-012 — Mixed separators in same input
 
-### AC-MAC-OUI-009 — Non-MAC text ignored
+**Given** the textarea contains `00:11:22:33:44:55` and `aa-bb-cc-dd-ee-ff` and `0011.2233.4455`
+**When** the user clicks Execute
+**Then** all three are extracted and normalized: `001122334455`, `AABBCCDDEEFF`, `001122334455` (the last two of these are deduplicated to a single entry — see §3)
 
-**Given** the input text is `Server 192.168.1.1 has MAC 00:11:22:33:44:55 on VLAN 10`
-**When** the tool executes
-**Then** only `00:11:22:33:44:55` is extracted; `192.168.1.1` and `10` are ignored
+### AC-MAC-OUI-013 — Case insensitivity
 
----
+**Given** the textarea contains `0a:1b:2c:3d:4e:5f` and `0A:1B:2C:3D:4E:5F`
+**When** the user clicks Execute
+**Then** both are normalized to `0A1B2C3D4E5F` (uppercase) and deduplicated
 
-### AC-MAC-OUI-010 — Multiple distinct OUIs in same input
+### AC-MAC-OUI-014 — Realistic ARP table paste
 
-**Given** the input text contains `00:11:22:33:44:55` and `aa:bb:cc:dd:ee:ff`
-**When** the tool executes
-**Then** two result rows are returned: one for `00:11:22`, one for `AA:BB:CC`
-
----
-
-### AC-MAC-OUI-011 — MAC embedded in ARP table output
-
-**Given** the input text is a realistic ARP table:
+**Given** the textarea contains:
 ```
-Internet  10.0.0.1           0   00:11:22:33:44:55   ARPA   Vlan10
-Internet  10.0.0.2           0   00-11-22-33-44-AA   ARPA   Vlan10
+Internet  10.0.0.1   0   00:11:22:33:44:55   ARPA   Vlan10
+Internet  10.0.0.2   0   00-11-22-33-44-AA   ARPA   Vlan10
 ```
-**When** the tool executes
-**Then** both MACs are extracted; they share the same OUI `00:11:22`, so `parse_stats.mac_oui_count = 2` and `parse_stats.unique_oui_count = 1`, with one result row for `00:11:22`.
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455` and `00112233 44AA`, both share the same OUI MA-L prefix `001122`
+
+### AC-MAC-OUI-015 — Realistic Cisco config paste
+
+**Given** the textarea contains `interface FastEthernet0/1\n mac-address 0011.2233.4455`
+**When** the user clicks Execute
+**Then** the frontend extracts `001122334455`
+
+### AC-MAC-OUI-016 — Non-hex text ignored
+
+**Given** the textarea contains `Server alpha-1 has IP 192.168.1.42 and runs ubuntu`
+**When** the user clicks Execute
+**Then** the frontend extracts nothing; the result is an empty list
+
+### AC-MAC-OUI-017 — UUID NOT matched
+
+**Given** the textarea contains `550e8400-e29b-41d4-a716-446655440000`
+**When** the user clicks Execute
+**Then** the frontend extracts nothing (UUID groups are 8-4-4-4-12, not 2-2-2-2-2-2)
+
+### AC-MAC-OUI-018 — Date ISO NOT matched as hyphen OUI
+
+**Given** the textarea contains `2026-05-31`
+**When** the user clicks Execute
+**Then** the frontend extracts nothing (groups are 4-2-2, not 2-2-2)
+
+### AC-MAC-OUI-019 — Timestamp HH:MM:SS — accepted as false positive
+
+**Given** the textarea contains `12:34:56` (looks like a timestamp)
+**When** the user clicks Execute
+**Then** the frontend extracts `123456` (OUI 3 octets) — this is an accepted false positive per ADR-014 §2.2 (recall > precision). The backend lookup will likely return "Unknown vendor".
+
+### AC-MAC-OUI-020 — Length normalization to valid IEEE sizes
+
+**Given** the frontend extracts a pattern that normalizes to 8 hex digits (e.g., `deadbeef`)
+**When** normalization runs
+**Then** the entry is **silently dropped** (length 8 not in {6, 7, 9, 12}); not sent to backend
 
 ---
 
-### AC-MAC-OUI-012 — Full MAC and OUI-only pattern with same prefix
+## 2. Frontend normalization
 
-**Given** the input text contains both `00:11:22:33:44:55` (full MAC) and `00:11:22` (OUI-only)
-**When** the tool executes
-**Then** one result row for `00:11:22` (deduplicated to single lookup)
+### AC-MAC-OUI-021 — Strip separators
 
----
+**Given** the frontend extracted `00:11:22:33:44:55`
+**When** normalization runs
+**Then** the output is `001122334455` (no separator)
 
-## 2. Déduplication
+### AC-MAC-OUI-022 — Convert to uppercase
 
-### AC-MAC-OUI-013 — Exact duplicate OUIs
+**Given** the frontend extracted `ab:cd:ef`
+**When** normalization runs
+**Then** the output is `ABCDEF`
 
-**Given** the input text contains `00:11:22:33:44:55` twice (same line repeated)
-**When** the tool executes
-**Then** the OUI `00:11:22` appears exactly once in the results
+### AC-MAC-OUI-023 — Reject invalid characters
 
----
+**Given** the frontend (via a hypothetical extraction artifact) produced `00112G` (`G` not hex)
+**When** normalization runs
+**Then** the entry is silently dropped before submission
 
-### AC-MAC-OUI-014 — Same OUI, different full-MAC formats
+### AC-MAC-OUI-024 — Send sorted unique list to backend
 
-**Given** the input text contains `00:11:22:33:44:55` (colon) and `00-11-22-33-44-55` (hyphen) and `0011.2233.4455` (Cisco)
-**When** the tool executes
-**Then** one result row for `00:11:22` (all three are the same OUI)
-
----
-
-### AC-MAC-OUI-015 — Same OUI, different separator but same byte count
-
-**Given** the input text contains `00:11:22` (colon, 3 bytes) and `001122` (bare hex, 3 bytes)
-**When** the tool executes
-**Then** one result row for `00:11:22` (deduplicated to single lookup)
+**Given** the frontend normalized 5 entries with 1 duplicate
+**When** the API request is built
+**Then** the request body is `{ "ouis": [...] }` with 4 unique entries
 
 ---
 
-### AC-MAC-OUI-016 — OUI prefixes of different lengths (MA-L vs MA-M overlap)
+## 3. Frontend deduplication
 
-**Given** the input text contains a MAC whose first 6 hex digits match an MA-L entry and whose first 7 hex digits match an MA-M entry
-**When** the tool executes
-**Then** only the longest-prefix match is returned (MA-M wins over MA-L), per `functional-spec.md` §3.5.4
+### AC-MAC-OUI-025 — Exact duplicates
 
----
+**Given** the textarea contains `00:11:22:33:44:55` twice
+**When** the user clicks Execute
+**Then** one unique entry `001122334455` is sent to backend
 
-## 3. Lookup IEEE
+### AC-MAC-OUI-026 — Same MAC, different separators
 
-### AC-MAC-OUI-017 — MA-L hit (24-bit)
+**Given** the textarea contains `00:11:22:33:44:55` and `00-11-22-33-44-55` and `0011.2233.4455`
+**When** the user clicks Execute
+**Then** one unique entry `001122334455` is sent (all 3 normalize to the same value)
 
-**Given** the OUI `00:11:22` exists in the `MacOui` table with `oui_type = MA-L`
-**When** the tool looks up `00:11:22`
-**Then** the result includes `organization`, `address`, `oui_type = "MA-L"`, `first_seen`, `last_seen`
+### AC-MAC-OUI-027 — Same OUI extracted twice via different MACs
 
----
-
-### AC-MAC-OUI-018 — MA-M hit (28-bit)
-
-**Given** the OUI `00:11:22:3` (7 hex digits) exists in the `MacOui` table with `oui_type = MA-M`
-**When** the tool looks up this OUI
-**Then** the result includes `oui_type = "MA-M"` and the corresponding organization
+**Given** the textarea contains `00:11:22:33:44:55` and `00:11:22:33:44:66`
+**When** the user clicks Execute
+**Then** two entries are sent to backend; the backend's longest-prefix lookup returns the same MA-L vendor for both. UI displays both rows.
 
 ---
 
-### AC-MAC-OUI-019 — MA-S hit (36-bit)
+## 4. Backend validation (zero-trust)
 
-**Given** the OUI `00:11:22:33:4` (9 hex digits) exists in the `MacOui` table with `oui_type = MA-S`
-**When** the tool looks up this OUI
-**Then** the result includes `oui_type = "MA-S"` and the corresponding organization
+### AC-MAC-OUI-028 — Valid JSON, all entries valid
 
----
+**Given** the API receives `{"ouis": ["001122", "112233445566"]}`
+**When** the backend validates and looks up
+**Then** the response is 200 OK with `results` array of 2 entries, `rejected` empty
 
-### AC-MAC-OUI-020 — Longest prefix wins
+### AC-MAC-OUI-029 — Valid JSON, one invalid entry
 
-**Given** the MAC `00:11:22:33:44:55`:
-- `001122` matches an MA-L entry in the database
-- `0011223` matches an MA-M entry in the database
-**When** the tool looks up this MAC
-**Then** the MA-M entry (`0011223`) is returned (most specific / longest prefix)
+**Given** the API receives `{"ouis": ["001122", "test"]}`
+**When** the backend validates
+**Then** the response is 200 OK with `results` of 1 entry (`001122`), `rejected` listing index 2 with `reason="invalid_format"` and a sanitized `sample`
 
----
+### AC-MAC-OUI-030 — Malformed JSON
 
-### AC-MAC-OUI-021 — Unknown vendor (OUI not in database)
+**Given** the API receives a body that is not valid JSON
+**When** the backend parses
+**Then** the response is 422 with `VALIDATION_ERROR`
 
-**Given** the OUI `FF:EE:DD` is extracted from input but does not exist in the `MacOui` table
-**When** the tool looks up this OUI
-**Then** the result row shows `organization` = "Unknown vendor" (i18n key `tools.mac_oui.unknown_vendor`), and `oui_type`, `address`, `first_seen`, `last_seen` are `null`
+### AC-MAC-OUI-031 — Missing `ouis` field
 
----
+**Given** the API receives `{}` (no `ouis` key)
+**When** the backend validates
+**Then** the response is 422 with `VALIDATION_ERROR`
 
-### AC-MAC-OUI-022 — Lookup is case-insensitive
+### AC-MAC-OUI-032 — `ouis` field is not an array
 
-**Given** the database stores OUI `001122` (uppercase bare hex)
-**When** the tool looks up extracted OUI `0a:1b:2c` (lowercase input)
-**Then** the lookup normalizes to uppercase bare hex `0A1B2C` and matches correctly
+**Given** the API receives `{"ouis": "001122"}` (string instead of array)
+**When** the backend validates
+**Then** the response is 422 with `VALIDATION_ERROR`
 
----
+### AC-MAC-OUI-033 — Length invalid (8 digits)
 
-### AC-MAC-OUI-023 — Result fields match spec
+**Given** the API receives `{"ouis": ["deadbeef"]}`
+**When** the backend validates
+**Then** the response is 200 OK with `results=[]` and `rejected=[{"index":1, "sample":"DEADBEEF", "reason":"invalid_length"}]`
 
-**Given** a successful lookup
-**When** the API returns results
-**Then** each result object contains exactly: `oui`, `organization`, `address`, `oui_type`, `first_seen`, `last_seen` (per `spec-tools-instant.md` §4.3)
+### AC-MAC-OUI-034 — Non-hex characters
 
----
+**Given** the API receives `{"ouis": ["001G22"]}`
+**When** the backend validates
+**Then** the response is 200 OK with `rejected=[{"index":1, "sample":"001G22", "reason":"non_hex_characters"}]`
 
-## 4. Historique des changements
+### AC-MAC-OUI-035 — Empty `ouis` list
 
-### AC-MAC-OUI-024 — OUI without history
+**Given** the API receives `{"ouis": []}`
+**When** the backend processes
+**Then** the response is 200 OK with `results=[]` and `rejected=[]`
 
-**Given** an OUI `00:11:22` has existed in the database with the same organization since `first_seen`
-**When** the tool looks up this OUI
-**Then** the `history` array for this OUI is empty (`[]`)
+### AC-MAC-OUI-036 — Backend batch size exceeded
 
----
-
-### AC-MAC-OUI-025 — OUI with name change
-
-**Given** OUI `00:11:22` changed organization name from "Cisco Systems, Inc." to "Cisco Systems, LLC" during a sync
-**When** the tool looks up this OUI
-**Then** the `history` array includes an entry with:
-- `previous_organization` = "Cisco Systems, Inc."
-- `new_organization` = "Cisco Systems, LLC"
-- `change_type` = "name_change"
-- `changed_at` = the date the sync detected the change
+**Given** the admin setting `MAC_OUI_BACKEND_BATCH_MAX_SIZE` is set to 2000
+**And** the API receives `{"ouis": [... 2001 entries ...]}`
+**When** the backend validates
+**Then** the response is 422 with error code `MAC_OUI_TOO_MANY_INPUTS`
 
 ---
 
-### AC-MAC-OUI-026 — OUI with address change
+## 5. Security: bounded echo
 
-**Given** OUI `00:11:22` changed address between two syncs (same organization name)
-**When** the tool looks up this OUI
-**Then** the `history` array includes an entry with `change_type` = "address_change", containing `previous_address` and `new_address`
+### AC-MAC-OUI-037 — XSS payload sanitization
 
----
+**Given** the API receives `{"ouis": ["<script>alert(1)</script>"]}`
+**When** the backend validates
+**Then** `rejected[0].sample` is `<script>alert(1)??` (truncated to 20 chars) and special chars replaced by `?`. **The original payload is never echoed.**
 
-### AC-MAC-OUI-027 — OUI with revoked status
+### AC-MAC-OUI-038 — Echo length cap
 
-**Given** OUI `00:11:22` was present in a previous IEEE file but is now listed as revoked
-**When** the tool looks up this OUI
-**Then** the `history` array includes an entry with `change_type` = "revoked"
+**Given** the API receives an invalid entry of 200 characters
+**When** the backend sanitizes the echo
+**Then** `rejected[i].sample` is at most 20 characters
 
----
+### AC-MAC-OUI-039 — Echo charset filter
 
-### AC-MAC-OUI-028 — OUI reassigned to different organization
+**Given** the API receives an entry with mixed characters: `00:11;22\nhello`
+**When** the backend sanitizes the echo
+**Then** characters outside `[0-9a-fA-F:.\-]` are replaced by `?`
 
-**Given** OUI `00:11:22` changed from "Old Vendor Inc." to "New Vendor LLC" (different legal entity)
-**When** the tool looks up this OUI
-**Then** the `history` array includes an entry with `change_type` = "reassigned"
+### AC-MAC-OUI-040 — Frontend escapes echo
 
----
-
-### AC-MAC-OUI-029 — OUI with multiple historical changes
-
-**Given** OUI `00:11:22` has 3 `MacOuiHistory` rows: a name change on 2026-01-15, an address change on 2026-03-10, and a reassignment on 2026-05-20
-**When** the tool looks up this OUI
-**Then** the `history` array contains all 3 entries, ordered by `detected_at` ascending (oldest first)
+**Given** the API returns a `rejected[]` array with sanitized `sample` values
+**When** the frontend renders the rejection notice
+**Then** React's default escaping applies (no `dangerouslySetInnerHTML`). Test with a sample containing literal `<` and `>` chars to confirm rendering as text.
 
 ---
 
-## 5. Garde-fous
+## 6. Lookup IEEE
 
-### AC-MAC-OUI-030 — Empty input
+### AC-MAC-OUI-041 — MA-L hit
 
-**Given** the input `text` parameter is an empty string (`""`)
-**When** the tool executes
-**Then** the API returns HTTP 422 with error code `MAC_OUI_PARSE_EMPTY` and `message_key` = `errors.mac_oui_parse_empty`
+**Given** the OUI `001122` exists in `mac_oui` with `oui_type='MA-L'`
+**When** the backend looks up `001122`
+**Then** the response includes `organization`, `address`, `oui_type="MA-L"`, `first_seen`, `last_seen`
+
+### AC-MAC-OUI-042 — MA-M hit (7 digits)
+
+**Given** the OUI `0011223` exists in `mac_oui` with `oui_type='MA-M'`
+**When** the backend looks up `0011223`
+**Then** the response includes `oui_type="MA-M"` and the corresponding organization
+
+### AC-MAC-OUI-043 — MA-S hit (9 digits)
+
+**Given** the OUI `001122334` exists in `mac_oui` with `oui_type='MA-S'`
+**When** the backend looks up `001122334`
+**Then** the response includes `oui_type="MA-S"`
+
+### AC-MAC-OUI-044 — Longest prefix wins (MAC complète couvre MA-L et MA-M)
+
+**Given** the MAC `001122334455`:
+- `001122` exists in MA-L (organization = IEEE Registration Authority)
+- `0011223` exists in MA-M (organization = Acme Corp)
+
+**When** the backend looks up this MAC
+**Then** the result is Acme Corp (MA-M, longest prefix) — not IEEE Registration Authority
+
+### AC-MAC-OUI-045 — Longest prefix wins (MAC complète couvre MA-M et MA-S)
+
+**Given** the MAC `001122334455`:
+- `001122` in MA-L, `0011223` in MA-M, `001122334` in MA-S
+
+**When** the backend looks up this MAC
+**Then** the result is the MA-S entry (longest prefix)
+
+### AC-MAC-OUI-046 — Unknown OUI
+
+**Given** the OUI `FFEEDD` does not exist in `mac_oui`
+**When** the backend looks up `FFEEDD`
+**Then** the response entry has `result=null` and the frontend displays "Unknown vendor" (i18n `tools.mac_oui.unknown_vendor`)
+
+### AC-MAC-OUI-047 — Ambiguous partial OUI (MA-L pool block)
+
+**Given** the OUI `8C1F64` exists in MA-L with `organization="IEEE Registration Authority"`
+**And** multiple MA-M entries exist with prefix starting `8C1F64...`
+**When** the user submits only `8C:1F:64` (no full MAC)
+**Then** the response entry includes:
+- `result` populated with the IEEE Registration Authority data
+- `ambiguous_extends_ma_m: true`
+- `ambiguous_extends_ma_s` (true or false depending on actual data)
+
+**And** the frontend displays this row in orange (token `--color-warning`) with the hint `tools.mac_oui.ambiguous_partial_oui`
+
+### AC-MAC-OUI-048 — Single SELECT, no N+1
+
+**Given** the API receives `{"ouis": [... 100 unique entries ...]}`
+**When** the backend performs lookups
+**Then** a single `SELECT * FROM mac_oui WHERE (oui, oui_type) IN ((...), ...)` is issued (or equivalent batched query). No per-entry round-trip.
 
 ---
 
-### AC-MAC-OUI-031 — Input exceeds 50 000 characters
+## 7. Historique des changements
 
-**Given** the input `text` parameter is 50 001+ characters
-**When** the tool executes
-**Then** the API returns HTTP 422 with `VALIDATION_ERROR` (parameter constraint violated, per `functional-spec.md` §3.5.2)
+### AC-MAC-OUI-049 — OUI without history
+
+**Given** OUI `001122` has no entries in `mac_oui_history`
+**When** the backend returns the result
+**Then** the entry's `history` field is `[]` (empty array, not null, not absent)
+
+### AC-MAC-OUI-050 — Name change
+
+**Given** OUI `001122` had `MacOuiHistory` row with `previous_organization="Cisco Systems, Inc."`, `new_organization="Cisco Systems, LLC"`, `change_type="name_change"`
+**When** the user expands the history for this OUI
+**Then** the entry is displayed with the labels (FR/EN per i18n) and the `detected_at` date
+
+### AC-MAC-OUI-051 — Name + address change classified as name_change
+
+**Given** OUI `001122` simultaneously changed `organization` (Aruba → HPE) and `address` (San Jose → Houston)
+**When** the daily sync detects this
+**Then** a single `MacOuiHistory` row is inserted with `change_type="name_change"`, all 4 fields populated (`previous_organization`, `new_organization`, `previous_address`, `new_address`)
+**And** the frontend displays both diffs (name + address)
+
+### AC-MAC-OUI-052 — Address-only change
+
+**Given** OUI `001122` kept its organization name but changed address
+**When** the daily sync detects this
+**Then** a `MacOuiHistory` row is inserted with `change_type="address_change"`, `previous_organization == new_organization`, `previous_address != new_address`
+
+### AC-MAC-OUI-053 — Revoked OUI
+
+**Given** OUI `001122` was present in MA-L but the IEEE file now lists it with organization `"----"` or containing `revoked`
+**When** the daily sync detects this
+**Then** a `MacOuiHistory` row is inserted with `change_type="revoked"`. The `MacOui.organization` is updated to the IEEE file value.
+
+### AC-MAC-OUI-054 — Multiple historical entries, chronological order
+
+**Given** OUI `001122` has 3 `MacOuiHistory` rows: name change on 2026-01-15, address change on 2026-03-10, name change on 2026-05-20
+**When** the user expands history
+**Then** entries are loaded in ascending chronological order (oldest first)
+
+### AC-MAC-OUI-055 — History pagination (lazy load)
+
+**Given** OUI `001122` has 47 history entries
+**And** the admin setting `MAC_OUI_HISTORY_PAGE_SIZE` is set to 10
+**When** the user expands the history section
+**Then** the first 10 entries are fetched and displayed
+**And** scrolling to the bottom of the expanded section triggers loading the next 10 (infinite scroll pattern)
+**And** the loading indicator appears between fetches
+
+### AC-MAC-OUI-056 — History pagination endpoint
+
+**Given** the API endpoint `GET /api/v1/tools/mac_oui/history?oui=001122&oui_type=MA-L&offset=0&limit=10` is called
+**When** there are 47 entries
+**Then** the response includes the first 10 entries plus `total: 47`, `has_more: true`
+
+### AC-MAC-OUI-057 — History collection start date header
+
+**Given** the module was deployed (first sync executed) on 2026-04-01
+**When** the user expands any OUI's history
+**Then** the section header reads `tools.mac_oui.history_since` (FR: « Historique collecté depuis le 01/04/2026 », EN: "History collected since 2026-04-01")
 
 ---
 
-### AC-MAC-OUI-032 — No valid MAC/OUI found
+## 8. Sortie API
 
-**Given** the input text is `This is a sentence with no MAC addresses. Just words.`
-**When** the tool executes
-**Then** the API returns HTTP 422 with error code `MAC_OUI_PARSE_EMPTY` and `message_key` = `errors.mac_oui_parse_empty`
-
----
-
-### AC-MAC-OUI-033 — Input contains only invalid hex patterns
-
-**Given** the input text is `12345` (odd number of hex digits, not a valid MAC/OUI pattern)
-**When** the tool executes
-**Then** no patterns are extracted; the API returns HTTP 422 with `MAC_OUI_PARSE_EMPTY`
-
----
-
-### AC-MAC-OUI-034 — Whitespace-only input
-
-**Given** the input `text` parameter is `"   \n\t   "` (only whitespace)
-**When** the tool executes
-**Then** the API returns HTTP 422 with `MAC_OUI_PARSE_EMPTY`
-
----
-
-### AC-MAC-OUI-035 — Input at 50 000 characters with valid MACs
-
-**Given** the input `text` is exactly 50 000 characters and contains valid MAC patterns
-**When** the tool executes
-**Then** the tool processes the text successfully within the 5-second timeout (per `spec-tools-instant.md` §6), extracts valid patterns, and returns results
-
----
-
-## 6. Sortie API
-
-### AC-MAC-OUI-036 — Success response envelope
+### AC-MAC-OUI-058 — Success response envelope
 
 **Given** the tool executes successfully
 **When** the API responds
-**Then** the response is HTTP 200 with the envelope `{"tool": "mac_oui", "success": true, "duration_ms": <number>, "data": {...}}` per `spec-tools-instant.md` §1.2
+**Then** the response is HTTP 200 with the standard envelope (per `spec-tools-instant.md` §1.2): `{"tool": "mac_oui", "success": true, "duration_ms": <number>, "data": {...}}`
 
----
+### AC-MAC-OUI-059 — Parse stats structure
 
-### AC-MAC-OUI-037 — `parse_stats` accuracy
-
-**Given** an input text of 150 characters containing 3 MAC addresses with 2 unique OUIs
-**When** the tool executes
-**Then** `data.parse_stats` contains:
-- `total_input_chars` = 150
-- `mac_oui_count` = 3 (total patterns extracted before dedup)
-- `unique_oui_count` = 2 (after dedup)
-
----
-
-### AC-MAC-OUI-038 — `history` always present
-
-**Given** a successful lookup of an OUI with no changes
+**Given** the request sent 3 entries (2 valid, 1 invalid; 1 of the valid was a duplicate already in the set)
 **When** the API responds
-**Then** `data.history` is an empty array `[]` (not absent, not `null`)
+**Then** `data.parse_stats` contains `total_inputs: 3, valid: 2, rejected: 1, unique: 2`
+
+### AC-MAC-OUI-060 — OUI display format MA-L
+
+**Given** a lookup result with `oui="001122"`, `oui_type="MA-L"`
+**When** the response is built
+**Then** `oui_display` field is `"00:11:22"` (uppercase, colon-separated)
+
+### AC-MAC-OUI-061 — OUI display format MA-M
+
+**Given** a lookup result with `oui="0011223"`, `oui_type="MA-M"`
+**When** the response is built
+**Then** `oui_display` field is `"00:11:22:3_"` (last group: 1 digit + underscore wildcard, per ADR-014 §2.5)
+
+### AC-MAC-OUI-062 — OUI display format MA-S
+
+**Given** a lookup result with `oui="001122334"`, `oui_type="MA-S"`
+**When** the response is built
+**Then** `oui_display` field is `"00:11:22:33:4_"`
+
+### AC-MAC-OUI-063 — `history` array always present
+
+**Given** any lookup result
+**When** the API responds
+**Then** each entry in `results[]` has a `history` field (empty array if no history)
 
 ---
 
-### AC-MAC-OUI-039 — OUI formatted as uppercase colon-separated in response
+## 9. UI / Affichage
 
-**Given** the extracted OUI is `001122` (bare hex)
-**When** the API returns the result
-**Then** the `oui` field is formatted as `00:11:22` (uppercase, colon-separated) per `spec-tools-instant.md` §4.3
+### AC-MAC-OUI-064 — Underscore styled as wildcard placeholder
 
----
+**Given** the result table displays a MA-M or MA-S `oui_display` containing `_`
+**When** the row is rendered
+**Then** the `_` character is styled with `color: var(--color-text-secondary)` (greyed)
+**And** a tooltip appears on hover: `tools.mac_oui.tooltip_wildcard_digit` (« Ce digit varie selon l'équipement »)
 
-## 7. i18n
+### AC-MAC-OUI-065 — Legend below the result table
 
-### AC-MAC-OUI-040 — French locale
+**Given** at least one result row has `oui_type` in `{MA-M, MA-S}`
+**When** the table is rendered
+**Then** a small caption below the table displays the legend i18n key `tools.mac_oui.legend_partial_byte`
 
-**Given** the user's locale is `fr` or `fr-FR`
-**When** the frontend renders the MAC OUI tool page
-**Then** all labels, messages, and error strings are displayed in French using the `tools.mac_oui.*` keys
+### AC-MAC-OUI-066 — Ambiguous OUI highlighted
 
----
+**Given** a result entry has `ambiguous_extends_ma_m=true` OR `ambiguous_extends_ma_s=true`
+**When** the row is rendered
+**Then** the row background uses `var(--color-warning-soft)` (orange-tinted) and the hint icon displays the message `tools.mac_oui.ambiguous_partial_oui` on hover/click
 
-### AC-MAC-OUI-041 — English locale
+### AC-MAC-OUI-067 — Rejected entries banner
 
-**Given** the user's locale is `en` or `en-US`
-**When** the frontend renders the MAC OUI tool page
-**Then** all labels, messages, and error strings are displayed in English
+**Given** the API response includes `rejected[]` with at least one entry
+**When** results are rendered
+**Then** a banner appears above the table: « N entrée(s) ignorée(s) : [list of sanitized samples] » (i18n `tools.mac_oui.rejected_notice`)
 
----
+### AC-MAC-OUI-068 — Copy to clipboard button
 
-### AC-MAC-OUI-042 — Error message key for empty parse
+**Given** the result table is non-empty
+**When** the user clicks the "Copy" button
+**Then** the results are copied as tab-separated text suitable for pasting into a ticket or spreadsheet
 
-**Given** the tool returns `MAC_OUI_PARSE_EMPTY`
-**When** the frontend renders the error
-**Then** the error message is translated from the `errors.mac_oui_parse_empty` key (FR and EN both available)
+### AC-MAC-OUI-069 — Empty result state
 
----
+**Given** the API responds with `results=[]` and `rejected=[]`
+**When** the page renders
+**Then** the i18n `tools.mac_oui.no_results` message is displayed (no empty table)
 
-### AC-MAC-OUI-043 — "Unknown vendor" i18n
+### AC-MAC-OUI-070 — Loading state
 
-**Given** an OUI is not found in the database
-**When** the frontend renders the result
-**Then** the string "Unknown vendor" (EN) / "Fabricant inconnu" (FR) is shown, using key `tools.mac_oui.unknown_vendor`
-
----
-
-## 8. RBAC
-
-### AC-MAC-OUI-044 — Visitor denied by default
-
-**Given** no admin has explicitly granted `visitor` role access to the `mac_oui` tool
-**When** a visitor (unauthenticated) accesses the MAC OUI tool (page or API)
-**Then** the API returns HTTP 403 with error code `ROLE_NOT_ALLOWED`
+**Given** the user clicks Execute
+**When** the request is in flight
+**Then** the Execute button is disabled, a spinner is shown, the textarea is read-only
 
 ---
 
-### AC-MAC-OUI-045 — Authenticated user allowed
+## 10. i18n
 
-**Given** the default `RoleToolPermission` for `authenticated` role on `mac_oui` is `allowed = true`
-**When** an authenticated user executes the MAC OUI tool
-**Then** the tool executes normally and returns HTTP 200
+### AC-MAC-OUI-071 — French locale
 
----
+**Given** the user's locale is `fr`
+**When** the page renders
+**Then** all labels, messages, and error strings are in French (keys `tools.mac_oui.*`, `errors.mac_oui_*`)
 
-### AC-MAC-OUI-046 — Admin allowed
+### AC-MAC-OUI-072 — English locale
 
-**Given** the default `RoleToolPermission` for `administrator` role on `mac_oui` is `allowed = true`
-**When** an admin executes the MAC OUI tool
-**Then** the tool executes normally and returns HTTP 200
+**Given** the user's locale is `en`
+**When** the page renders
+**Then** all labels, messages, and error strings are in English
 
----
+### AC-MAC-OUI-073 — All i18n keys present
 
-### AC-MAC-OUI-047 — Tool disabled globally
-
-**Given** an admin sets `ToolModule.enabled = false` for `mac_oui`
-**When** any user (including admin) attempts to execute the tool
-**Then** the API returns HTTP 403 with error code `TOOL_DISABLED`
+**Given** the keys list per `spec-api-contract.md` §10.6
+**When** running the i18n key audit script
+**Then** all `tools.mac_oui.*` keys exist in both `fr.json` and `en.json` with no missing translation
 
 ---
 
-## 9. Rate limiting
+## 11. RBAC
 
-### AC-MAC-OUI-048 — Authenticated user within limits
+### AC-MAC-OUI-074 — Default seed for `mac_oui` follows existing pattern
 
-**Given** an authenticated user has a global hard limit of 500 req/hr and has made 10 requests
-**When** the user executes the MAC OUI tool
-**Then** the API returns HTTP 200 (no rate limit triggered)
+**Given** the application boots and the `mac_oui` tool is registered
+**When** the seed runs (cf. `src/backend/app/main.py:126-137`)
+**Then** a `RoleToolPermission` row is created for each of (`visitor`, `authenticated`, `administrator`) with `allowed=True` (identical pattern to other tools)
 
----
+### AC-MAC-OUI-075 — Admin can revoke per role via the matrix
 
-### AC-MAC-OUI-049 — Authenticated user exceeds soft limit
+**Given** an admin opens Administration > Modules
+**When** the admin toggles off the `visitor` permission for `mac_oui`
+**Then** the next visitor request to `mac_oui` returns HTTP 403 with the standard `ROLE_NOT_ALLOWED` code (no MAC-OUI-specific code)
 
-**Given** an authenticated user has a global soft limit of 1 req/sec
-**When** the user sends 2 requests within 1 second
-**Then** the second request returns HTTP 429 with `Retry-After: 1` and error code `RATE_LIMIT_EXCEEDED`
+### AC-MAC-OUI-076 — Module disabled globally
 
----
+**Given** the admin sets `ToolModule.enabled=false` for `mac_oui`
+**When** any user attempts to execute
+**Then** the API returns HTTP 403 with `TOOL_DISABLED` (existing project convention)
 
-### AC-MAC-OUI-050 — Visitor IP rate limit applies
+### AC-MAC-OUI-077 — `mac_oui` removed from sidebar when disabled
 
-**Given** a visitor IP has a global hard limit of 200 req/hr
-**When** the visitor (if granted access) exceeds this limit on the MAC OUI tool
-**Then** the API returns HTTP 429 with `Retry-After: 3600`
-
----
-
-### AC-MAC-OUI-051 — Per-tool rate limit can tighten global limit
-
-**Given** an admin sets a per-tool hard limit of 50 req/hr for `mac_oui` for `authenticated` role (tighter than the global 500)
-**When** an authenticated user exceeds 50 requests in an hour
-**Then** the API returns HTTP 429 (per-tool limit enforced)
+**Given** a user's effective permission for `mac_oui` is `false` (or the tool is globally disabled)
+**When** the sidebar renders
+**Then** the `MAC OUI` entry is **absent** from the sidebar (consistent with existing tool gating, cf. `ui-spec.md` §2.2)
 
 ---
 
-## 10. Synchronisation IEEE
+## 12. Rate limiting
 
-### AC-MAC-OUI-052 — Nominal daily sync (all 3 files)
+### AC-MAC-OUI-078 — Inherits global baselines
 
-**Given** all 3 IEEE files (MA-L, MA-M, MA-S) are available at their URLs
+**Given** the default rate limits per `functional-spec.md` §5
+**When** an authenticated user calls `mac_oui`
+**Then** the global limit (1 req/s soft, 500 req/h hard) applies — no MAC-OUI-specific limit
+
+### AC-MAC-OUI-079 — Per-tool override available
+
+**Given** the admin sets a per-tool hard limit of 50 req/h for `mac_oui` for `authenticated`
+**When** an authenticated user exceeds this in 1 hour
+**Then** the API returns HTTP 429 with `Retry-After` header
+
+---
+
+## 13. IEEE Sync
+
+### AC-MAC-OUI-080 — HTTPS confirmed
+
+**Given** the sync service downloads the 3 IEEE files
+**When** the URLs are fetched
+**Then** all URLs use `https://standards-oui.ieee.org/...` (confirmed accessible 2026-05-31, cf. ADR-013 §2.1)
+
+### AC-MAC-OUI-081 — Nominal daily sync
+
+**Given** all 3 IEEE files (MA-L, MA-M, MA-S) are reachable
+**When** the daily sync job runs at `OUI_SYNC_HOUR` UTC
+**Then** all 3 files are downloaded and parsed; new OUIs inserted; existing OUIs with no diff get `last_seen` updated to today; summary log emitted: `{added} new, {changed} changed, {confirmed} confirmed, 0 failed`
+
+### AC-MAC-OUI-082 — File MA-L unavailable
+
+**Given** the MA-L URL returns 5xx or times out
 **When** the daily sync job runs
-**Then**:
-- All 3 files are downloaded and parsed
-- New OUIs are inserted with `first_seen = today`
-- Existing OUIs with unchanged org/address get `last_seen` updated to today
-- A summary log is emitted: `{added} new, {changed} changed, {confirmed} confirmed, 0 failed`
+**Then** the MA-L file is skipped; MA-M and MA-S are processed normally; a WARNING log is emitted
 
----
+### AC-MAC-OUI-083 — Three consecutive failures of same file → CRITICAL log
 
-### AC-MAC-OUI-053 — MA-L file temporarily unavailable
+**Given** MA-L has failed 3 consecutive daily attempts
+**When** the 3rd failure occurs
+**Then** a CRITICAL-level log is emitted with the marker `ALERT_OUI_SYNC_FAILED_3X`. The status column in Admin > Modules reflects this state in red.
 
-**Given** `http://standards-oui.ieee.org/oui/oui.txt` returns HTTP 5xx or times out
-**When** the daily sync job runs
-**Then**:
-- The MA-L file is skipped
-- MA-M and MA-S files are processed normally
-- A WARNING log is emitted for the MA-L failure
-- Existing MA-L data is preserved unchanged (`last_seen` not updated)
+### AC-MAC-OUI-084 — OUI absent from current files preserved
 
----
+**Given** OUI `001122` exists in DB with `last_seen=2026-05-01`
+**When** the sync runs and `001122` is absent from all 3 IEEE files
+**Then** the row is NOT deleted; `last_seen` remains 2026-05-01; no history row is inserted
 
-### AC-MAC-OUI-054 — MA-M file temporarily unavailable
-
-**Given** `http://standards-oui.ieee.org/oui28/mam.txt` is unreachable
-**When** the daily sync job runs
-**Then** MA-M is skipped; MA-L and MA-S are processed; WARNING logged; MA-M data preserved
-
----
-
-### AC-MAC-OUI-055 — MA-S file temporarily unavailable
-
-**Given** `http://standards-oui.ieee.org/oui36/oui36.txt` is unreachable
-**When** the daily sync job runs
-**Then** MA-S is skipped; MA-L and MA-M are processed; WARNING logged; MA-S data preserved
-
----
-
-### AC-MAC-OUI-056 — Three consecutive failures for same file → CRITICAL alert
-
-**Given** the MA-L file has failed to download for 3 consecutive daily sync attempts
-**When** the 3rd consecutive failure occurs
-**Then** a CRITICAL-level log is emitted (actionable as an admin alert), per `spec-backend.md` §9.6
-
----
-
-### AC-MAC-OUI-057 — OUI not present in any IEEE file is preserved
-
-**Given** an OUI `00:11:22` exists in the database with `last_seen = 2026-05-01`
-**When** the daily sync runs and this OUI is absent from all 3 IEEE files
-**Then**:
-- The OUI row is NOT deleted
-- `last_seen` remains `2026-05-01` (not updated)
-- No `MacOuiHistory` row is inserted (absence from file is not a "change")
-
----
-
-### AC-MAC-OUI-058 — All 3 files unavailable
-
-**Given** all 3 IEEE files are unreachable
-**When** the daily sync job runs
-**Then**:
-- All 3 are skipped
-- A WARNING log is emitted for each
-- Existing data is fully preserved
-- The consecutive failure counter increments per file independently
-
----
-
-### AC-MAC-OUI-059 — Sync schedule respects configured hour
+### AC-MAC-OUI-085 — Configurable sync hour
 
 **Given** the env var `OUI_SYNC_HOUR=5`
-**When** the APScheduler job triggers
-**Then** the sync runs at 05:00 UTC daily (per `spec-backend.md` §9.6)
+**When** the scheduler triggers
+**Then** the sync runs at 05:00 UTC
+
+### AC-MAC-OUI-086 — Sync log persisted
+
+**Given** any sync run completes (success, partial, or failure)
+**When** the run terminates
+**Then** a row is inserted in `oui_sync_log` (per Sprint 5 model) with start/end timestamps, counts, file failures
+
+### AC-MAC-OUI-087 — `change_type` classification: 3 values
+
+**Given** a sync detects a diff
+**When** the classification logic runs (cf. ADR-013 §2.3)
+**Then** `change_type` is one of `name_change`, `address_change`, `revoked` — never `reassigned`
+
+### AC-MAC-OUI-088 — UNIQUE(oui, oui_type) allows overlap
+
+**Given** the IEEE files contain `8C:1F:64` in MA-L (IEEE Registration Authority) and `8C:1F:64:0` in MA-M (Acme Corp)
+**When** the sync inserts both
+**Then** both rows are stored (different `oui_type`); the `UNIQUE(oui, oui_type)` constraint is satisfied
 
 ---
 
-### AC-MAC-OUI-060 — Sync job parse failure
+## 14. Administration
 
-**Given** one of the IEEE files is downloaded but contains malformed content (no valid `(hex)` lines)
-**When** the sync processes this file
-**Then**:
-- An ERROR log is emitted
-- The file is skipped
-- The consecutive failure counter increments
+### AC-MAC-OUI-089 — Status column in Admin > Modules
 
----
+**Given** the admin opens Administration > Modules
+**When** the table renders
+**Then** a new column "Statut" (i18n `admin.status`) appears between the role permission columns and the "Paramètres" column. The cell shows a colored icon for modules whose `has_status` is true, otherwise the cell is empty.
 
-## 11. Doutes / arbitrages requis
+### AC-MAC-OUI-090 — Status icon color semantics
 
-### 11.1 Déduplication de formats différents
+**Given** the `mac_oui` module exposes status
+**When** the status icon is rendered
+**Then** the color reflects the latest sync state:
+- 🟢 green: last sync `success`
+- 🟡 yellow: last sync `partial` (1-2 files failed)
+- 🔴 red: 3+ consecutive failures OR last sync `failed`
+- ⚪ grey: module enabled, never synced yet
 
-Le brief mentionne : « doublons avec formats différents (`00:11:22` vs `0011.2200` représentent-ils la même chose ? → à trancher dans l'ADR §3.3) ».
+### AC-MAC-OUI-091 — Status modal opens centered
 
-**Analyse** :
-- `00:11:22` en notation hex pairs = 3 octets (00 11 22), soit un OUI MA-L 24-bit.
-- `0011.2200` en notation Cisco = 2 paires de 4 digits → `00 11` puis `22 00`, soit 4 octets (00 11 22 00), un OUI 28-bit.
-- Ces deux patterns ont des longueurs différentes, donc ils ne peuvent pas représenter le même OUI.
-- Le cas pertinent serait `00:11:22` vs `0011.22` (tous deux 3 octets), ou `00:11:22:33` vs `0011.2233` (tous deux 4 octets).
+**Given** the admin clicks the status icon for `mac_oui`
+**When** the click handler runs
+**Then** a centered `<Modal>` opens (component `src/frontend/src/components/ui/Modal.tsx`, NOT a lateral drawer) containing the detailed status
 
-**Question** : l'exemple du brief est-il une coquille pour `00:11:22` vs `0011.22` (3 octets, deux formats), ou bien le brief demande-t-il si un OUI 3-octets et un OUI 4-octets qui partagent les 3 premiers octets doivent être considérés comme « doublons » pour la déduplication ?
+### AC-MAC-OUI-092 — Status modal content
 
-**Impact** : si on déduplique `00:11:22` (MA-L) et `00112233` (MA-M potentiel), on perd la spécificité MA-M. La spec `functional-spec.md` §3.5.4 dit « longest prefix wins », ce qui suggère qu'on ne les déduplique pas — on garde le plus long.
+**Given** the status modal is open for `mac_oui`
+**When** content is rendered
+**Then** it includes:
+- Date of last sync (locale-formatted)
+- Per-file outcome (MA-L/MA-M/MA-S: success/skipped/failed)
+- Counts: added / changed / confirmed
+- Consecutive failure counters per file
+- Manual "Trigger sync now" button (POSTs to `POST /api/v1/admin/oui/sync`)
+- Table of last 30 runs (newest first)
 
-→ À trancher lors de la revue conjointe et dans l'ADR-014.
+### AC-MAC-OUI-093 — Settings modal opens centered
 
-### 11.2 Cisco dot-separated : 2, 3, ou 4 groupes ?
+**Given** the admin clicks the gear icon for `mac_oui`
+**When** the click handler runs
+**Then** the existing centered `<Modal>` opens (same as other tools) with the configurable parameters listed in AC-MAC-OUI-094
 
-La spec `spec-tools-instant.md` §4.4 liste `0011.2233.4455` (3 groupes de 4 digits = 6 octets) et mentionne aussi `0011.22` (2 groupes = 3 octets). Mais le format Cisco peut aussi avoir :
-- `0011.2233` (2 groupes = 4 octets)
-- `0011.22` (2 groupes mais le second groupe n'a que 2 digits → 3 octets)
+### AC-MAC-OUI-094 — Admin-configurable parameters
 
-**Question** : le pattern Cisco accepte-t-il un nombre variable de groupes (2 ou 3) ? Accepte-t-il un dernier groupe tronqué à 2 digits (comme `0011.22` pour un OUI 3-octets) ?
+**Given** the admin opens the `mac_oui` Settings modal
+**When** the form renders
+**Then** the following parameters are editable (stored in `ToolModuleSetting` table or equivalent existing mechanism), with the listed defaults:
 
-**Impact** : si un dernier groupe de 2 digits est accepté, `0011.2233` (4 octets) et `0011.22` (3 octets) sont deux OUIs distincts qu'il faut extraire correctement.
+| Parameter | Default | Range |
+|---|---|---|
+| `MAC_OUI_FRONTEND_INPUT_MAX_CHARS` | 50 000 | 1 000 – 200 000 |
+| `MAC_OUI_BACKEND_BATCH_MAX_SIZE` | 2 000 | 100 – 10 000 |
+| `MAC_OUI_HISTORY_PAGE_SIZE` | 10 | 5 – 50 |
+| `OUI_SYNC_HOUR` | 3 | 0 – 23 |
 
-→ À trancher dans l'ADR-014.
+### AC-MAC-OUI-095 — Settings persisted and applied immediately
 
-### 11.3 Chevauchement MA-L / MA-M / MA-S en base
+**Given** the admin updates a setting (e.g., `MAC_OUI_HISTORY_PAGE_SIZE` from 10 to 20)
+**When** save succeeds
+**Then** the next history-fetch request uses the new value (no app restart required)
 
-La spec `spec-backend.md` §9.6 ne précise pas le comportement quand un même préfixe apparait dans deux fichiers IEEE différents (ex. `001122` dans MA-L et `0011223` dans MA-M). La spec dit « longest prefix wins » pour le lookup (§3.5.4 fonctionnel), mais ne dit pas comment stocker.
+### AC-MAC-OUI-096 — Manual sync endpoint
 
-**Question** : stocke-t-on les deux entrées (MA-L et MA-M pour des préfixes qui se chevauchent) ou une seule ?
-
-→ À trancher dans l'ADR-013.
-
-### 11.4 `change_type` : détection automatique
-
-La spec `spec-backend.md` §4.2 liste `change_type` avec les valeurs `name_change`, `address_change`, `revoked`, `reassigned`. Mais la spec §9.6 décrit seulement une comparaison org/address : « OUI exists with different org or address → insert MacOuiHistory row with change_type ».
-
-**Question** : comment le sync service distingue-t-il automatiquement `name_change` de `reassigned` à partir d'un simple diff de chaînes ? Faut-il une heuristique (ex. distance de Levenshtein) ou l'opérateur humain devra-t-il reclassifier manuellement ?
-
-→ À trancher dans l'ADR-013.
-
-### 11.5 Timeout d'extraction
-
-La spec `spec-tools-instant.md` §6 donne un timeout de 5s pour MAC OUI Lookup (DB query + regex). Pour un input de 50 000 caractères contenant des milliers de patterns potentiels, une regex complexe avec backtracking pourrait dépasser ce timeout.
-
-**Question** : la regex a-t-elle été testée sur un worst-case de 50 000 caractères ? Faut-il prévoir une limite sur le nombre de patterns extraits (ex. max 1 000 OUIs) pour garantir le timeout ?
-
-→ À vérifier lors du Sprint 3 (implémentation de l'extraction). L'ADR-014 doit inclure une analyse de complexité de la regex retenue.
-
-### 11.6 IEEE file URLs — HTTP vs HTTPS
-
-Les URLs dans `spec-backend.md` §9.6 et `spec-tools-instant.md` §4.5 utilisent `http://` (pas `https://`). En production, le téléchargement transite en clair.
-
-**Question** : IEEE propose-t-il des endpoints HTTPS pour ces fichiers ? Si oui, doit-on utiliser HTTPS ? Si non, faut-il documenter le risque ?
-
-→ À vérifier lors de la revue de sécurité. Si IEEE ne propose pas HTTPS, documenter dans `docs/security/`.
-
-### 11.7 Format de sortie du champ `oui`
-
-La spec `spec-tools-instant.md` §4.3 dit : « oui: the extracted OUI prefix (uppercase, colon-separated, e.g., 00:11:22) ». Mais pour un OUI MA-M (7 digits), le format n'est pas spécifié. Exemple : `00:11:22:3` ou `00:11:22:30` ?
-
-**Question** : comment formate-t-on un OUI MA-M (28-bit, 7 hex digits) et MA-S (36-bit, 9 hex digits) en notation colon-separated ?
-
-→ À clarifier et spécifier dans l'ADR-014.
-
-### 11.8 Absence de spec pour le endpoint admin sync status
-
-La spec `spec-backend.md` §9.6 mentionne « Admin visibility: sync status and last run time visible in the admin Modules section » mais aucun endpoint API n'est défini pour exposer cet état. Le `GET /admin/modules/{tool_name}/...` existe pour les DNS presets mais pas pour le statut de sync MAC OUI.
-
-**Question** : faut-il un endpoint dédié (ex. `GET /admin/modules/mac_oui/sync-status`) ou étendre le endpoint modules existant ?
-
-→ À spécifier dans le Sprint 6 (admin).
-
-### 11.9 RBAC visitor : « désactivé par défaut » vs « deny if no config »
-
-Le brief §3.1 dit « visitor désactivé par défaut ». La spec `functional-spec.md` §2.3 dit « Default: deny if no configuration exists ». Ces deux formulations sont-elles équivalentes ?
-
-**Analyse** : oui — un visiteur sans `RoleToolPermission` explicite `allowed=true` se voit refuser l'accès. Mais le brief suggère que le comportement par défaut du seed de données doit explicitement mettre `visitor → denied` pour `mac_oui`.
-
-**Question** : le seed doit-il explicitement créer une `RoleToolPermission(role=visitor, tool=mac_oui, allowed=false)` ou se contenter de l'absence de ligne ?
-
-→ À trancher : explicite (plus clair, auditable) vs implicite (moins de lignes, cohérent avec le reste).
+**Given** the admin clicks "Trigger sync now"
+**When** the request is sent
+**Then** `POST /api/v1/admin/oui/sync` is called; if a sync is already running, the response is 409 with code `OUI_SYNC_ALREADY_RUNNING`. Else 202 with a task ID.
 
 ---
 
-## 12. Références croisées
+## 15. Doutes / arbitrages requis
+
+Tous les doutes du draft initial ont été levés lors de la revue Sprint 0. Cette section reste pour traçabilité.
+
+### 15.1 Doutes initiaux et résolutions
+
+| ID | Doute initial | Résolution Sprint 0 |
+|---|---|---|
+| 11.1 | Déduplication formats différents (`00:11:22` vs `0011.2200`) | Normalisation bare hex uppercase, dédup sur chaîne normalisée. Longueurs distinctes = entrées distinctes. |
+| 11.2 | Cisco 2/3/4 groupes ? | Frontend tolérant : 2 et 3 groupes acceptés. Politique rappel > précision (ADR-014). |
+| 11.3 | Chevauchement MA-L/MA-M/MA-S | `UNIQUE(oui, oui_type)` — spec corrigée. Une même valeur 24-bit peut exister en MA-L (pool IEEE) et comme préfixe de MA-M/MA-S. |
+| 11.4 | `change_type` détection auto | 3 valeurs seulement : `name_change`, `address_change`, `revoked`. `reassigned` abandonné. `name_change` englobe le cas nom+adresse simultané. |
+| 11.5 | Timeout 50k chars | Levé : l'extraction se fait au frontend, le backend reçoit une liste normalisée. |
+| 11.6 | HTTP vs HTTPS IEEE | HTTPS confirmé fonctionnel (test 2026-05-31). |
+| 11.7 | Format `oui` MA-M/MA-S | `XX:XX:XX:X_` et `XX:XX:XX:XX:X_` (underscore = wildcard). Légende sous tableau. |
+| 11.8 | Endpoint admin status | Colonne « Statut » dans Admin > Modules avec icône colorée + modal centré. Endpoint `GET /api/v1/admin/modules/{tool}/status` générique. Flag `has_status` sur `ToolModule`. |
+| 11.9 | RBAC visitor explicite vs implicite | Faux problème. Le projet seed déjà toutes les paires (rôle, tool) avec `allowed=True` (cf. `main.py:126-137`). Pas de comportement spécial pour mac_oui. |
+
+### 15.2 Doutes ouverts (à traiter en cours d'implémentation)
+
+- **AC-MAC-OUI-019 (timestamps comme faux positifs)** : si le taux de faux positifs sur timestamps se révèle gênant en usage réel (Sprint 4 testing), une heuristique de contexte temporel pourra être ajoutée. Hors scope MVP.
+- **Regex frontend finale** : à composer en Sprint 4 avec gestion correcte de la précédence (longueurs supérieures matchent en premier). Tests exhaustifs depuis l'annexe A de l'ADR-014.
+
+---
+
+## 16. Références croisées
 
 | Source | Sections pertinentes |
 |---|---|
 | `functional-spec.md` | §3.5 (MAC OUI), §5 (rate limiting) |
-| `spec-backend.md` | §4.2 (MacOui, MacOuiHistory models), §9.6 (OUI sync), §6 (rate limiting) |
-| `spec-tools-instant.md` | §4 (MAC OUI execution, parameters, result, sync), §1 (HTTP envelope), §6 (timeout) |
-| `spec-api-contract.md` | §9 (error codes — `MAC_OUI_PARSE_EMPTY`), §10 (i18n keys `tools.mac_oui.*`, `errors.mac_oui_parse_empty`) |
-| `spec-frontend.md` | §4.1 (textarea input) |
-| `ui-spec.md` | SCR-26 (MAC OUI Lookup page) |
+| `spec-backend.md` | §4.2 (MacOui, MacOuiHistory — `UNIQUE(oui, oui_type)`), §9.6 (OUI sync HTTPS), §6 (rate limiting) |
+| `spec-tools-instant.md` | §4 (MAC OUI: à corriger pour refléter l'extraction frontend), §1 (HTTP envelope), §6 (timeout) |
+| `spec-api-contract.md` | §9 (error codes), §10 (i18n keys) |
+| `spec-frontend.md` | §4.1 (textarea input — à étendre pour décrire la regex tolérante) |
+| `ui-spec.md` | SCR-26 (MAC OUI Lookup page), §2.2 (sidebar) |
+| `docs/adr/ADR-013-mac-oui-sync-strategy.md` | Stratégie de sync (3 change_type, UNIQUE(oui,oui_type), HTTPS, pas de purge) |
+| `docs/adr/ADR-014-mac-oui-extraction-regex.md` | Extraction frontend tolérante, format MA-M/MA-S avec `_`, OUI ambigu |
+| `src/backend/app/main.py:126-137` | Pattern de seed RoleToolPermission existant |
+| `src/frontend/src/components/ui/Modal.tsx` | Composant Modal centré à réutiliser |
+| `src/frontend/src/pages/admin/AdminModulesPage.tsx` | Structure existante du tableau Modules |
