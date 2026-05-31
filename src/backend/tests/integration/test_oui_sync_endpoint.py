@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.models.base import new_uuid7, utcnow
 from app.models.preferences import GlobalSetting
 from app.security.password import hash_password
@@ -82,16 +82,15 @@ async def test_post_when_running_409(client: AsyncClient, db_session, _engine):
     """Sync already in progress → 409 with OUI_SYNC_ALREADY_RUNNING."""
     # Seed the running flag using a separate session (avoids transaction issues)
     test_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
-    async with test_factory() as seed_session:
-        async with seed_session.begin():
-            row = await seed_session.execute(
-                sa_select(GlobalSetting).where(GlobalSetting.key == "oui_sync_running")
-            )
-            setting = row.scalar_one_or_none()
-            if setting:
-                setting.value = "1"
-            else:
-                seed_session.add(GlobalSetting(key="oui_sync_running", value="1"))
+    async with test_factory() as seed_session, seed_session.begin():
+        row = await seed_session.execute(
+            sa_select(GlobalSetting).where(GlobalSetting.key == "oui_sync_running")
+        )
+        setting = row.scalar_one_or_none()
+        if setting:
+            setting.value = "1"
+        else:
+            seed_session.add(GlobalSetting(key="oui_sync_running", value="1"))
 
     token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
     response = await client.post(

@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Literal
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 

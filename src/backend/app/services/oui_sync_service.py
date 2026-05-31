@@ -112,7 +112,8 @@ class OuiSyncService:
 
     async def sync_all(self) -> SyncReport:
         report = SyncReport(started_at=datetime.now(UTC))
-        http = await self._get_http()
+        # Ensure HTTP client is initialized
+        await self._get_http()
 
         async with self._session_factory() as session:
             # Check if already running
