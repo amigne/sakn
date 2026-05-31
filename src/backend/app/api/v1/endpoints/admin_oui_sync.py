@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
@@ -43,8 +44,6 @@ async def trigger_oui_sync(
             message_key="errors.oui_sync_already_running",
             message="A MAC OUI sync is already in progress.",
         )
-
-    import uuid
 
     task_id = str(uuid.uuid4())
     started_at = datetime.now(UTC)

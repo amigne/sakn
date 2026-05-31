@@ -60,9 +60,9 @@ def mock_oui_service():
 
 @pytest.mark.asyncio
 async def test_post_unauthenticated_403(client: AsyncClient):
-    """Unauthenticated request → 403."""
+    """Unauthenticated request → 403 (require_admin treats no-session as visitor)."""
     response = await client.post("/api/v1/admin/oui/sync", json={})
-    assert response.status_code in (401, 403)
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

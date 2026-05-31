@@ -207,17 +207,23 @@ async def lifespan(app: FastAPI) -> Any:
 
                 await db.commit()
 
-                # Reset stale running flag at startup (in case of previous crash/SIGKILL)
+                # Reset stale running flag + started_at at startup (in case of previous crash/SIGKILL)
                 row = await db.execute(
-                    select(GlobalSetting).where(GlobalSetting.key == "oui_sync_running")
+                    select(GlobalSetting).where(
+                        GlobalSetting.key.in_(["oui_sync_running", "oui_sync_started_at"])
+                    )
                 )
-                running_flag = row.scalar_one_or_none()
+                stale_rows = {s.key: s for s in row.scalars().all()}
+                running_flag = stale_rows.get("oui_sync_running")
+                started_at = stale_rows.get("oui_sync_started_at")
                 if running_flag and running_flag.value == "1":
                     logger.warning(
                         "oui_sync_running flag stale at startup, resetting",
                         extra={"prior_value": running_flag.value},
                     )
                     running_flag.value = "0"
+                    if started_at:
+                        started_at.value = ""
                     await db.commit()
 
         except Exception:
