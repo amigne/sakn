@@ -89,7 +89,7 @@ Rationale:
 - **Symmetric with backend**: mirrors `pip-audit --ignore-vuln` in terms of expressive power and governance overhead.
 - **Reversible**: removing the GHSA id from the array restores strict scanning.
 
-First use of the mechanism: GHSA-5xrq-8626-4rwp (vitest < 4.1.0) — tracked in #334.
+First use of the mechanism: GHSA-5xrq-8626-4rwp (vitest < 4.1.0) — tracked in #334. **Cleared 2026-06-01** when vitest was upgraded to 4.1.8 on `dev0.2.0` (via the port of PR #336).
 
 ## Consequences
 

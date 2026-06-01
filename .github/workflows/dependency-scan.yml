@@ -48,10 +48,7 @@ jobs:
           set -euo pipefail
           # Accepted vulnerabilities — each MUST be tracked by an open issue
           # documented in docs/qa/dependency-scanning.md (Active Exceptions).
-          #
-          #   GHSA-5xrq-8626-4rwp — vitest <4.1.0 (devDep, Vitest UI server not
-          #   started by our scripts). Tracked in #334. Expires 2026-08-30.
-          ALLOWLIST=("GHSA-5xrq-8626-4rwp")
+          ALLOWLIST=()
 
           audit_json=$(npm audit --audit-level=high --json || true)
 

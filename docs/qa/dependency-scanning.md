@@ -54,7 +54,7 @@ When a vulnerability is disclosed with no fix available, or when upgrading would
 
 | CVE / Advisory | Package | Filed | Expires | Issue | Rationale |
 |----------------|---------|-------|---------|-------|-----------|
-| GHSA-5xrq-8626-4rwp | vitest (`<4.1.0`) | 2026-06-01 | 2026-08-30 | #334 | devDep only — Vitest UI server not started by project scripts. SemVer-major upgrade (3 → 4) deferred to a dedicated PR. |
+| _(none)_ | — | — | — | — | — |
 
 ## Weekly Scan
 
