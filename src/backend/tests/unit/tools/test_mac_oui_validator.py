@@ -167,10 +167,16 @@ class TestValidateRejection:
         assert rejected[0].reason == "invalid_format"
 
     def test_too_short_rejected(self):
-        """Less than 6 hex digits → invalid_format."""
+        """Covers #344 — 5 hex-valid chars → invalid_length (not invalid_format)."""
         _, rejected = validate_batch(["00112"])
         assert len(rejected) == 1
-        assert rejected[0].reason == "invalid_format"
+        assert rejected[0].reason == "invalid_length"
+
+    def test_hex_valid_too_long_rejected(self):
+        """Covers #344 — 16 hex-valid chars → invalid_length (not invalid_format)."""
+        _, rejected = validate_batch(["0011223344556677"])
+        assert len(rejected) == 1
+        assert rejected[0].reason == "invalid_length"
 
     def test_non_string_rejected(self):
         """Non-string item → invalid_format."""
