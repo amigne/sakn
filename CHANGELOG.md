@@ -5,6 +5,19 @@ All notable changes to SAKN will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Development cycle for `0.1.1` (backend: `0.1.1.dev0`, frontend: `0.1.1-dev`).
+
+### Security
+
+- Upgrade `vitest` to `^4.1.8` to fix CVE GHSA-5xrq-8626-4rwp (critical, CVSS 9.8 — Vitest UI server unauthorized file access). devDependency only, no production runtime exposure. (#334)
+
+### Changed
+
+- Backend: FastAPI version now sourced from `importlib.metadata` (`pyproject.toml` is the single source of truth). (#333)
+- Add `scripts/bump-version.sh` for atomic cross-stack version bumps (PEP 440 ↔ SemVer). (#333)
+
 ## [0.1.0] — 2026-05-30
 
 First post-MVP release.
