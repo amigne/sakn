@@ -12,7 +12,6 @@ See [ADR-010](../adr/adr-010-dependency-scanning.md) for the tool selection rati
 |------|-----------|-------------------|-----------|
 | `pip-audit` | Python (backend) | Any vulnerability | No — blocks CI |
 | `npm audit` | JavaScript (frontend) | High and critical | No — blocks CI |
-| `osv-scanner` | All lockfiles | N/A | Yes — never blocks CI |
 
 ## Exception Policy
 
@@ -34,12 +33,20 @@ When a vulnerability is disclosed with no fix available, or when upgrading would
    - run: pip-audit --desc on --ignore-vuln PYSEC-YYYY-NNNN
    ```
 
-   Frontend (`npm audit`): add to `.nsprc` in `src/frontend/`:
-   ```json
-   {
-     "GHSA-xxxx-xxxx-xxxx": "Temporary exception until YYYY-MM-DD — see issue #NNN"
-   }
+   Frontend (`npm audit`): add the GHSA id to the `ALLOWLIST` array in the
+   `Run npm audit (with tracked exception allowlist)` step of
+   `.github/workflows/dependency-scan.yml`. Each entry MUST include a
+   comment with the package, justification, tracking issue, and expiry
+   date. Example:
+
+   ```yaml
+   # GHSA-xxxx-xxxx-xxxx — <package> (<rationale>). Tracked in #NNN. Expires YYYY-MM-DD.
+   ALLOWLIST=("GHSA-xxxx-xxxx-xxxx")
    ```
+
+   The step uses `jq` to extract GHSA ids from `npm audit --json` and
+   compares them against the allowlist. Any high/critical advisory not in
+   the allowlist still fails the CI job.
 
 3. **Document the exception** in the table below.
 
@@ -47,7 +54,7 @@ When a vulnerability is disclosed with no fix available, or when upgrading would
 
 | CVE / Advisory | Package | Filed | Expires | Issue | Rationale |
 |----------------|---------|-------|---------|-------|-----------|
-| _(none)_ | — | — | — | — | — |
+| GHSA-5xrq-8626-4rwp | vitest (`<4.1.0`) | 2026-06-01 | 2026-08-30 | #334 | devDep only — Vitest UI server not started by project scripts. SemVer-major upgrade (3 → 4) deferred to a dedicated PR. |
 
 ## Weekly Scan
 

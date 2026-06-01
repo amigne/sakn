@@ -42,5 +42,51 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm ci
-      - name: Run npm audit
-        run: npm audit --audit-level=high
+      - name: Run npm audit (with tracked exception allowlist)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Accepted vulnerabilities — each MUST be tracked by an open issue
+          # documented in docs/qa/dependency-scanning.md (Active Exceptions).
+          #
+          #   GHSA-5xrq-8626-4rwp — vitest <4.1.0 (devDep, Vitest UI server not
+          #   started by our scripts). Tracked in #334. Expires 2026-08-30.
+          ALLOWLIST=("GHSA-5xrq-8626-4rwp")
+
+          audit_json=$(npm audit --audit-level=high --json || true)
+
+          mapfile -t found < <(
+            jq -r '
+              [.vulnerabilities[]?
+                | select(.severity == "high" or .severity == "critical")
+                | .via[]?
+                | select(type == "object")
+                | .url // empty
+                | capture("(?<id>GHSA-[A-Za-z0-9-]+)").id
+              ] | unique | .[]
+            ' <<< "$audit_json"
+          )
+
+          unexpected=()
+          for id in "${found[@]}"; do
+            [ -z "$id" ] && continue
+            case " ${ALLOWLIST[*]} " in
+              *" $id "*) ;;
+              *) unexpected+=("$id") ;;
+            esac
+          done
+
+          if (( ${#unexpected[@]} > 0 )); then
+            echo "::error::High/critical vulnerabilities not in allowlist:"
+            printf '  - https://github.com/advisories/%s\n' "${unexpected[@]}"
+            echo "---"
+            jq '.vulnerabilities' <<< "$audit_json"
+            exit 1
+          fi
+
+          if (( ${#found[@]} > 0 )); then
+            echo "All ${#found[@]} reported high/critical vulnerability(ies) are in the allowlist:"
+            printf '  - %s\n' "${found[@]}"
+          else
+            echo "No high/critical vulnerabilities."
+          fi
