@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Development cycle for `0.2.0` (backend: `0.2.0.dev0`, frontend: `0.2.0-dev`).
 
+### Security
+
+- Upgrade `vitest` to `^4.1.8` to fix CVE GHSA-5xrq-8626-4rwp (critical, CVSS 9.8 — Vitest UI server unauthorized file access). devDependency only, no production runtime exposure. Ported from `dev0.1.1` (#334).
+
+### Changed
+
+- Backend: FastAPI version now sourced from `importlib.metadata` (`pyproject.toml` is the single source of truth). Ported from `dev0.1.1` (#333).
+- Add `scripts/bump-version.sh` for atomic cross-stack version bumps (PEP 440 ↔ SemVer). Ported from `dev0.1.1` (#333).
+- CI: remove `GHSA-5xrq-8626-4rwp` from the npm audit allowlist now that vitest 4.1.8 ships the fix.
+
 ## [0.1.0] — 2026-05-30
 
 First post-MVP release.
