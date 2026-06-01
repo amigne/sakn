@@ -255,6 +255,8 @@ class Test422Errors:
         data = response.json()
         assert data["error"]["code"] == "MAC_OUI_TOO_MANY_INPUTS"
         assert data["error"]["message_key"] == "errors.mac_oui_too_many_inputs"
+        # Covers #345 — details.max must be populated for i18n interpolation
+        assert data["error"]["details"] == {"max": 2000}
 
 
 # ---------------------------------------------------------------------------

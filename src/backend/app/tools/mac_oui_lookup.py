@@ -150,6 +150,7 @@ class MacOuiLookupTool(BaseTool):
                 code="MAC_OUI_TOO_MANY_INPUTS",
                 message_key="errors.mac_oui_too_many_inputs",
                 message=f"Too many inputs. Maximum is {max_size}.",
+                details={"max": max_size},
             )
 
         # --- Zero-trust validation --------------------------------------------
