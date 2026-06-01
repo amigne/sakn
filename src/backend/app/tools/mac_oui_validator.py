@@ -54,14 +54,14 @@ def sanitize_sample(s: str, max_len: int = 20) -> str:
 
 def validate_batch(
     ouis: list[str],
-    max_size: int,
 ) -> tuple[list[ValidatedEntry], list[RejectedEntry]]:
     """Validate and normalise a batch of raw OUI/MAC strings.
 
+    Batch-size enforcement is the caller's responsibility (performed in
+    the tool layer before invoking this function).
+
     Args:
         ouis: Raw input strings (may contain separators ``:``, ``-``, ``.``).
-        max_size: Hard cap on batch size (checked **before** this call by
-            the tool layer).
 
     Returns:
         A tuple of ``(validated, rejected)``.  The caller assembles both into

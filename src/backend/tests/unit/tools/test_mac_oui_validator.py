@@ -64,34 +64,34 @@ class TestSanitizeSample:
 class TestValidateNormalisation:
     def test_normalize_with_colon(self):
         """Covers AC-MAC-OUI-021 — strip colon separators."""
-        validated, rejected = validate_batch(["00:11:22"], max_size=2000)
+        validated, rejected = validate_batch(["00:11:22"])
         assert len(validated) == 1
         assert len(rejected) == 0
         assert validated[0].normalized == "001122"
 
     def test_normalize_with_hyphen(self):
         """Hyphen separators stripped."""
-        validated, _ = validate_batch(["00-11-22"], max_size=2000)
+        validated, _ = validate_batch(["00-11-22"])
         assert validated[0].normalized == "001122"
 
     def test_normalize_with_dot(self):
         """Dot separators stripped."""
-        validated, _ = validate_batch(["0011.22"], max_size=2000)
+        validated, _ = validate_batch(["0011.22"])
         assert validated[0].normalized == "001122"
 
     def test_normalize_bare_hex(self):
         """Bare hex passes through unchanged."""
-        validated, _ = validate_batch(["001122"], max_size=2000)
+        validated, _ = validate_batch(["001122"])
         assert validated[0].normalized == "001122"
 
     def test_normalize_uppercase(self):
         """Covers AC-MAC-OUI-022 — lowercase → uppercase."""
-        validated, _ = validate_batch(["abcdef"], max_size=2000)
+        validated, _ = validate_batch(["abcdef"])
         assert validated[0].normalized == "ABCDEF"
 
     def test_normalize_mixed_separators(self):
         """Mixed separators in same input."""
-        validated, _ = validate_batch(["00:11-22.33:44:55"], max_size=2000)
+        validated, _ = validate_batch(["00:11-22.33:44:55"])
         assert validated[0].normalized == "001122334455"
 
 
@@ -103,25 +103,25 @@ class TestValidateNormalisation:
 class TestValidateLengthAcceptance:
     def test_length_6_valid(self):
         """24-bit OUI (6 hex digits) accepted."""
-        validated, _ = validate_batch(["001122"], max_size=2000)
+        validated, _ = validate_batch(["001122"])
         assert len(validated) == 1
         assert validated[0].bit_size == 24
 
     def test_length_7_valid(self):
         """28-bit OUI (7 hex digits) accepted."""
-        validated, _ = validate_batch(["0011223"], max_size=2000)
+        validated, _ = validate_batch(["0011223"])
         assert len(validated) == 1
         assert validated[0].bit_size == 28
 
     def test_length_9_valid(self):
         """36-bit OUI (9 hex digits) accepted."""
-        validated, _ = validate_batch(["001122334"], max_size=2000)
+        validated, _ = validate_batch(["001122334"])
         assert len(validated) == 1
         assert validated[0].bit_size == 36
 
     def test_length_12_valid(self):
         """48-bit MAC (12 hex digits) accepted."""
-        validated, _ = validate_batch(["001122334455"], max_size=2000)
+        validated, _ = validate_batch(["001122334455"])
         assert len(validated) == 1
         assert validated[0].bit_size == 48
 
@@ -134,7 +134,7 @@ class TestValidateLengthAcceptance:
 class TestValidateRejection:
     def test_length_8_rejected(self):
         """Covers AC-MAC-OUI-033 — 8 digits → invalid_length."""
-        _, rejected = validate_batch(["deadbeef"], max_size=2000)
+        _, rejected = validate_batch(["deadbeef"])
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_length"
         # sanitize_sample preserves case — lowercase input stays lowercase
@@ -142,19 +142,19 @@ class TestValidateRejection:
 
     def test_length_10_rejected(self):
         """10 digits rejected."""
-        _, rejected = validate_batch(["0011223344"], max_size=2000)
+        _, rejected = validate_batch(["0011223344"])
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_length"
 
     def test_length_11_rejected(self):
         """11 digits rejected."""
-        _, rejected = validate_batch(["00112233445"], max_size=2000)
+        _, rejected = validate_batch(["00112233445"])
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_length"
 
     def test_non_hex_rejected(self):
         """Covers AC-MAC-OUI-034 — non-hex char → non_hex_characters."""
-        _, rejected = validate_batch(["001G22"], max_size=2000)
+        _, rejected = validate_batch(["001G22"])
         assert len(rejected) == 1
         assert rejected[0].reason == "non_hex_characters"
         # 'G' is outside [0-9a-fA-F] → replaced by '?' in sanitised sample
@@ -162,25 +162,25 @@ class TestValidateRejection:
 
     def test_empty_string_rejected(self):
         """Empty string → invalid_format."""
-        _, rejected = validate_batch([""], max_size=2000)
+        _, rejected = validate_batch([""])
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_format"
 
     def test_too_short_rejected(self):
         """Less than 6 hex digits → invalid_format."""
-        _, rejected = validate_batch(["00112"], max_size=2000)
+        _, rejected = validate_batch(["00112"])
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_format"
 
     def test_non_string_rejected(self):
         """Non-string item → invalid_format."""
-        _, rejected = validate_batch([12345], max_size=2000)  # type: ignore[list-item]
+        _, rejected = validate_batch([12345])  # type: ignore[list-item]
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_format"
 
     def test_xss_payload_rejected(self):
         """Covers AC-MAC-OUI-037 — XSS payload rejected with sanitised sample."""
-        _, rejected = validate_batch(["<script>alert(1)</script>"], max_size=2000)
+        _, rejected = validate_batch(["<script>alert(1)</script>"])
         assert len(rejected) == 1
         sample = rejected[0].sample
         for char in ("<", ">", "(", ")", ";", '"', "'"):
@@ -189,7 +189,7 @@ class TestValidateRejection:
     def test_echo_length_capped_at_20(self):
         """Covers AC-MAC-OUI-038 — long input → sample capped at 20 chars."""
         long_input = "A" * 200
-        _, rejected = validate_batch([long_input], max_size=2000)
+        _, rejected = validate_batch([long_input])
         assert len(rejected[0].sample) <= 20
 
 
@@ -201,40 +201,40 @@ class TestValidateRejection:
 class TestValidateEdgeCases:
     def test_empty_list_returns_empty(self):
         """Empty list → empty validated and rejected."""
-        validated, rejected = validate_batch([], max_size=2000)
+        validated, rejected = validate_batch([])
         assert len(validated) == 0
         assert len(rejected) == 0
 
     def test_index_is_1_based(self):
         """RejectedEntry.index is 1-based."""
         # Use hex-valid first entry so only the second is rejected
-        _, rejected = validate_batch(["001122", "bad!!"], max_size=2000)
+        _, rejected = validate_batch(["001122", "bad!!"])
         assert len(rejected) == 1
         assert rejected[0].index == 2
 
     def test_all_valid_large_batch(self):
         """Large batch of valid entries all pass."""
         ouis = [f"{i:06X}" for i in range(100)]
-        validated, rejected = validate_batch(ouis, max_size=2000)
+        validated, rejected = validate_batch(ouis)
         assert len(validated) == 100
         assert len(rejected) == 0
 
     def test_mixed_valid_and_invalid(self):
         """Mix of valid and invalid entries."""
         ouis = ["001122", "deadbeef", "0011223", "001G22"]
-        validated, rejected = validate_batch(ouis, max_size=2000)
+        validated, rejected = validate_batch(ouis)
         assert len(validated) == 2  # 001122, 0011223
         assert len(rejected) == 2  # deadbeef (len 8), 001G22 (non-hex)
 
     def test_raw_value_preserved(self):
         """ValidatedEntry.raw preserves the original input."""
-        validated, _ = validate_batch(["00:11:22"], max_size=2000)
+        validated, _ = validate_batch(["00:11:22"])
         assert validated[0].raw == "00:11:22"
         assert validated[0].normalized == "001122"
 
     def test_charset_filter_on_rejected(self):
         """Covers AC-MAC-OUI-039 — rejected entries have sanitised samples."""
-        _, rejected = validate_batch(["hello\nworld"], max_size=2000)
+        _, rejected = validate_batch(["hello\nworld"])
         assert len(rejected) == 1
         # '\n' is not in the safe charset → replaced by '?'
         assert "\n" not in rejected[0].sample
