@@ -27,12 +27,18 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 
 def get_registry(request: Request) -> ToolRegistry:
     if not hasattr(request.app.state, "tool_registry"):
+        from app.tools.dns_lookup import DnsLookupTool
+        from app.tools.mac_oui_lookup import MacOuiLookupTool
         from app.tools.ping import PingTool
+        from app.tools.ssl_viewer import SslViewerTool
         from app.tools.traceroute import TracerouteTool
 
         registry = ToolRegistry()
         registry.register(PingTool())
         registry.register(TracerouteTool())
+        registry.register(DnsLookupTool())
+        registry.register(SslViewerTool())
+        registry.register(MacOuiLookupTool())
         request.app.state.tool_registry = registry
     return request.app.state.tool_registry
 

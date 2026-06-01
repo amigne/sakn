@@ -80,6 +80,7 @@ async def lifespan(app: FastAPI) -> Any:
 
     # Tool registry (always available, even without DB)
     from app.tools.dns_lookup import DnsLookupTool
+    from app.tools.mac_oui_lookup import MacOuiLookupTool
     from app.tools.ping import PingTool
     from app.tools.registry import ToolRegistry
     from app.tools.ssl_viewer import SslViewerTool
@@ -90,6 +91,7 @@ async def lifespan(app: FastAPI) -> Any:
     registry.register(TracerouteTool())
     registry.register(DnsLookupTool())
     registry.register(SslViewerTool())
+    registry.register(MacOuiLookupTool())
     app.state.tool_registry = registry
 
     # Seed tool modules + default config rows (idempotent)
@@ -118,6 +120,8 @@ async def lifespan(app: FastAPI) -> Any:
                             description_key=definition.description_key,
                             enabled=True,
                             version=definition.version,
+                            has_settings=getattr(tool, "has_settings", False),
+                            has_status=getattr(tool, "has_status", False),
                         )
                         db.add(existing)
                         await db.flush()

@@ -12,6 +12,8 @@ class ToolModule(Base, UUID7Mixin, TimestampMixin):
     description_key: Mapped[str] = mapped_column(String(128), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     version: Mapped[str] = mapped_column(String(20), nullable=False)
+    has_settings: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    has_status: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class RoleToolPermission(Base, UUID7Mixin):
