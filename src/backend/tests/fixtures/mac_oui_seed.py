@@ -6,7 +6,7 @@ used by the lookup service and endpoint integration tests.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,9 +112,9 @@ async def seed_mac_oui_test_data(db: AsyncSession) -> dict[str, str]:
     await db.flush()
 
     # History entries for VLANCorp
-    dt1 = datetime(2025, 1, 15, tzinfo=timezone.utc)
-    dt2 = datetime(2025, 6, 10, tzinfo=timezone.utc)
-    dt3 = datetime(2026, 3, 5, tzinfo=timezone.utc)
+    dt1 = datetime(2025, 1, 15, tzinfo=UTC)
+    dt2 = datetime(2025, 6, 10, tzinfo=UTC)
+    dt3 = datetime(2026, 3, 5, tzinfo=UTC)
 
     db.add_all([
         MacOuiHistory(

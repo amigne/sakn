@@ -14,7 +14,6 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-
 # Only regex acceptable on the backend side: bounded, anchored, fixed length range.
 # No alternation, no backtracking, no ReDoS surface.
 _HEX_STRIP_RE = re.compile(r"[:.\-]")

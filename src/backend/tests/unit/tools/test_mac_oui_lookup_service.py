@@ -8,14 +8,11 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import event
 
-from app.models.mac_oui import MacOui
 from app.tools.mac_oui_lookup_service import (
-    HISTORY_FIRST_PAGE_SIZE,
     format_oui_display,
     lookup_batch,
 )
 from app.tools.mac_oui_validator import ValidatedEntry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -309,11 +306,13 @@ class TestNPlusOne:
         def _count_selects(conn, cursor, statement, parameters, context, executemany):
             nonlocal select_count
             stmt_str = str(statement)
-            if "FROM mac_oui" in stmt_str and "SELECT" in stmt_str.upper():
-                # Exclude the ambiguity query (Phase 3) — it's a second query
-                # but NOT N+1.  Count only the main lookup query.
-                if "substr" not in stmt_str.lower():
-                    select_count += 1
+            # Count main lookup query; exclude ambiguity query (Phase 3)
+            if (
+                "FROM mac_oui" in stmt_str
+                and "SELECT" in stmt_str.upper()
+                and "substr" not in stmt_str.lower()
+            ):
+                select_count += 1
 
         entries = [_v(i, f"{i:06X}", 24) for i in range(10)]
         await lookup_batch(db_session, entries)

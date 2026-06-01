@@ -70,7 +70,14 @@ class MacOuiLookupTool(BaseTool):
                 code="VALIDATION_ERROR",
                 message_key="errors.validation",
                 message="The 'ouis' field is required.",
-                details={"fields": {"ouis": {"message_key": "errors.field_required", "message": "This field is required."}}},
+                details={
+                    "fields": {
+                        "ouis": {
+                            "message_key": "errors.field_required",
+                            "message": "This field is required.",
+                        }
+                    }
+                },
             )
 
         if not isinstance(ouis, list):

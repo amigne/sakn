@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.tools.mac_oui_validator import (
-    RejectedEntry,
-    ValidatedEntry,
     sanitize_sample,
     validate_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # sanitize_sample
