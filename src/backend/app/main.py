@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager, suppress
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -342,7 +343,7 @@ async def lifespan(app: FastAPI) -> Any:
 app = FastAPI(
     title="SAKN API",
     description="Swiss Army Knife for Network Engineers",
-    version="0.1.0",
+    version=_pkg_version("sakn"),
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
