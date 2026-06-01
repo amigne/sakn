@@ -304,7 +304,7 @@ async def lifespan(app: FastAPI) -> Any:
 app = FastAPI(
     title="SAKN API",
     description="Swiss Army Knife for Network Engineers",
-    version="0.2.0-dev",
+    version="0.2.0.dev0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
