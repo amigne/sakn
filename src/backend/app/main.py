@@ -6,6 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from importlib.metadata import version as _pkg_version
+
 from app.config import settings
 from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.database import engine
@@ -304,7 +306,7 @@ async def lifespan(app: FastAPI) -> Any:
 app = FastAPI(
     title="SAKN API",
     description="Swiss Army Knife for Network Engineers",
-    version="0.2.0.dev0",
+    version=_pkg_version("sakn"),
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
