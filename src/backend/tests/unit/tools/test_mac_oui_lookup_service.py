@@ -231,6 +231,38 @@ class TestAmbiguity:
             assert row.ambiguous_extends_ma_m is False
             assert row.ambiguous_extends_ma_s is False
 
+    async def test_mixed_batch_only_24bit_gets_ambiguous_flag(self, db_session):
+        """Regression — in a mixed batch where a 24-bit MA-L hit and a longer
+        entry share the same 24-bit prefix, only the 24-bit entry must be
+        flagged ambiguous. Per ADR-014 §4.4.2 the ≥28-bit entry has already
+        resolved to its longest prefix and carries no ambiguity.
+        """
+        from tests.fixtures.mac_oui_seed import seed_mac_oui_test_data
+
+        await seed_mac_oui_test_data(db_session)
+
+        # 8C1F64 = IEEE Reg Auth (MA-L) AND has MA-M extensions 8C1F640/8C1F641
+        # AND a MA-S extension 8C1F64100. So the 24-bit entry is ambiguous.
+        # The 28-bit entry 8C1F640 resolves directly to MA-M (Acme Corp)
+        # and must NOT inherit any ambiguity flag.
+        entries = [
+            _v(1, "8C1F64", 24),    # → MA-L hit, ambiguous_extends_ma_m/s = True
+            _v(2, "8C1F640", 28),   # → MA-M hit, ambiguous_extends_* must be False
+        ]
+        rows = await lookup_batch(db_session, entries)
+
+        # 24-bit entry: confirmed ambiguous on both MA-M and MA-S
+        assert rows[0].result is not None
+        assert rows[0].result.oui_type == "MA-L"
+        assert rows[0].ambiguous_extends_ma_m is True
+        assert rows[0].ambiguous_extends_ma_s is True
+
+        # 28-bit entry: resolved to MA-M, never ambiguous
+        assert rows[1].result is not None
+        assert rows[1].result.oui_type == "MA-M"
+        assert rows[1].ambiguous_extends_ma_m is False
+        assert rows[1].ambiguous_extends_ma_s is False
+
 
 # ---------------------------------------------------------------------------
 # lookup_batch — history

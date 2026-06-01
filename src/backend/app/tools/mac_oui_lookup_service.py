@@ -274,9 +274,18 @@ async def lookup_batch(
         oid = matched_oui_id.get(idx)
         history = history_map.get(oid, [])[:HISTORY_FIRST_PAGE_SIZE] if oid else []
 
-        # Ambiguity only applies to 24-bit entries
-        is_ambiguous_ma_m = entry.normalized[:6] in ambiguous_ma_m
-        is_ambiguous_ma_s = entry.normalized[:6] in ambiguous_ma_s
+        # Ambiguity only applies to 24-bit entries — for ≥28-bit entries we
+        # already picked the longest prefix, so there is no ambiguity by
+        # definition (ADR-014 §4.4.2). The bit_size gate is essential: in a
+        # mixed batch where a 24-bit MA-L hit and a longer entry share the
+        # same 24-bit prefix, Phase 3 would otherwise mark the longer entry
+        # as ambiguous too.
+        is_ambiguous_ma_m = (
+            entry.bit_size == 24 and entry.normalized[:6] in ambiguous_ma_m
+        )
+        is_ambiguous_ma_s = (
+            entry.bit_size == 24 and entry.normalized[:6] in ambiguous_ma_s
+        )
 
         rows.append(
             LookupRow(
