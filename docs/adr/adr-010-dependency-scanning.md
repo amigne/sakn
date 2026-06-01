@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-05-22 (amended 2026-05-23 to remove OSV-Scanner)
+Accepted — 2026-05-22 (amended 2026-05-23 to remove OSV-Scanner; amended 2026-06-01 to add frontend allowlist mechanism)
 
 ## Context
 
@@ -71,6 +71,25 @@ Rather than pinning a different tag or migrating to the reusable workflow, the O
 - **The fictive coverage is worse than the honest gap**: a perpetually-red advisory check that everyone learns to ignore degrades trust in the CI signal.
 
 Should SAKN add a new dependency ecosystem (Go, Rust, etc.), this decision must be revisited.
+
+### Amendment 2026-06-01 — Frontend allowlist mechanism
+
+The original frontend policy was binary: `npm audit --audit-level=high` blocked CI on any high/critical advisory, with no mechanism to accept a tracked risk. The backend already had `pip-audit --ignore-vuln`; the frontend's documented `.nsprc` mechanism was aspirational — `npm audit` does not natively read `.nsprc`, so no exception was actually wireable.
+
+The `Run npm audit` step now extracts GHSA ids from `npm audit --json` via `jq` and compares them against an inline `ALLOWLIST` array. Any high/critical advisory not in the allowlist still fails CI. Each allowlist entry must:
+
+- Be tracked by an open GitHub issue
+- Carry an inline comment with package, justification, tracking issue, and expiry date
+- Be registered in the *Active Exceptions* table in `docs/qa/dependency-scanning.md`
+
+Rationale:
+
+- **Fail-closed by default**: only the explicitly listed advisory passes — any new vuln still breaks the build.
+- **No new dependency**: `jq` is preinstalled on GitHub `ubuntu-latest` runners; no third-party allowlist tool added.
+- **Symmetric with backend**: mirrors `pip-audit --ignore-vuln` in terms of expressive power and governance overhead.
+- **Reversible**: removing the GHSA id from the array restores strict scanning.
+
+First use of the mechanism: GHSA-5xrq-8626-4rwp (vitest < 4.1.0) — tracked in #334.
 
 ## Consequences
 
