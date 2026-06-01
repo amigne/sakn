@@ -5,9 +5,14 @@ Requires a database session with seeded MacOui / MacOuiHistory rows.
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
+
 import pytest
 from sqlalchemy import event
 
+from app.models.base import new_uuid7
+from app.models.mac_oui import MacOui
+from app.models.mac_oui_history import MacOuiHistory
 from app.tools.mac_oui_lookup_service import (
     format_oui_display,
     lookup_batch,
@@ -313,6 +318,91 @@ class TestHistory:
         assert len(rows) == 1
         assert rows[0].result is None
         assert rows[0].history == []
+
+    async def test_history_bounded_to_first_page(self, db_session):
+        """Covers #346 — >10 history entries → only first page returned."""
+        # Create OUI with 25 history entries — should only get back 10
+        oui = MacOui(
+            id=new_uuid7(),
+            oui="BEEF00",
+            oui_type="MA-L",
+            organization="TestCorp",
+            address="1 Test Way",
+            first_seen=date(2024, 1, 1),
+            last_seen=date(2026, 1, 1),
+        )
+        db_session.add(oui)
+        await db_session.flush()
+
+        base = datetime(2025, 1, 1)
+        for i in range(25):
+            dt = base + timedelta(days=i)
+            h = MacOuiHistory(
+                id=new_uuid7(),
+                oui_id=oui.id,
+                oui="BEEF00",
+                previous_organization=f"OldCorp_{i:02d}",
+                new_organization="TestCorp",
+                previous_address="Old Address",
+                new_address="1 Test Way",
+                change_type="name_change",
+                detected_at=dt,
+            )
+            db_session.add(h)
+        await db_session.flush()
+
+        entries = [_v(1, "BEEF00", 24)]
+        rows = await lookup_batch(db_session, entries)
+
+        assert len(rows) == 1
+        assert rows[0].result is not None
+        history = rows[0].history
+        # Must be capped at HISTORY_FIRST_PAGE_SIZE (10)
+        assert len(history) == 10
+        # Most recent first
+        for i in range(len(history) - 1):
+            assert history[i].detected_at > history[i + 1].detected_at
+
+    async def test_history_per_oui_partition(self, db_session):
+        """Covers #346 — each OUI gets its own cap, not a global cap."""
+        # Two OUIs, 15 entries each. Each should get 10.
+        for prefix, org in [("BEEF01", "CorpA"), ("BEEF02", "CorpB")]:
+            oui = MacOui(
+                id=new_uuid7(),
+                oui=prefix,
+                oui_type="MA-L",
+                organization=org,
+                address="1 Test Way",
+                first_seen=date(2024, 1, 1),
+                last_seen=date(2026, 1, 1),
+            )
+            db_session.add(oui)
+            await db_session.flush()
+
+            for i in range(15):
+                dt = datetime(2025, 1, 1) + timedelta(days=i)
+                h = MacOuiHistory(
+                    id=new_uuid7(),
+                    oui_id=oui.id,
+                    oui=prefix,
+                    previous_organization=f"Old_{org}_{i:02d}",
+                    new_organization=org,
+                    previous_address="Old Address",
+                    new_address="1 Test Way",
+                    change_type="name_change",
+                    detected_at=dt,
+                )
+                db_session.add(h)
+        await db_session.flush()
+
+        entries = [_v(1, "BEEF01", 24), _v(2, "BEEF02", 24)]
+        rows = await lookup_batch(db_session, entries)
+
+        assert len(rows) == 2
+        # Each gets exactly 10 entries
+        for row in rows:
+            assert row.result is not None
+            assert len(row.history) == 10
 
 
 # ---------------------------------------------------------------------------
