@@ -136,16 +136,16 @@ async def test_relationship_ordering(db_session):
 
     await db_session.flush()
 
-    # Verify ordering via direct query on history table
-    history_rows = (await db_session.execute(
-        select(MacOuiHistory)
-        .where(MacOuiHistory.oui_id == oui.id)
-        .order_by(MacOuiHistory.detected_at)
-    )).scalars().all()
-    assert len(history_rows) == 3
-    assert ensure_aware(history_rows[0].detected_at) == t1
-    assert ensure_aware(history_rows[1].detected_at) == t2
-    assert ensure_aware(history_rows[2].detected_at) == t3
+    # Verify ordering via the relationship (AC-MAC-OUI-054 names MacOui.history)
+    from sqlalchemy.orm import selectinload
+
+    loaded_oui = (await db_session.execute(
+        select(MacOui).options(selectinload(MacOui.history)).where(MacOui.id == oui.id)
+    )).scalar_one()
+    assert len(loaded_oui.history) == 3
+    assert ensure_aware(loaded_oui.history[0].detected_at) == t1
+    assert ensure_aware(loaded_oui.history[1].detected_at) == t2
+    assert ensure_aware(loaded_oui.history[2].detected_at) == t3
 
 
 @pytest.mark.asyncio
