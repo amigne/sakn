@@ -46,7 +46,7 @@ class SyncReport:
     finished_at: datetime | None = None
 
 
-def classify_change(old_org: str, new_org: str, old_addr: str, new_addr: str) -> str:
+def classify_change(old_org: str, new_org: str) -> str:
     """3 values only: name_change | address_change | revoked. No reassigned."""
     new_org_norm = new_org.strip()
     if not new_org_norm or new_org_norm == "----" or "revoked" in new_org_norm.lower():
@@ -301,8 +301,6 @@ class OuiSyncService:
                     change_type = classify_change(
                         existing.organization,
                         entry.organization,
-                        existing.address,
-                        entry.address,
                     )
                     session.add(
                         MacOuiHistory(
