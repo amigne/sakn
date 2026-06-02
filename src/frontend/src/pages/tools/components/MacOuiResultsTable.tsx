@@ -267,9 +267,7 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
       </div>
 
       {hasPartialByte && (
-        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          {t("tools.mac_oui.legend_partial_byte")}
-        </p>
+        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">{t("tools.mac_oui.legend_partial_byte")}</p>
       )}
     </div>
   );
