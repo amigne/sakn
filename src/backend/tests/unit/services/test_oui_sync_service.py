@@ -592,3 +592,25 @@ async def test_windows_1252_encoding_handled(_engine):
         # (db_session in test_mac_oui_lookup_service.py shares the engine and
         # would otherwise see "000001" and trigger the history phase).
         await _cleanup_oui_tables(factory)
+
+
+@pytest.mark.asyncio
+async def test_try_acquire_running_lock_atomic_under_concurrency(_engine):
+    """Covers #329 — 10 concurrent acquire calls → exactly 1 wins."""
+    import asyncio
+
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory, oui_sync_running="0")
+
+    async def attempt():
+        async with factory() as session:
+            service = OuiSyncService(db_session_factory=factory)
+            # Each call opens its own session for true concurrency
+            return await service.try_acquire_running_lock(session)
+
+    results = await asyncio.gather(*(attempt() for _ in range(10)))
+    winners = [r for r in results if r is True]
+    losers = [r for r in results if r is False]
+    assert len(winners) == 1
+    assert len(losers) == 9
