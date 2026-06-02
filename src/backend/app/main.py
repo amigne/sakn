@@ -320,7 +320,7 @@ async def lifespan(app: FastAPI) -> Any:
             from app.database import async_session_factory as asf
             from app.scheduler.jobs.oui_sync_job import register_oui_sync_job
 
-            register_oui_sync_job(scheduler, asf)
+            await register_oui_sync_job(scheduler, asf)
         except Exception:
             logger.exception("OUI sync job registration failed")
 

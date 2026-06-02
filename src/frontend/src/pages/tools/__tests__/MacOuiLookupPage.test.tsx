@@ -26,10 +26,15 @@ vi.mock("@/api/tools/macOui", async () => {
   return { ...actual, executeMacOuiLookup: (...args: unknown[]) => mockLookup(...args) };
 });
 
+const mockApi = vi.fn();
+vi.mock("@/services/api", () => ({
+  api: (...args: unknown[]) => mockApi(...args),
+}));
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function mockLookupSuccess(data: unknown) {
-  mockLookup.mockResolvedValue(data);
+function mockLookupSuccess(responseData: unknown) {
+  mockLookup.mockResolvedValue({ data: responseData });
 }
 
 function mockLookupError(message: string) {
@@ -42,6 +47,9 @@ describe("MacOuiLookupPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLookup.mockReset();
+    mockApi.mockReset();
+    // M1 — default config response for dynamic maxChars
+    mockApi.mockResolvedValue({ max_chars: 50_000 });
   });
 
   it("renders initial state: empty textarea, execute button visible", () => {

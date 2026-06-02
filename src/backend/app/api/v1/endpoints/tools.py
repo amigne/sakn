@@ -449,11 +449,171 @@ async def execute_tool(
     except Exception:
         logger.exception("Failed to log tool execution")
 
-    return {
+    # Look up module_deployed_at for MAC OUI (Sprint 5: câblage date "depuis")
+    module_deployed_at: str | None = None
+    if tool_name == "mac_oui" and result.success:
+        try:
+            from app.models.oui_sync_log import OuiSyncLog
+            async with async_session_factory() as deploy_db:
+                deploy_row = await deploy_db.execute(
+                    select(OuiSyncLog.started_at)
+                    .where(OuiSyncLog.status != "failed")
+                    .order_by(OuiSyncLog.started_at.asc())
+                    .limit(1)
+                )
+                first_sync = deploy_row.scalar_one_or_none()
+                if first_sync is not None:
+                    module_deployed_at = first_sync.date().isoformat()
+        except Exception:
+            logger.debug("Could not fetch module_deployed_at for mac_oui", exc_info=True)
+
+    response: dict[str, Any] = {
         "result": {
             "success": result.success,
             "data": result.data,
             "error": result.error,
             "duration_ms": result.duration_ms or elapsed_ms,
         }
+    }
+    if module_deployed_at is not None:
+        response["result"]["module_deployed_at"] = module_deployed_at
+
+    return response
+
+
+# ── MAC OUI Tool Config (Sprint 5 — M1) ──────────────────────────────────────
+
+
+@router.get("/mac_oui/config")
+async def get_mac_oui_config(
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    """Public config for the MAC OUI tool (non-sensitive). Same RBAC as tool exec.
+
+    Serves the effective frontend input limit so the UI can be dynamically
+    configured by the admin without a redeploy (M1).
+    """
+    await _check_tool_access("mac_oui", request, session)
+
+    from app.models.preferences import GlobalSetting
+
+    row = await session.execute(
+        select(GlobalSetting).where(
+            GlobalSetting.key == "module.mac_oui.MAC_OUI_FRONTEND_INPUT_MAX_CHARS"
+        )
+    )
+    s = row.scalar_one_or_none()
+    max_chars = int(s.value) if s else 50_000
+    return {"max_chars": max_chars}
+
+
+# ── MAC OUI Paginated History (Sprint 5) ────────────────────────────────────
+# Specific to mac_oui; generalize to /{tool_name}/history when a 2nd tool needs
+# history (NIT N3).
+
+
+@router.get("/mac_oui/history")
+async def get_mac_oui_history(
+    oui: str,
+    oui_type: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 10,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    """Paginated history for a given OUI. Same RBAC as tool execution."""
+    from app.models.mac_oui import MacOui
+    from app.models.mac_oui_history import MacOuiHistory
+    from app.models.preferences import GlobalSetting
+
+    # Enforce same access as tool execution
+    await _check_tool_access("mac_oui", request, session)
+
+    # Validate oui_type
+    if oui_type not in ("MA-L", "MA-M", "MA-S"):
+        from fastapi import HTTPException as HTTPEx
+        raise HTTPEx(
+            status_code=400,
+            detail="oui_type must be one of: MA-L, MA-M, MA-S",
+        )
+
+    # Load effective page size from settings (fallback to hard-coded default)
+    max_page_size = 50
+    try:
+        setting_row = await session.execute(
+            select(GlobalSetting).where(
+                GlobalSetting.key == "module.mac_oui.MAC_OUI_HISTORY_PAGE_SIZE"
+            )
+        )
+        db_setting = setting_row.scalar_one_or_none()
+        if db_setting is not None:
+            max_page_size = int(db_setting.value)
+    except (ValueError, TypeError):
+        pass
+
+    # Clamp
+    if limit < 1:
+        limit = 10
+    if limit > max_page_size:
+        limit = max_page_size
+    if offset < 0:
+        offset = 0
+
+    # Find the MacOui row
+    oui_normalized = oui.strip().upper()
+    oui_row = await session.execute(
+        select(MacOui).where(
+            MacOui.oui == oui_normalized,
+            MacOui.oui_type == oui_type,
+        )
+    )
+    mac_oui = oui_row.scalar_one_or_none()
+
+    if mac_oui is None:
+        return {
+            "items": [],
+            "total": 0,
+            "offset": offset,
+            "limit": limit,
+            "has_more": False,
+        }
+
+    # Count total
+    from sqlalchemy import func as sa_func
+    count_result = await session.execute(
+        select(sa_func.count(MacOuiHistory.id)).where(
+            MacOuiHistory.oui_id == mac_oui.id
+        )
+    )
+    total = count_result.scalar() or 0
+
+    # Fetch page
+    history_rows = await session.execute(
+        select(MacOuiHistory)
+        .where(MacOuiHistory.oui_id == mac_oui.id)
+        .order_by(MacOuiHistory.detected_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    entries = history_rows.scalars().all()
+
+    items = [
+        {
+            "previous_organization": h.previous_organization,
+            "new_organization": h.new_organization,
+            "previous_address": h.previous_address,
+            "new_address": h.new_address,
+            "change_type": h.change_type,
+            "detected_at": h.detected_at.isoformat(),
+        }
+        for h in entries
+    ]
+
+    return {
+        "items": items,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": (offset + limit) < total,
     }

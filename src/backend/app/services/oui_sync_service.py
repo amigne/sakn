@@ -1,7 +1,9 @@
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 import httpx
 from sqlalchemy import select, update
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.mac_oui import MacOui
 from app.models.mac_oui_history import MacOuiHistory
+from app.models.oui_sync_log import OuiSyncLog
 from app.models.preferences import GlobalSetting
 from app.services.oui_parser import parse_ieee_file
 
@@ -165,9 +168,17 @@ class OuiSyncService:
             return True
         return False
 
-    async def sync_all(self, skip_lock_check: bool = False) -> SyncReport:
+    async def sync_all(
+        self,
+        skip_lock_check: bool = False,
+        triggered_by: str = "scheduler",
+        triggered_by_user_id: UUID | None = None,
+    ) -> SyncReport:
         """Run sync for all 3 IEEE files. Set skip_lock_check=True if the caller
-        already acquired the lock via try_acquire_running_lock."""
+        already acquired the lock via try_acquire_running_lock.
+
+        Persists start/end in oui_sync_log (Sprint 5).
+        """
         report = SyncReport(started_at=datetime.now(UTC))
         await self._get_http()
 
@@ -177,6 +188,12 @@ class OuiSyncService:
                     self._log.warning("oui_sync_already_running")
                     report.finished_at = datetime.now(UTC)
                     return report
+
+        # 1. Create OuiSyncLog row (status='running')
+        log_id = await self._create_log(
+            triggered_by=triggered_by,
+            triggered_by_user_id=triggered_by_user_id,
+        )
 
         try:
             for oui_type, url in OUI_SOURCES:
@@ -194,6 +211,15 @@ class OuiSyncService:
                     # if it didn't run (sync_one raised before calling it),
                     # the counter is intentionally not advanced here to avoid
                     # double-counting on partial failures (#327).
+
+            # 2. Finalize log with success/partial status
+            await self._finalize_log(log_id, report)
+
+        except Exception as e:
+            # 3. Finalize log with failed status
+            await self._finalize_log_with_error(log_id, str(e))
+            raise
+
         finally:
             async with self._session_factory() as session:
                 await self._set_running(session, False)
@@ -211,6 +237,83 @@ class OuiSyncService:
             },
         )
         return report
+
+    async def _create_log(
+        self,
+        triggered_by: str,
+        triggered_by_user_id: UUID | None = None,
+    ) -> str:
+        """Insert a new OuiSyncLog row with status='running'. Returns the log id."""
+        async with self._session_factory() as session:
+            log = OuiSyncLog(
+                started_at=datetime.now(UTC),
+                triggered_by=triggered_by,
+                triggered_by_user_id=str(triggered_by_user_id) if triggered_by_user_id else None,
+                status="running",
+                added=0,
+                changed=0,
+                confirmed=0,
+            )
+            session.add(log)
+            await session.commit()
+            self._log.info(
+                "oui_sync_started",
+                extra={
+                    "log_id": log.id,
+                    "triggered_by": triggered_by,
+                    "triggered_by_user_id": str(triggered_by_user_id) if triggered_by_user_id else None,
+                },
+            )
+            return log.id
+
+    async def _finalize_log(self, log_id: str, report: SyncReport) -> None:
+        """Update the OuiSyncLog row with final counts and status."""
+        status = "partial" if report.files_failed else "success"
+        async with self._session_factory() as session:
+            row = await session.execute(
+                select(OuiSyncLog).where(OuiSyncLog.id == log_id)
+            )
+            log = row.scalar_one_or_none()
+            if log is None:
+                self._log.error("oui_sync_log_not_found", extra={"log_id": log_id})
+                return
+            log.status = status
+            log.finished_at = datetime.now(UTC)
+            log.added = report.added
+            log.changed = report.changed
+            log.confirmed = report.confirmed
+            log.files_failed = json.dumps(report.files_failed) if report.files_failed else None
+            await session.commit()
+        self._log.info(
+            "oui_sync_finished",
+            extra={
+                "log_id": log_id,
+                "status": status,
+                "added": report.added,
+                "changed": report.changed,
+                "confirmed": report.confirmed,
+                "files_failed": report.files_failed,
+            },
+        )
+
+    async def _finalize_log_with_error(self, log_id: str, error_message: str) -> None:
+        """Mark the OuiSyncLog row as failed with an error message."""
+        async with self._session_factory() as session:
+            row = await session.execute(
+                select(OuiSyncLog).where(OuiSyncLog.id == log_id)
+            )
+            log = row.scalar_one_or_none()
+            if log is None:
+                self._log.error("oui_sync_log_not_found", extra={"log_id": log_id})
+                return
+            log.status = "failed"
+            log.finished_at = datetime.now(UTC)
+            log.error_message = error_message
+            await session.commit()
+        self._log.error(
+            "oui_sync_failed",
+            extra={"log_id": log_id, "error_message": error_message},
+        )
 
     async def sync_one(self, oui_type: str, url: str) -> tuple[int, int, int, bool]:
         """Download, parse and upsert one IEEE file. Returns (added, changed, confirmed, failed)."""

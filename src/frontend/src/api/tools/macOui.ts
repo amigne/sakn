@@ -49,30 +49,55 @@ export interface MacOuiExecuteResponse {
   parse_stats: MacOuiParseStats;
 }
 
+export interface MacOuiHistoryPage {
+  items: MacOuiHistoryEntry[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+
 interface MacOuiEnvelope {
   result: {
     success: boolean;
     data: MacOuiExecuteResponse;
     error: string | null;
     duration_ms: number;
+    module_deployed_at?: string;
   };
 }
 
-// ── API call ──────────────────────────────────────────────────────────
+// ── API calls ─────────────────────────────────────────────────────────
 
-export async function executeMacOuiLookup(req: MacOuiExecuteRequest): Promise<MacOuiExecuteResponse> {
+export async function executeMacOuiLookup(req: MacOuiExecuteRequest): Promise<{
+  data: MacOuiExecuteResponse;
+  module_deployed_at?: string;
+}> {
   const envelope = await api<MacOuiEnvelope>("/tools/mac_oui/execute", {
     method: "POST",
     body: req,
   });
 
   if (!envelope.result.success) {
-    // Backend returned soft error (success=false in 200 OK).
-    // HTTP 4xx/5xx errors are already thrown as ApiError by api<…>().
     throw new Error(envelope.result.error ?? "Unknown error");
   }
 
-  return envelope.result.data;
+  return {
+    data: envelope.result.data,
+    module_deployed_at: envelope.result.module_deployed_at,
+  };
+}
+
+/** Fetch a paginated page of history entries for a specific OUI. */
+export async function fetchMacOuiHistory(
+  oui: string,
+  oui_type: string,
+  offset: number,
+  limit: number,
+): Promise<MacOuiHistoryPage> {
+  return api<MacOuiHistoryPage>(
+    `/tools/mac_oui/history?oui=${encodeURIComponent(oui)}&oui_type=${encodeURIComponent(oui_type)}&offset=${offset}&limit=${limit}`,
+  );
 }
 
 export { api };

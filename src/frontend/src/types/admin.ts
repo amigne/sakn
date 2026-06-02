@@ -31,6 +31,7 @@ export function toolDisplayName(name: string): string {
     traceroute: "Traceroute",
     dns_lookup: "DNS Lookup",
     ssl_viewer: "TLS Certificate Viewer",
+    mac_oui: "MAC OUI Lookup",
   };
   return map[name] ?? name.replace(/_/g, " ");
 }
@@ -64,6 +65,7 @@ export interface ToolModule {
   name: string;
   enabled: boolean;
   has_settings?: boolean;
+  has_status?: boolean;
 }
 
 export interface GlobalSettings {

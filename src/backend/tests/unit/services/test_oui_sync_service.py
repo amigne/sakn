@@ -520,7 +520,7 @@ async def test_owned_http_client_closed_after_sync(_engine, monkeypatch):
     async def failing_stream(method, url, **kw):
         # Trigger the except-branch in sync_one without doing real I/O
         raise httpx.TimeoutException("test")
-        yield  # noqa: pragma: no cover — required marker for asynccontextmanager
+        yield  # pragma: no cover — required marker for asynccontextmanager
 
     def tracking_client_factory(**kwargs):
         client = MagicMock()

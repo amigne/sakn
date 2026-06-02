@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MacOuiExecuteResponse } from "@/api/tools/macOui";
-import { executeMacOuiLookup } from "@/api/tools/macOui";
+import { executeMacOuiLookup, fetchMacOuiHistory } from "@/api/tools/macOui";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
 import { Spinner } from "@/components/ui";
 import type { ExtractedOui } from "@/lib/macOuiExtractor";
 import { extractOuis } from "@/lib/macOuiExtractor";
+import { api } from "@/services/api";
 import { useToolStore } from "@/stores/toolStore";
 import type { ExecutionStatus } from "@/types/tool";
 import MacOuiParseStats from "./components/MacOuiParseStats";
 import MacOuiRejectedBanner from "./components/MacOuiRejectedBanner";
 import MacOuiResultsTable from "./components/MacOuiResultsTable";
 
-const MAX_CHARS = 50_000;
+const DEFAULT_MAX_CHARS = 50_000;
 const WARN_THRESHOLD = 0.9;
 
 function localeFromI18n(lng: string): string {
@@ -29,6 +30,7 @@ export default function MacOuiLookupPage() {
   const [data, setData] = useState<MacOuiExecuteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [moduleDeployedAt, setModuleDeployedAt] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<{
     extracted: ExtractedOui[];
     matchesBeforeDedup: number;
@@ -37,8 +39,25 @@ export default function MacOuiLookupPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const runningRef = useRef(false);
 
+  // M1 — dynamic max chars from admin-configurable setting
+  const [maxChars, setMaxChars] = useState(DEFAULT_MAX_CHARS);
+
   useEffect(() => {
     useToolStore.getState().setActiveTool("mac_oui");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ max_chars: number }>("/tools/mac_oui/config")
+      .then((cfg) => {
+        if (!cancelled && cfg.max_chars > 0) setMaxChars(cfg.max_chars);
+      })
+      .catch(() => {
+        // Keep DEFAULT_MAX_CHARS on error
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const isRunning = status === "running";
@@ -46,11 +65,11 @@ export default function MacOuiLookupPage() {
   const hasText = text.trim().length > 0;
 
   const charCount = text.length;
-  const isApproachingLimit = charCount >= MAX_CHARS * WARN_THRESHOLD;
+  const isApproachingLimit = charCount >= maxChars * WARN_THRESHOLD;
 
   const handleTextChange = (value: string) => {
-    if (value.length > MAX_CHARS) {
-      value = value.slice(0, MAX_CHARS);
+    if (value.length > maxChars) {
+      value = value.slice(0, maxChars);
     }
     setText(value);
     if (extraction) setExtraction(null);
@@ -70,7 +89,7 @@ export default function MacOuiLookupPage() {
     setDuration(null);
 
     // 1. Extract OUIs from text.
-    const ext = extractOuis(text, { maxChars: MAX_CHARS });
+    const ext = extractOuis(text, { maxChars });
     setExtraction({
       extracted: ext.unique,
       matchesBeforeDedup: ext.totalMatchesBeforeDedup,
@@ -90,7 +109,10 @@ export default function MacOuiLookupPage() {
       const result = await executeMacOuiLookup({
         ouis: ext.unique.map((e) => e.normalized),
       });
-      setData(result);
+      setData(result.data);
+      if (result.module_deployed_at) {
+        setModuleDeployedAt(result.module_deployed_at);
+      }
       setStatus("completed");
       setDuration(performance.now() - start);
       setTimeout(() => {
@@ -136,7 +158,7 @@ export default function MacOuiLookupPage() {
           <textarea
             id="mac-oui-textarea"
             rows={8}
-            maxLength={MAX_CHARS}
+            maxLength={maxChars}
             className="focus-ring w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] border-[var(--color-border)] resize-y font-mono dark:[color-scheme:dark]"
             placeholder={t("tools.mac_oui.param_text_desc")}
             value={text}
@@ -156,14 +178,14 @@ export default function MacOuiLookupPage() {
             >
               {t("tools.mac_oui.input_chars_count", {
                 current: charCount.toLocaleString(),
-                max: MAX_CHARS.toLocaleString(),
+                max: maxChars.toLocaleString(),
               })}
               {isApproachingLimit &&
-                ` — ${t("tools.mac_oui.input_approaching_limit", { max: MAX_CHARS.toLocaleString() })}`}
+                ` — ${t("tools.mac_oui.input_approaching_limit", { max: maxChars.toLocaleString() })}`}
             </span>
             {extraction?.truncated && (
               <span className="text-xs text-warning-600 dark:text-warning-500">
-                {t("tools.mac_oui.input_truncation_warning", { max: MAX_CHARS.toLocaleString() })}
+                {t("tools.mac_oui.input_truncation_warning", { max: maxChars.toLocaleString() })}
               </span>
             )}
           </div>
@@ -209,7 +231,14 @@ export default function MacOuiLookupPage() {
           <div ref={resultsRef} tabIndex={-1}>
             <MacOuiRejectedBanner rejected={data.rejected} />
             <MacOuiParseStats stats={data.parse_stats} />
-            <MacOuiResultsTable results={data.results} locale={localeFromI18n(i18n.language)} />
+            <MacOuiResultsTable
+              results={data.results}
+              locale={localeFromI18n(i18n.language)}
+              onLoadMoreHistory={(oui, oui_type) => (offset, limit) =>
+                fetchMacOuiHistory(oui, oui_type, offset, limit).then((p) => p.items)
+              }
+              deployedSince={moduleDeployedAt}
+            />
           </div>
         )}
 
