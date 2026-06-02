@@ -62,16 +62,13 @@ async def _cleanup_oui_tables(session_factory):
 
 def test_classify_name_change():
     """Covers AC-MAC-OUI-050 — change_type='name_change'."""
-    assert classify_change("Cisco", "Cisco LLC", "addr", "addr") == "name_change"
+    assert classify_change("Cisco", "Cisco LLC") == "name_change"
 
 
 def test_classify_name_and_address_change_as_name_change():
     """Covers AC-MAC-OUI-051 — Aruba→HPE with different address → name_change."""
     assert (
-        classify_change(
-            "Aruba Networks", "Hewlett Packard Enterprise",
-            "San Jose, CA", "Houston, TX",
-        )
+        classify_change("Aruba Networks", "Hewlett Packard Enterprise")
         == "name_change"
     )
 
@@ -79,23 +76,23 @@ def test_classify_name_and_address_change_as_name_change():
 def test_classify_address_only_change():
     """Covers AC-MAC-OUI-052 — change_type='address_change'."""
     assert (
-        classify_change("Cisco", "Cisco", "Old Address", "New Address")
+        classify_change("Cisco", "Cisco")
         == "address_change"
     )
 
 
 def test_classify_revoked_keyword():
     """Covers AC-MAC-OUI-053 — keyword 'revoked' → change_type='revoked'."""
-    assert classify_change("Cisco", "Cisco [revoked]", "a", "a") == "revoked"
-    assert classify_change("Cisco", "REVOKED ASSIGNMENT", "a", "a") == "revoked"
+    assert classify_change("Cisco", "Cisco [revoked]") == "revoked"
+    assert classify_change("Cisco", "REVOKED ASSIGNMENT") == "revoked"
 
 
 def test_classify_revoked_dashes():
-    assert classify_change("Cisco", "----", "a", "a") == "revoked"
+    assert classify_change("Cisco", "----") == "revoked"
 
 
 def test_classify_revoked_empty():
-    assert classify_change("Cisco", "   ", "a", "a") == "revoked"
+    assert classify_change("Cisco", "   ") == "revoked"
 
 
 # ── Mock helpers for HTTP streaming ─────────────────────────────────────────
