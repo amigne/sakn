@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { MacOuiResultRow } from "@/api/tools/macOui";
+import type { MacOuiHistoryEntry, MacOuiResultRow } from "@/api/tools/macOui";
 import { Button, Tooltip } from "@/components/ui";
 import MacOuiHistoryDetails from "./MacOuiHistoryDetails";
 
 interface MacOuiResultsTableProps {
   results: MacOuiResultRow[];
   locale: string;
+  /** Factory to create a load-more callback for a specific OUI (Sprint 5). */
+  onLoadMoreHistory?: (
+    oui: string,
+    oui_type: string,
+  ) => (offset: number, limit: number) => Promise<MacOuiHistoryEntry[]>;
+  /** Date the module was first deployed (Sprint 5). */
+  deployedSince?: string | null;
 }
 
 /**
@@ -45,7 +52,12 @@ function formatDate(dateStr: string, locale: string): string {
   }
 }
 
-export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTableProps) {
+export default function MacOuiResultsTable({
+  results,
+  locale,
+  onLoadMoreHistory,
+  deployedSince,
+}: MacOuiResultsTableProps) {
   const { t } = useTranslation();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
@@ -257,7 +269,17 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
                         </Button>
                       )}
                     </div>
-                    {hasHistory && expandedRows.has(idx) && <MacOuiHistoryDetails history={row.history} />}
+                    {hasHistory && expandedRows.has(idx) && (
+                      <MacOuiHistoryDetails
+                        history={row.history}
+                        loadMoreHistory={
+                          row.result?.oui_type && onLoadMoreHistory
+                            ? onLoadMoreHistory(row.oui_display.replace(/[:_]/g, ""), row.result.oui_type)
+                            : undefined
+                        }
+                        deployedSince={deployedSince}
+                      />
+                    )}
                   </td>
                 </tr>
               );

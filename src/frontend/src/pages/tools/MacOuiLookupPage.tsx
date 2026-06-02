@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MacOuiExecuteResponse } from "@/api/tools/macOui";
-import { executeMacOuiLookup } from "@/api/tools/macOui";
+import { executeMacOuiLookup, fetchMacOuiHistory } from "@/api/tools/macOui";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
@@ -29,6 +29,7 @@ export default function MacOuiLookupPage() {
   const [data, setData] = useState<MacOuiExecuteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [moduleDeployedAt, setModuleDeployedAt] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<{
     extracted: ExtractedOui[];
     matchesBeforeDedup: number;
@@ -90,7 +91,10 @@ export default function MacOuiLookupPage() {
       const result = await executeMacOuiLookup({
         ouis: ext.unique.map((e) => e.normalized),
       });
-      setData(result);
+      setData(result.data);
+      if (result.module_deployed_at) {
+        setModuleDeployedAt(result.module_deployed_at);
+      }
       setStatus("completed");
       setDuration(performance.now() - start);
       setTimeout(() => {
@@ -209,7 +213,14 @@ export default function MacOuiLookupPage() {
           <div ref={resultsRef} tabIndex={-1}>
             <MacOuiRejectedBanner rejected={data.rejected} />
             <MacOuiParseStats stats={data.parse_stats} />
-            <MacOuiResultsTable results={data.results} locale={localeFromI18n(i18n.language)} />
+            <MacOuiResultsTable
+              results={data.results}
+              locale={localeFromI18n(i18n.language)}
+              onLoadMoreHistory={(oui, oui_type) => (offset, limit) =>
+                fetchMacOuiHistory(oui, oui_type, offset, limit).then((p) => p.items)
+              }
+              deployedSince={moduleDeployedAt}
+            />
           </div>
         )}
 

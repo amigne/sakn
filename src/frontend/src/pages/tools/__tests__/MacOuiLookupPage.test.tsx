@@ -28,8 +28,8 @@ vi.mock("@/api/tools/macOui", async () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function mockLookupSuccess(data: unknown) {
-  mockLookup.mockResolvedValue(data);
+function mockLookupSuccess(responseData: unknown) {
+  mockLookup.mockResolvedValue({ data: responseData });
 }
 
 function mockLookupError(message: string) {

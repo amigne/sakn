@@ -47,11 +47,16 @@ async def trigger_oui_sync(
 
     task_id = str(uuid.uuid4())
     started_at = datetime.now(UTC)
+    admin_user_id = getattr(request.state, "user_id", None)
 
     # Launch sync in background (lock already held, skip re-check)
     async def _run_sync():
         try:
-            await oui_service.sync_all(skip_lock_check=True)
+            await oui_service.sync_all(
+                skip_lock_check=True,
+                triggered_by="admin",
+                triggered_by_user_id=uuid.UUID(admin_user_id) if admin_user_id else None,
+            )
         except Exception:
             logger.exception("manual_oui_sync_failed", extra={"task_id": task_id})
 

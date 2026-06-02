@@ -5,8 +5,10 @@ import { Spinner } from "@/components/ui";
 
 interface MacOuiHistoryDetailsProps {
   history: MacOuiHistoryEntry[];
-  /** Optional callback for loading more history (to be wired in Sprint 5). */
+  /** Callback for loading more history (wired in Sprint 5). */
   loadMoreHistory?: (offset: number, limit: number) => Promise<MacOuiHistoryEntry[]>;
+  /** The date of the first sync deployment (wired in Sprint 5). */
+  deployedSince?: string | null;
 }
 
 const CHANGE_TYPE_LABELS: Record<string, string> = {
@@ -15,7 +17,7 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   revoked: "tools.mac_oui.history_change_revoked",
 };
 
-export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOuiHistoryDetailsProps) {
+export default function MacOuiHistoryDetails({ history, loadMoreHistory, deployedSince }: MacOuiHistoryDetailsProps) {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<MacOuiHistoryEntry[]>(history);
   const [loading, setLoading] = useState(false);
@@ -47,7 +49,7 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
     }
   }, [loadMoreHistory, loading]);
 
-  // IntersectionObserver for infinite scroll (Sprint 5 ready)
+  // IntersectionObserver for infinite scroll
   useEffect(() => {
     if (!loadMoreHistory) return;
     const el = sentinelRef.current;
@@ -66,8 +68,8 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
     return () => observer.disconnect();
   }, [loadMoreHistory, hasMore, loading, loadMore]);
 
-  // Placeholder date — Sprint 5 will provide the actual deployment date.
-  const placeholderDate = new Date().toISOString().slice(0, 10);
+  // Use the actual deployment date if available, otherwise fallback to today.
+  const sinceDate = deployedSince ?? new Date().toISOString().slice(0, 10);
 
   const renderChangeLabel = (type: string): string => {
     const key = CHANGE_TYPE_LABELS[type];
@@ -82,7 +84,7 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
         {t("tools.mac_oui.history_title")}
       </h4>
       <p className="mb-2 text-xs text-[var(--color-text-secondary)]">
-        {t("tools.mac_oui.history_since", { date: placeholderDate })}
+        {t("tools.mac_oui.history_since", { date: sinceDate })}
       </p>
 
       <div className="max-h-64 overflow-y-auto">
@@ -134,15 +136,9 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
           </div>
         )}
 
-        {!hasMore && loadMoreHistory && (
+        {!hasMore && (
           <p className="py-2 text-center text-xs text-[var(--color-text-secondary)]">
             {t("tools.mac_oui.history_no_more")}
-          </p>
-        )}
-
-        {!loadMoreHistory && (
-          <p className="py-2 text-center text-xs text-[var(--color-text-secondary)] italic">
-            {t("tools.mac_oui.history_placeholder")}
           </p>
         )}
       </div>
