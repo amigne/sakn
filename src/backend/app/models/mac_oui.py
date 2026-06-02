@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 
 from sqlalchemy import CheckConstraint, Date, Index, String, Text, UniqueConstraint
@@ -16,7 +18,7 @@ class MacOui(Base, UUID7Mixin, TimestampMixin):
     first_seen: Mapped[date] = mapped_column(Date(), nullable=False)
     last_seen: Mapped[date] = mapped_column(Date(), nullable=False)
 
-    history = relationship(
+    history: Mapped[list[MacOuiHistory]] = relationship(  # noqa: F821
         "MacOuiHistory",
         cascade="all, delete-orphan",
         order_by="MacOuiHistory.detected_at",

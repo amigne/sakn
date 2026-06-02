@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
@@ -20,7 +22,7 @@ class MacOuiHistory(Base, UUID7Mixin):
     change_type: Mapped[str] = mapped_column(String(20), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    parent = relationship("MacOui", back_populates="history")
+    parent: Mapped[MacOui] = relationship("MacOui", back_populates="history")  # noqa: F821
 
     __table_args__ = (
         CheckConstraint(
