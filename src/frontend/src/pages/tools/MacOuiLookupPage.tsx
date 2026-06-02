@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { executeMacOuiLookup } from "@/api/tools/macOui";
 import type { MacOuiExecuteResponse } from "@/api/tools/macOui";
-import { Spinner } from "@/components/ui";
+import { executeMacOuiLookup } from "@/api/tools/macOui";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { extractOuis } from "@/lib/macOuiExtractor";
+import { Spinner } from "@/components/ui";
 import type { ExtractedOui } from "@/lib/macOuiExtractor";
+import { extractOuis } from "@/lib/macOuiExtractor";
 import { useToolStore } from "@/stores/toolStore";
 import type { ExecutionStatus } from "@/types/tool";
 import MacOuiParseStats from "./components/MacOuiParseStats";
@@ -214,9 +214,7 @@ export default function MacOuiLookupPage() {
         )}
 
         {showEmpty && (
-          <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
-            {t("tools.mac_oui.no_results")}
-          </p>
+          <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">{t("tools.mac_oui.no_results")}</p>
         )}
       </ToolOutput>
     </PageLayout>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Tooltip } from "@/components/ui";
 import type { MacOuiResultRow } from "@/api/tools/macOui";
+import { Button, Tooltip } from "@/components/ui";
 import MacOuiHistoryDetails from "./MacOuiHistoryDetails";
 
 interface MacOuiResultsTableProps {
@@ -50,9 +50,7 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [copiedRow, setCopiedRow] = useState<number | null>(null);
 
-  const hasPartialByte = results.some(
-    (r) => r.result?.oui_type === "MA-M" || r.result?.oui_type === "MA-S",
-  );
+  const hasPartialByte = results.some((r) => r.result?.oui_type === "MA-M" || r.result?.oui_type === "MA-S");
 
   const toggleHistory = (idx: number) => {
     setExpandedRows((prev) => {
@@ -204,7 +202,10 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
                   <td className="px-3 py-2 text-[var(--color-text-secondary)] font-mono text-xs whitespace-nowrap">
                     {row.result ? formatDate(row.result.last_seen, locale) : "—"}
                   </td>
-                  <td className="px-3 py-2 text-[var(--color-text-secondary)] max-w-40 truncate" title={row.result?.address ?? undefined}>
+                  <td
+                    className="px-3 py-2 text-[var(--color-text-secondary)] max-w-40 truncate"
+                    title={row.result?.address ?? undefined}
+                  >
                     {row.result?.address ?? "—"}
                   </td>
                   <td className="px-3 py-2">
@@ -219,7 +220,13 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
                           {copiedRow === idx ? (
                             <span className="text-xs text-success-600">{t("tools.mac_oui.copied")}</span>
                           ) : (
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"

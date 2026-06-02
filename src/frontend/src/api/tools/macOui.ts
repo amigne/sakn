@@ -60,9 +60,7 @@ interface MacOuiEnvelope {
 
 // ── API call ──────────────────────────────────────────────────────────
 
-export async function executeMacOuiLookup(
-  req: MacOuiExecuteRequest,
-): Promise<MacOuiExecuteResponse> {
+export async function executeMacOuiLookup(req: MacOuiExecuteRequest): Promise<MacOuiExecuteResponse> {
   const envelope = await api<MacOuiEnvelope>("/tools/mac_oui/execute", {
     method: "POST",
     body: req,
@@ -78,4 +76,3 @@ export async function executeMacOuiLookup(
 }
 
 export { api };
-

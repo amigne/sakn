@@ -70,10 +70,7 @@ function normalize(raw: string): string | null {
 
 // ── Main export ──────────────────────────────────────────────────────
 
-export function extractOuis(
-  text: string,
-  opts?: { maxChars?: number },
-): ExtractionResult {
+export function extractOuis(text: string, opts?: { maxChars?: number }): ExtractionResult {
   const maxChars = opts?.maxChars ?? 50_000;
   const truncated = text.length > maxChars;
   const input = truncated ? text.slice(0, maxChars) : text;

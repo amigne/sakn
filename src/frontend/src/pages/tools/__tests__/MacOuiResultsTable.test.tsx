@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import MacOuiResultsTable from "../components/MacOuiResultsTable";
 import type { MacOuiResultRow } from "@/api/tools/macOui";
+import MacOuiResultsTable from "../components/MacOuiResultsTable";
 
 // ── Test data ─────────────────────────────────────────────────────────
 

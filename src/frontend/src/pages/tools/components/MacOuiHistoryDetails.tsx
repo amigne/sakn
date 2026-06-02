@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Spinner } from "@/components/ui";
 import type { MacOuiHistoryEntry } from "@/api/tools/macOui";
+import { Spinner } from "@/components/ui";
 
 interface MacOuiHistoryDetailsProps {
   history: MacOuiHistoryEntry[];
@@ -107,10 +107,16 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
             {entries.map((entry, i) => (
               <tr key={`${entry.detected_at}-${i}`} className="border-b border-[var(--color-border)]">
                 <td className="px-2 py-1 text-[var(--color-text)]">{renderChangeLabel(entry.change_type)}</td>
-                <td className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate" title={entry.previous_organization}>
+                <td
+                  className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate"
+                  title={entry.previous_organization}
+                >
                   {entry.previous_organization}
                 </td>
-                <td className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate" title={entry.new_organization}>
+                <td
+                  className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate"
+                  title={entry.new_organization}
+                >
                   {entry.new_organization}
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap text-[var(--color-text-secondary)] font-mono">
