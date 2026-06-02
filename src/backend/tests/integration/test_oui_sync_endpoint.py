@@ -51,7 +51,7 @@ def mock_oui_service():
     from app.main import app
 
     service = MagicMock()
-    service._try_acquire_running_lock = AsyncMock(return_value=True)
+    service.try_acquire_running_lock = AsyncMock(return_value=True)
     service.sync_all = AsyncMock(return_value=None)
     app.dependency_overrides[get_oui_sync_service] = lambda: service
     yield service
@@ -95,7 +95,7 @@ async def test_post_admin_202(client: AsyncClient, db_session, mock_oui_service)
 @pytest.mark.asyncio
 async def test_post_when_running_409(client: AsyncClient, db_session, mock_oui_service):
     """Sync already in progress → 409 with OUI_SYNC_ALREADY_RUNNING. M2: atomic lock rejects."""
-    mock_oui_service._try_acquire_running_lock.return_value = False
+    mock_oui_service.try_acquire_running_lock.return_value = False
 
     token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
     response = await client.post(
@@ -115,14 +115,14 @@ async def test_concurrent_admin_posts_only_one_gets_202(
     """M2: 5 concurrent POSTs → exactly 1 gets 202, rest get 409."""
     token = await _create_session_for_role(db_session, ROLE_ADMINISTRATOR)
 
-    # Simulate _try_acquire_running_lock: first call succeeds, rest fail
+    # Simulate try_acquire_running_lock: first call succeeds, rest fail
     call_count = [0]
 
     async def acquire_lock(session):
         call_count[0] += 1
         return call_count[0] == 1
 
-    mock_oui_service._try_acquire_running_lock = acquire_lock
+    mock_oui_service.try_acquire_running_lock = acquire_lock
 
     async def post():
         return await client.post(
