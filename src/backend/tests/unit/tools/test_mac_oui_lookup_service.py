@@ -5,9 +5,8 @@ Requires a database session with seeded MacOui / MacOuiHistory rows.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-
 import re
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import event
