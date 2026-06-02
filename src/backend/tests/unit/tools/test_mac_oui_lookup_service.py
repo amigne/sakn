@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+import re
+
 import pytest
 from sqlalchemy import event
 
@@ -424,13 +426,17 @@ class TestNPlusOne:
         # get_bind() may return AsyncEngine or Engine depending on setup
         sync_engine = getattr(bind, "sync_engine", bind)
 
+        # Word-boundary anchor so we don't also match `FROM mac_oui_history`
+        # (which the history phase emits). Excludes `substr` to skip the
+        # ambiguity-detection query (Phase 3) which also targets `mac_oui`.
+        mac_oui_select_re = re.compile(r"FROM mac_oui(?![_a-zA-Z0-9])")
+
         @event.listens_for(sync_engine, "after_cursor_execute")
         def _count_selects(conn, cursor, statement, parameters, context, executemany):
             nonlocal select_count
             stmt_str = str(statement)
-            # Count main lookup query; exclude ambiguity query (Phase 3)
             if (
-                "FROM mac_oui" in stmt_str
+                mac_oui_select_re.search(stmt_str)
                 and "SELECT" in stmt_str.upper()
                 and "substr" not in stmt_str.lower()
             ):
@@ -451,10 +457,13 @@ class TestNPlusOne:
         bind = db_session.get_bind()
         sync_engine = getattr(bind, "sync_engine", bind)
 
+        # Word-boundary anchor — see test_single_select_no_n_plus_1 above.
+        mac_oui_select_re = re.compile(r"FROM mac_oui(?![_a-zA-Z0-9])")
+
         @event.listens_for(sync_engine, "after_cursor_execute")
         def _count_selects(conn, cursor, statement, parameters, context, executemany):
             nonlocal select_count
-            if "FROM mac_oui" in str(statement):
+            if mac_oui_select_re.search(str(statement)):
                 select_count += 1
 
         rows = await lookup_batch(db_session, [])

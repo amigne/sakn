@@ -579,10 +579,16 @@ async def test_windows_1252_encoding_handled(_engine):
     }
     mock_http = _make_mock_http(responses)
     service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
-    report = await service.sync_all()
+    try:
+        report = await service.sync_all()
 
-    assert report.added == 1
-    async with factory() as session:
-        row = await session.execute(select(MacOui).where(MacOui.oui == "000001"))
-        mac = row.scalar_one()
-        assert mac.organization == "Société Corp"
+        assert report.added == 1
+        async with factory() as session:
+            row = await session.execute(select(MacOui).where(MacOui.oui == "000001"))
+            mac = row.scalar_one()
+            assert mac.organization == "Société Corp"
+    finally:
+        # Clean up committed rows so they don't leak into other test files
+        # (db_session in test_mac_oui_lookup_service.py shares the engine and
+        # would otherwise see "000001" and trigger the history phase).
+        await _cleanup_oui_tables(factory)
