@@ -253,7 +253,15 @@ class OuiSyncService:
                         await self._handle_failure(oui_type)
                         return 0, 0, 0, True
                     chunks.append(chunk)
-                content = b"".join(chunks).decode("utf-8", errors="replace")
+                raw_bytes = b"".join(chunks)
+                try:
+                    content = raw_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    self._log.warning(
+                        "oui_file_not_utf8_falling_back_to_cp1252",
+                        extra={"file": oui_type},
+                    )
+                    content = raw_bytes.decode("cp1252", errors="replace")
         except httpx.TimeoutException:
             self._log.error("oui_download_timeout", extra={"file": oui_type})
             await self._handle_failure(oui_type)
