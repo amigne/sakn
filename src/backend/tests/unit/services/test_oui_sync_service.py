@@ -614,3 +614,39 @@ async def test_try_acquire_running_lock_atomic_under_concurrency(_engine):
     losers = [r for r in results if r is False]
     assert len(winners) == 1
     assert len(losers) == 9
+
+
+@pytest.mark.asyncio
+async def test_sync_one_raises_no_double_increment(_engine, monkeypatch):
+    """Covers #327 — outer except must NOT re-increment the failure counter."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    mock_http = _make_mock_http()
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+
+    # Force sync_one to raise before _handle_failure runs
+    original_sync_one = service.sync_one
+    call_count = 0
+
+    async def _failing_sync_one(oui_type, url):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("simulated crash before _handle_failure")
+        return await original_sync_one(oui_type, url)
+
+    monkeypatch.setattr(service, "sync_one", _failing_sync_one)
+
+    report = await service.sync_all()
+
+    # The first file should be marked as failed
+    assert "MA-L" in report.files_failed
+    # The remaining files should succeed
+    assert len(report.files_failed) == 1
+
+    # Verify the failure counter was NOT incremented by the outer except
+    async with factory() as session:
+        count = await service._get_failure_count(session, "MA-L")
+    assert count == 0, f"Failure counter should be 0, got {count}"

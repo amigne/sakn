@@ -190,15 +190,10 @@ class OuiSyncService:
                 except Exception:
                     self._log.exception("oui_sync_unexpected_error file=%s", oui_type)
                     report.files_failed.append(oui_type)
-                    async with self._session_factory() as session:
-                        count = await self._get_failure_count(session, oui_type) + 1
-                        await self._set_failure_count(session, oui_type, count)
-                        await session.commit()
-                        if count >= 3:
-                            self._log.error(
-                                "ALERT_OUI_SYNC_FAILED_3X",
-                                extra={"file": oui_type, "consecutive_failures": count},
-                            )
+                    # _handle_failure() is the responsibility of sync_one;
+                    # if it didn't run (sync_one raised before calling it),
+                    # the counter is intentionally not advanced here to avoid
+                    # double-counting on partial failures (#327).
         finally:
             async with self._session_factory() as session:
                 await self._set_running(session, False)
