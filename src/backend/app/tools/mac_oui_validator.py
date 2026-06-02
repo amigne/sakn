@@ -17,10 +17,18 @@ from typing import Literal
 # Only regex acceptable on the backend side: bounded, anchored, fixed length range.
 # No alternation, no backtracking, no ReDoS surface.
 _HEX_STRIP_RE = re.compile(r"[:.\-]")
-_HEX_VALID_RE = re.compile(r"^[0-9A-F]{6,12}$")
+_HEX_ONLY_RE = re.compile(r"^[0-9A-Fa-f]+$")
 _SANITIZE_RE = re.compile(r"[^0-9a-fA-F:.\-]")
 
 VALID_LENGTHS = frozenset({6, 7, 9, 12})
+
+# Mapping of hex-digit length → IEEE bit size.
+_BIT_SIZE: dict[int, Literal[24, 28, 36, 48]] = {
+    6: 24,
+    7: 28,
+    9: 36,
+    12: 48,
+}
 
 
 @dataclass(frozen=True)
@@ -84,22 +92,8 @@ def validate_batch(
         # Step 1: strip allowed separators
         stripped = _HEX_STRIP_RE.sub("", raw)
 
-        # Step 2: check for non-hex characters BEFORE length check so that
-        #         "001G" returns non_hex_characters, not invalid_length.
-        if not _HEX_VALID_RE.match(stripped.upper()):
-            # If the stripped string has the right hex pattern but also had
-            # mixed content, it'll fail the fullmatch.  Distinguish:
-            #   - Contains non-hex chars → non_hex_characters
-            #   - Otherwise (e.g. empty after strip, too short) → invalid_format
-            if stripped and not re.fullmatch(r"^[0-9A-Fa-f]+$", stripped):
-                rejected.append(
-                    RejectedEntry(
-                        index=idx,
-                        sample=sanitize_sample(raw),
-                        reason="non_hex_characters",
-                    )
-                )
-                continue
+        # Step 2: empty after stripping → invalid_format
+        if not stripped:
             rejected.append(
                 RejectedEntry(
                     index=idx,
@@ -109,10 +103,21 @@ def validate_batch(
             )
             continue
 
+        # Step 3: check for non-hex characters BEFORE length check so that
+        #         "001G" returns non_hex_characters, not invalid_length.
+        if not _HEX_ONLY_RE.match(stripped):
+            rejected.append(
+                RejectedEntry(
+                    index=idx,
+                    sample=sanitize_sample(raw),
+                    reason="non_hex_characters",
+                )
+            )
+            continue
+
+        # Step 4: hex-valid → validate length.
         normalized = stripped.upper()
         length = len(normalized)
-
-        # Step 3: validate length
         if length not in VALID_LENGTHS:
             rejected.append(
                 RejectedEntry(
@@ -123,21 +128,13 @@ def validate_batch(
             )
             continue
 
-        # Step 4: map length → bit_size
-        bit_size_map: dict[int, Literal[24, 28, 36, 48]] = {
-            6: 24,
-            7: 28,
-            9: 36,
-            12: 48,
-        }
-        bit_size = bit_size_map[length]
-
+        # Step 5: valid → produce entry
         validated.append(
             ValidatedEntry(
                 index=idx,
                 raw=raw,
                 normalized=normalized,
-                bit_size=bit_size,
+                bit_size=_BIT_SIZE[length],
             )
         )
 
