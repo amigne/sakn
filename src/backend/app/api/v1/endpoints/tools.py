@@ -510,7 +510,6 @@ async def get_mac_oui_history(
         )
 
     # Load effective page size from settings (fallback to hard-coded default)
-    page_size_limit = limit
     max_page_size = 50
     try:
         setting_row = await session.execute(

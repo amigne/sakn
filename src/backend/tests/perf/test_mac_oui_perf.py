@@ -33,7 +33,7 @@ def _clear_rate_limits():
 
 async def _seed_many_ouis(db: AsyncSession, count: int) -> None:
     """Seed N unique MA-L OUI rows."""
-    from datetime import UTC, date
+    from datetime import date
 
     today = date.today()
     for i in range(count):

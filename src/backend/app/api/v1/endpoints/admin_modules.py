@@ -256,18 +256,17 @@ async def get_module_status(
     }
 
     # --- Total records ----------------------------------------------------------------
-    from app.models.mac_oui import MacOui
-
-    count_row = await session.execute(select(MacOui).limit(1))
     # Use a fast count query
     from sqlalchemy import func as sa_func
+
+    from app.models.mac_oui import MacOui
     count_result = await session.execute(select(sa_func.count(MacOui.id)))
     total_records = count_result.scalar() or 0
 
     # --- Determine status -------------------------------------------------------------
     if not logs:
         derived_status = "idle"
-    elif any(l.status == "running" for l in logs[:1]):
+    elif any(log.status == "running" for log in logs[:1]):
         derived_status = "running"
     elif any(v >= 3 for v in consecutive_failures.values()):
         derived_status = "alert"
