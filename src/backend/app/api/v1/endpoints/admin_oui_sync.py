@@ -37,7 +37,7 @@ async def trigger_oui_sync(
 ) -> dict:
     """Trigger a manual MAC OUI IEEE sync. Returns 202 with task_id, or 409 if already running."""
     # Atomic compare-and-set: acquire the lock before returning 202
-    if not await oui_service._try_acquire_running_lock(session):
+    if not await oui_service.try_acquire_running_lock(session):
         raise AppError(
             status_code=409,
             code="OUI_SYNC_ALREADY_RUNNING",

@@ -133,7 +133,7 @@ class OuiSyncService:
             else:
                 session.add(GlobalSetting(key=key, value=val))
 
-    async def _try_acquire_running_lock(self, session: AsyncSession) -> bool:
+    async def try_acquire_running_lock(self, session: AsyncSession) -> bool:
         """Atomic compare-and-set: returns True if we acquired the lock."""
         result = await session.execute(
             update(GlobalSetting)
@@ -167,13 +167,13 @@ class OuiSyncService:
 
     async def sync_all(self, skip_lock_check: bool = False) -> SyncReport:
         """Run sync for all 3 IEEE files. Set skip_lock_check=True if the caller
-        already acquired the lock via _try_acquire_running_lock."""
+        already acquired the lock via try_acquire_running_lock."""
         report = SyncReport(started_at=datetime.now(UTC))
         await self._get_http()
 
         if not skip_lock_check:
             async with self._session_factory() as session:
-                if not await self._try_acquire_running_lock(session):
+                if not await self.try_acquire_running_lock(session):
                     self._log.warning("oui_sync_already_running")
                     report.finished_at = datetime.now(UTC)
                     return report
