@@ -246,9 +246,23 @@ async def lookup_batch(
     history_map: dict[str, list[HistoryEntry]] = {}
 
     if all_matched_ids:
+        # Per-OUI row number, most recent first.  The outer join filters
+        # to ≤ HISTORY_FIRST_PAGE_SIZE rows per OUI, avoiding an unbounded
+        # fetch.  ROW_NUMBER is portable to SQLite ≥ 3.25 and PostgreSQL.
+        rn = func.row_number().over(
+            partition_by=MacOuiHistory.oui_id,
+            order_by=MacOuiHistory.detected_at.desc(),
+        ).label("rn")
+
+        inner = (
+            select(MacOuiHistory.id.label("hid"), rn)
+            .where(MacOuiHistory.oui_id.in_(all_matched_ids))
+        ).subquery("ranked")
+
         hist_stmt = (
             select(MacOuiHistory)
-            .where(MacOuiHistory.oui_id.in_(all_matched_ids))
+            .join(inner, MacOuiHistory.id == inner.c.hid)
+            .where(inner.c.rn <= HISTORY_FIRST_PAGE_SIZE)
             .order_by(MacOuiHistory.detected_at.desc())
         )
         hist_result = await session.execute(hist_stmt)
