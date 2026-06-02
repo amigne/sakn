@@ -1,4 +1,4 @@
-import { api, ApiError } from "@/services/api";
+import { api } from "@/services/api";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -49,26 +49,33 @@ export interface MacOuiExecuteResponse {
   parse_stats: MacOuiParseStats;
 }
 
+interface MacOuiEnvelope {
+  result: {
+    success: boolean;
+    data: MacOuiExecuteResponse;
+    error: string | null;
+    duration_ms: number;
+  };
+}
+
 // ── API call ──────────────────────────────────────────────────────────
 
 export async function executeMacOuiLookup(
   req: MacOuiExecuteRequest,
 ): Promise<MacOuiExecuteResponse> {
-  const res = await api<{
-    result: { success: boolean; data: MacOuiExecuteResponse; error: string | null };
-  }>(`/tools/mac_oui/execute`, {
+  const envelope = await api<MacOuiEnvelope>("/tools/mac_oui/execute", {
     method: "POST",
     body: req,
   });
 
-  if (!res.result.success) {
-    throw new ApiError(422, {
-      error: {
-        code: "MAC_OUI_TOO_MANY_INPUTS",
-        message: res.result.error ?? "Unknown error",
-      },
-    });
+  if (!envelope.result.success) {
+    // Backend returned soft error (success=false in 200 OK).
+    // HTTP 4xx/5xx errors are already thrown as ApiError by api<…>().
+    throw new Error(envelope.result.error ?? "Unknown error");
   }
 
-  return res.result.data;
+  return envelope.result.data;
 }
+
+export { api };
+

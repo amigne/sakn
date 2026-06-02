@@ -81,7 +81,6 @@ export function extractOuis(
   // Position mask: once a character index is consumed, shorter patterns
   // cannot match across it (prevents truncating a 48-bit MAC to 24-bit).
   const consumed = new Array<boolean>(input.length);
-  let consumedCount = 0;
 
   function isConsumed(start: number, end: number): boolean {
     for (let i = start; i < end; i++) {
@@ -92,10 +91,7 @@ export function extractOuis(
 
   function markConsumed(start: number, end: number): void {
     for (let i = start; i < end; i++) {
-      if (!consumed[i]) {
-        consumed[i] = true;
-        consumedCount++;
-      }
+      consumed[i] = true;
     }
   }
 
@@ -103,10 +99,7 @@ export function extractOuis(
   const patterns = buildPatterns();
 
   for (const { re, bitSize } of patterns) {
-    // Reset lastIndex for the global regex.
-    re.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(input)) !== null) {
+    for (const match of input.matchAll(re)) {
       const start = match.index;
       const end = start + match[0].length;
 

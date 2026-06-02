@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { executeMacOuiLookup } from "@/api/tools/macOui";
+import type { MacOuiExecuteResponse } from "@/api/tools/macOui";
+import { Spinner } from "@/components/ui";
 import PageLayout from "@/components/layout/PageLayout";
 import ToolForm from "@/components/tool/ToolForm";
 import ToolOutput from "@/components/tool/ToolOutput";
-import { Spinner } from "@/components/ui";
-import { useToolExecution } from "@/hooks/useToolExecution";
-import { useToolStore } from "@/stores/toolStore";
 import { extractOuis } from "@/lib/macOuiExtractor";
-import type { MacOuiExecuteResponse } from "@/api/tools/macOui";
 import type { ExtractedOui } from "@/lib/macOuiExtractor";
-import MacOuiRejectedBanner from "./components/MacOuiRejectedBanner";
+import { useToolStore } from "@/stores/toolStore";
+import type { ExecutionStatus } from "@/types/tool";
 import MacOuiParseStats from "./components/MacOuiParseStats";
+import MacOuiRejectedBanner from "./components/MacOuiRejectedBanner";
 import MacOuiResultsTable from "./components/MacOuiResultsTable";
 
 const MAX_CHARS = 50_000;
-const WARN_THRESHOLD = 0.9; // 90%
+const WARN_THRESHOLD = 0.9;
 
 function localeFromI18n(lng: string): string {
   if (lng === "fr") return "fr-FR";
@@ -24,13 +25,17 @@ function localeFromI18n(lng: string): string {
 export default function MacOuiLookupPage() {
   const { t, i18n } = useTranslation();
   const [text, setText] = useState("");
-  const { status, data, error, duration, execute, reset } = useToolExecution();
+  const [status, setStatus] = useState<ExecutionStatus>("idle");
+  const [data, setData] = useState<MacOuiExecuteResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const [extraction, setExtraction] = useState<{
     extracted: ExtractedOui[];
     matchesBeforeDedup: number;
     truncated: boolean;
   } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const runningRef = useRef(false);
 
   useEffect(() => {
     useToolStore.getState().setActiveTool("mac_oui");
@@ -40,24 +45,29 @@ export default function MacOuiLookupPage() {
   const isCompleted = status === "completed";
   const hasText = text.trim().length > 0;
 
-  const response = (data ?? null) as MacOuiExecuteResponse | null;
-
   const charCount = text.length;
   const isApproachingLimit = charCount >= MAX_CHARS * WARN_THRESHOLD;
 
   const handleTextChange = (value: string) => {
-    // Enforce maxLength via JS as well (belt + suspenders).
     if (value.length > MAX_CHARS) {
       value = value.slice(0, MAX_CHARS);
     }
     setText(value);
-    // Clear previous extraction/response when text changes.
     if (extraction) setExtraction(null);
-    if (data) reset();
+    if (data) {
+      setData(null);
+      setStatus("idle");
+      setError(null);
+    }
   };
 
   const handleStart = useCallback(async () => {
-    if (!hasText || isRunning) return;
+    if (!hasText || runningRef.current) return;
+    runningRef.current = true;
+    setStatus("running");
+    setError(null);
+    setData(null);
+    setDuration(null);
 
     // 1. Extract OUIs from text.
     const ext = extractOuis(text, { maxChars: MAX_CHARS });
@@ -69,29 +79,40 @@ export default function MacOuiLookupPage() {
 
     // 2. If nothing extracted, show empty result.
     if (ext.unique.length === 0) {
+      setStatus("idle");
+      runningRef.current = false;
       return;
     }
 
     // 3. Send normalized list to backend.
-    const ouis = ext.unique.map((e) => e.normalized);
+    const start = performance.now();
     try {
-      await execute("mac_oui", { ouis });
-      // Focus results area after submit.
+      const result = await executeMacOuiLookup({
+        ouis: ext.unique.map((e) => e.normalized),
+      });
+      setData(result);
+      setStatus("completed");
+      setDuration(performance.now() - start);
       setTimeout(() => {
         resultsRef.current?.focus();
       }, 100);
-    } catch {
-      // Error already handled by useToolExecution.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setStatus("error");
+    } finally {
+      runningRef.current = false;
     }
-  }, [text, hasText, isRunning, execute, reset, data]);
+  }, [text, hasText]);
 
   const handleReset = useCallback(() => {
     setText("");
     setExtraction(null);
-    reset();
-  }, [reset]);
+    setStatus("idle");
+    setData(null);
+    setError(null);
+    setDuration(null);
+  }, []);
 
-  // Show empty state when extraction found nothing.
   const showEmpty = extraction !== null && extraction.extracted.length === 0 && status === "idle";
 
   return (
@@ -137,7 +158,8 @@ export default function MacOuiLookupPage() {
                 current: charCount.toLocaleString(),
                 max: MAX_CHARS.toLocaleString(),
               })}
-              {isApproachingLimit && ` — ${t("tools.mac_oui.input_approaching_limit", { max: MAX_CHARS.toLocaleString() })}`}
+              {isApproachingLimit &&
+                ` — ${t("tools.mac_oui.input_approaching_limit", { max: MAX_CHARS.toLocaleString() })}`}
             </span>
             {extraction?.truncated && (
               <span className="text-xs text-warning-600 dark:text-warning-500">
@@ -153,10 +175,10 @@ export default function MacOuiLookupPage() {
         emptyMessage={t("tools.mac_oui.no_results")}
         error={error}
         onCopy={
-          response?.results?.length
+          data?.results?.length
             ? () => {
                 const header = ["OUI", "Vendor", "Type", "First seen", "Last seen", "Address"].join("\t");
-                const lines = response.results.map((r) => {
+                const lines = data.results.map((r) => {
                   const vendor = r.result?.organization ?? t("tools.mac_oui.unknown_vendor");
                   const type = r.result?.oui_type ?? "—";
                   const first = r.result?.first_seen ?? "—";
@@ -169,7 +191,6 @@ export default function MacOuiLookupPage() {
             : undefined
         }
       >
-        {/* Submitting state */}
         {isRunning && (
           <div className="flex items-center gap-2 text-sm text-primary-600" aria-live="polite">
             <Spinner size="sm" />
@@ -184,19 +205,14 @@ export default function MacOuiLookupPage() {
           </div>
         )}
 
-        {/* Success state */}
-        {isCompleted && response && (
+        {isCompleted && data && (
           <div ref={resultsRef} tabIndex={-1}>
-            <MacOuiRejectedBanner rejected={response.rejected} />
-            <MacOuiParseStats stats={response.parse_stats} />
-            <MacOuiResultsTable
-              results={response.results}
-              locale={localeFromI18n(i18n.language)}
-            />
+            <MacOuiRejectedBanner rejected={data.rejected} />
+            <MacOuiParseStats stats={data.parse_stats} />
+            <MacOuiResultsTable results={data.results} locale={localeFromI18n(i18n.language)} />
           </div>
         )}
 
-        {/* Empty state: extraction ran but found nothing */}
         {showEmpty && (
           <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
             {t("tools.mac_oui.no_results")}

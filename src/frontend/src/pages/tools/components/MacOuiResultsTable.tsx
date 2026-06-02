@@ -179,7 +179,11 @@ export default function MacOuiResultsTable({ results, locale }: MacOuiResultsTab
                   <td className="px-3 py-2">
                     {isAmbiguous && (
                       <Tooltip content={t("tools.mac_oui.ambiguous_partial_oui")}>
-                        <span className="me-1 cursor-help text-warning-600" aria-label={t("tools.mac_oui.ambiguous_partial_oui")}>
+                        <span
+                          role="img"
+                          aria-label={t("tools.mac_oui.ambiguous_partial_oui")}
+                          className="me-1 cursor-help text-warning-600"
+                        >
                           &#9888;
                         </span>
                       </Tooltip>
