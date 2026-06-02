@@ -557,3 +557,32 @@ async def test_pre_built_http_client_not_closed_by_service(_engine):
 
     # Caller-owned client → service did not close it
     mock_http.aclose.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_windows_1252_encoding_handled(_engine):
+    """Covers #330 — cp1252 bytes (e.g., '\\xe9' for é) decoded gracefully."""
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    await _seed_settings(factory)
+
+    # Simulate a cp1252-encoded IEEE file with "Société Corp"
+    # "Soci\xe9t\xe9" in cp1252 → "Société" in utf-8
+    # IEEE format: "XX-XX-XX   (hex)\t\tORGANIZATION\n"
+    line = "00-00-01   (hex)\t\tSoci\xe9t\xe9 Corp\n"
+    raw = line.encode("cp1252")
+
+    responses = {
+        "https://standards-oui.ieee.org/oui/oui.txt": _MockStreamResponse(200, raw),
+        "https://standards-oui.ieee.org/oui28/mam.txt": _MockStreamResponse(200, b""),
+        "https://standards-oui.ieee.org/oui36/oui36.txt": _MockStreamResponse(200, b""),
+    }
+    mock_http = _make_mock_http(responses)
+    service = OuiSyncService(db_session_factory=factory, http_client=mock_http)
+    report = await service.sync_all()
+
+    assert report.added == 1
+    async with factory() as session:
+        row = await session.execute(select(MacOui).where(MacOui.oui == "000001"))
+        mac = row.scalar_one()
+        assert mac.organization == "Société Corp"
