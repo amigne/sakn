@@ -147,6 +147,11 @@ async def test_updated_at_changes_on_update(db_session):
     await db_session.flush()
 
     original_updated_at = oui.updated_at
+    # Ensure a clock tick has elapsed to avoid strict > comparison flaking
+    # on platforms with low-resolution clocks (#320).
+    import asyncio
+
+    await asyncio.sleep(0.001)
     oui.organization = "New Corp Name"
     await db_session.flush()
 
