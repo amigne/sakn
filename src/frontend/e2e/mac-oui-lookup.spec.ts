@@ -178,15 +178,28 @@ test.describe("MAC OUI Lookup Page", () => {
     // Wait for results
     await expect(page.locator("table")).toBeVisible({ timeout: 10000 });
 
-    // Grant clipboard permissions
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    // Intercept clipboard writes so we can verify the TSV content
+    // cross-browser (Firefox doesn't support clipboard-read/write permissions).
+    await page.evaluate(() => {
+      let captured = "";
+      Object.defineProperty(navigator, "clipboard", {
+        value: {
+          writeText: (text: string) => {
+            captured = text;
+            return Promise.resolve();
+          },
+          readText: () => Promise.resolve(captured),
+        },
+        configurable: true,
+      });
+    });
 
     // Click the global copy button
     await page
       .getByRole("button", { name: /Copy all results/i })
       .click();
 
-    // Read clipboard and verify TSV header
+    // Read the captured clipboard content
     const clipboard = await page.evaluate(() =>
       navigator.clipboard.readText(),
     );
