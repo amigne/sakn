@@ -314,8 +314,8 @@ async def lifespan(app: FastAPI) -> Any:
             except Exception:
                 logger.exception("Orphan preferences cleanup failed")
 
-        scheduler.start()
-        # Register OUI sync job (idempotent)
+        # Register OUI sync job (idempotent) — must be before scheduler.start()
+        # to match the convention used by other scheduled jobs.
         try:
             from app.database import async_session_factory as asf
             from app.scheduler.jobs.oui_sync_job import register_oui_sync_job
@@ -323,6 +323,8 @@ async def lifespan(app: FastAPI) -> Any:
             register_oui_sync_job(scheduler, asf)
         except Exception:
             logger.exception("OUI sync job registration failed")
+
+        scheduler.start()
     except Exception:
         logger.exception("Scheduler initialization failed")
 
