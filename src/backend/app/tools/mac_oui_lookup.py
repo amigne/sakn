@@ -154,7 +154,7 @@ class MacOuiLookupTool(BaseTool):
             )
 
         # --- Zero-trust validation --------------------------------------------
-        validated, rejected = validate_batch(ouis, max_size)
+        validated, rejected = validate_batch(ouis)
 
         # --- Database lookup --------------------------------------------------
         results = []
