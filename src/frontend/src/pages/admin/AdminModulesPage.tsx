@@ -373,7 +373,10 @@ export default function AdminModulesPage() {
                         {mod.has_status ? (
                           <StatusIcon
                             status={statusByModule[mod.name]?.status ?? "idle"}
-                            onClick={() => setShowStatusModal(true)}
+                            // TODO: dispatch by mod.name when a 2nd module exposes has_status (NIT N2)
+                            onClick={() => {
+                              if (mod.name === "mac_oui") setShowStatusModal(true);
+                            }}
                           />
                         ) : null}
                       </div>

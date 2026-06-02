@@ -27,6 +27,17 @@ router = APIRouter(prefix="/admin/modules", tags=["admin-modules"])
 MODULE_SETTING_PREFIX = "module."
 
 
+def _safe_parse_files_failed(raw: str | None) -> list[str]:
+    """Parse a JSON-encoded files_failed string, returning an empty list on errors."""
+    if not raw:
+        return []
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
 # ── Module Enable/Disable ───────────────────────────────────────────────────
 
 
@@ -72,7 +83,10 @@ async def list_modules(
                 "description_key": m.description_key,
                 "enabled": m.enabled,
                 "version": m.version,
-                "has_settings": m.name in settings_modules,
+                # N5 — use the DB column as the primary signal, but also fall
+                # back to the computed value for modules created by seed logic
+                # that sets has_settings after the tool_module row is inserted.
+                "has_settings": m.has_settings or m.name in settings_modules,
                 "has_status": m.has_status,
             }
             for m in modules
@@ -120,6 +134,36 @@ async def update_module(
 
 # ── Module Settings ──────────────────────────────────────────────────────────
 
+# M4 — Backend validation for known MAC OUI settings (defense in depth).
+# Ranges match the frontend SETTING_DEFS in MacOuiSettingsModal.tsx.
+_MAC_OUI_SETTING_VALIDATORS: dict[str, tuple[int, int]] = {
+    "MAC_OUI_FRONTEND_INPUT_MAX_CHARS": (1000, 200000),
+    "MAC_OUI_BACKEND_BATCH_MAX_SIZE": (100, 10000),
+    "MAC_OUI_HISTORY_PAGE_SIZE": (5, 50),
+    "OUI_SYNC_HOUR": (0, 23),
+}
+
+
+def _validate_mac_oui_setting(key: str, value: str) -> None:
+    """Raise HTTPException(400) if *key* is a known MAC OUI setting but *value*
+    is not a valid integer within its allowed range."""
+    validator = _MAC_OUI_SETTING_VALIDATORS.get(key)
+    if validator is None:
+        return  # unknown key — allow (forward-compat)
+    min_val, max_val = validator
+    try:
+        int_val = int(value)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Setting '{key}' must be an integer.",
+        ) from exc
+    if int_val < min_val or int_val > max_val:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Setting '{key}' must be between {min_val} and {max_val}.",
+        )
+
 
 @router.get("/{module_name}/settings")
 async def get_module_settings(
@@ -159,7 +203,8 @@ async def update_module_settings(
     row = await session.execute(
         select(ToolModule).where(ToolModule.name == module_name)
     )
-    if row.scalar_one_or_none() is None:
+    tool_mod = row.scalar_one_or_none()
+    if tool_mod is None:
         raise HTTPException(status_code=404, detail=f"Module '{module_name}' not found")
 
     settings_to_update = body.get("settings", {})
@@ -169,11 +214,24 @@ async def update_module_settings(
     from app.models.preferences import GlobalSetting
 
     prefix = f"{MODULE_SETTING_PREFIX}{module_name}."
-    updated = {}
+    old_settings: dict[str, str] = {}
+    updated: dict[str, str] = {}
+
+    # Capture old values for audit (M3)
+    if module_name == "mac_oui":
+        old_rows = await session.execute(
+            select(GlobalSetting).where(GlobalSetting.key.like(f"{prefix}%"))
+        )
+        for s in old_rows.scalars().all():
+            old_settings[s.key[len(prefix):]] = s.value
 
     for key, value in settings_to_update.items():
         full_key = f"{prefix}{key}"
         value_str = str(value).lower() if isinstance(value, bool) else str(value)
+
+        # M4 — validate value if this is a known MAC OUI setting
+        if module_name == "mac_oui":
+            _validate_mac_oui_setting(key, value_str)
 
         row = await session.execute(
             select(GlobalSetting).where(GlobalSetting.key == full_key)
@@ -185,9 +243,45 @@ async def update_module_settings(
         else:
             session.add(GlobalSetting(key=full_key, value=value_str))
 
-        updated[key] = value
+        updated[key] = value_str
+
+    # M3 — audit log for settings changes
+    admin_id = getattr(request.state, "user_id", None)
+    await log_admin_action(
+        session,
+        admin_id=admin_id or "unknown",
+        action="module.settings.update",
+        entity_type="tool_module",
+        entity_id=tool_mod.id,
+        old_value=old_settings,
+        new_value=updated,
+    )
 
     await session.commit()
+
+    # M2 — reschedule OUI sync job if OUI_SYNC_HOUR changed for mac_oui
+    if module_name == "mac_oui" and "OUI_SYNC_HOUR" in updated:
+        try:
+            scheduler = request.app.state.scheduler
+            new_hour = int(updated["OUI_SYNC_HOUR"])
+            from apscheduler.triggers.cron import CronTrigger
+            scheduler.reschedule_job(
+                "oui_sync_daily",
+                trigger=CronTrigger(hour=new_hour, minute=0, timezone="UTC"),
+            )
+            logger.info(
+                "oui_sync_job_rescheduled",
+                extra={"new_hour": new_hour},
+            )
+        except Exception:
+            # Best-effort: rescheduling may fail in multi-worker setups
+            # where the API worker is not the scheduler owner.
+            logger.warning(
+                "oui_sync_job_reschedule_failed",
+                exc_info=True,
+                extra={"setting_key": "OUI_SYNC_HOUR", "new_value": updated["OUI_SYNC_HOUR"]},
+            )
+
     return {"module": module_name, "settings": updated}
 
 
@@ -256,7 +350,6 @@ async def get_module_status(
     }
 
     # --- Total records ----------------------------------------------------------------
-    # Use a fast count query
     from sqlalchemy import func as sa_func
 
     from app.models.mac_oui import MacOui
@@ -275,10 +368,7 @@ async def get_module_status(
         if last_log.status == "failed":
             derived_status = "alert"
         elif last_log.files_failed:
-            try:
-                failed_files = json.loads(last_log.files_failed) if last_log.files_failed else []
-            except (json.JSONDecodeError, TypeError):
-                failed_files = []
+            failed_files = _safe_parse_files_failed(last_log.files_failed)
             derived_status = "partial" if 1 <= len(failed_files) <= 2 else "success"
         else:
             derived_status = "success"
@@ -294,7 +384,7 @@ async def get_module_status(
             "added": last.added,
             "changed": last.changed,
             "confirmed": last.confirmed,
-            "files_failed": json.loads(last.files_failed) if last.files_failed else [],
+            "files_failed": _safe_parse_files_failed(last.files_failed),
         }
 
     # --- Next scheduled run -----------------------------------------------------------
@@ -325,7 +415,7 @@ async def get_module_status(
             "added": log.added,
             "changed": log.changed,
             "confirmed": log.confirmed,
-            "files_failed": json.loads(log.files_failed) if log.files_failed else [],
+            "files_failed": _safe_parse_files_failed(log.files_failed),
             "error_message": log.error_message,
         }
         history.append(entry)

@@ -481,16 +481,45 @@ async def execute_tool(
     return response
 
 
+# ── MAC OUI Tool Config (Sprint 5 — M1) ──────────────────────────────────────
+
+
+@router.get("/mac_oui/config")
+async def get_mac_oui_config(
+    request: Request,
+    session=Depends(get_session),
+) -> dict[str, Any]:
+    """Public config for the MAC OUI tool (non-sensitive). Same RBAC as tool exec.
+
+    Serves the effective frontend input limit so the UI can be dynamically
+    configured by the admin without a redeploy (M1).
+    """
+    await _check_tool_access("mac_oui", request, session)
+
+    from app.models.preferences import GlobalSetting
+
+    row = await session.execute(
+        select(GlobalSetting).where(
+            GlobalSetting.key == "module.mac_oui.MAC_OUI_FRONTEND_INPUT_MAX_CHARS"
+        )
+    )
+    s = row.scalar_one_or_none()
+    max_chars = int(s.value) if s else 50_000
+    return {"max_chars": max_chars}
+
+
 # ── MAC OUI Paginated History (Sprint 5) ────────────────────────────────────
+# Specific to mac_oui; generalize to /{tool_name}/history when a 2nd tool needs
+# history (NIT N3).
 
 
 @router.get("/mac_oui/history")
 async def get_mac_oui_history(
     oui: str,
     oui_type: str,
+    request: Request,
     offset: int = 0,
     limit: int = 10,
-    request: Request = None,
     session=Depends(get_session),
 ) -> dict[str, Any]:
     """Paginated history for a given OUI. Same RBAC as tool execution."""

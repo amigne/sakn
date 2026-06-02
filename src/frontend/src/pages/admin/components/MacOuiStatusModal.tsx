@@ -96,7 +96,7 @@ export default function MacOuiStatusModal({ open, onClose }: MacOuiStatusModalPr
               return;
             }
             backoffRef.current = Math.min(backoffRef.current * ERROR_BACKOFF_FACTOR, MAX_BACKOFF_MS);
-            pollTimerRef.current = setTimeout(scheduleNext, backoffRef.current);
+            scheduleNext();
           }
         }, backoffRef.current);
       };
@@ -276,19 +276,19 @@ export default function MacOuiStatusModal({ open, onClose }: MacOuiStatusModalPr
                           scope="col"
                           className="px-2 py-1 text-start text-[var(--color-text-secondary)] font-semibold"
                         >
-                          Finished
+                          {t("admin.oui_sync.finished")}
                         </th>
                         <th
                           scope="col"
                           className="px-2 py-1 text-start text-[var(--color-text-secondary)] font-semibold"
                         >
-                          Trigger
+                          {t("admin.oui_sync.trigger")}
                         </th>
                         <th
                           scope="col"
                           className="px-2 py-1 text-center text-[var(--color-text-secondary)] font-semibold w-8"
                         >
-                          St.
+                          {t("admin.oui_sync.status_short")}
                         </th>
                         <th
                           scope="col"
