@@ -113,10 +113,7 @@ export default function MacOuiHistoryDetails({ history, loadMoreHistory }: MacOu
                 >
                   {entry.previous_organization}
                 </td>
-                <td
-                  className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate"
-                  title={entry.new_organization}
-                >
+                <td className="px-2 py-1 text-[var(--color-text)] max-w-48 truncate" title={entry.new_organization}>
                   {entry.new_organization}
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap text-[var(--color-text-secondary)] font-mono">
