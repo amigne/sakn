@@ -148,8 +148,11 @@ async def update_rate_limits(
                 tool_id=tool_id,
                 soft_limit=item.get("soft_limit", 0),
                 hard_limit=item.get("hard_limit", 0),
-                window_seconds=item.get("window_seconds", 60),
             )
+            # Only set window_seconds if explicitly provided;
+            # otherwise let the model column default (60) apply.
+            if "window_seconds" in item:
+                config.window_seconds = item["window_seconds"]
             session.add(config)
             await session.flush()
 
