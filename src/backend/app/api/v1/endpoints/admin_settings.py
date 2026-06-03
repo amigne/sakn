@@ -10,11 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models.preferences import GlobalSetting
+from app.security.csrf import require_csrf
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/settings", tags=["admin-settings"])
+router = APIRouter(prefix="/admin/settings", tags=["admin-settings"], dependencies=[Depends(require_csrf)])
 
 
 @router.get("")

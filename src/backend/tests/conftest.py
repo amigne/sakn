@@ -71,6 +71,11 @@ async def client(_engine) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_session] = override_get_session
 
+    # Disable CSRF validation in tests — test clients don't set the
+    # X-CSRF-Token header. Production endpoints still enforce it.
+    from app.security.csrf import require_csrf
+    app.dependency_overrides[require_csrf] = lambda: None
+
     # Monkey-patch the global async_session_factory so middleware also uses test DB
     original_factory = db_module.async_session_factory
     original_rl_factory = rl_module.async_session_factory

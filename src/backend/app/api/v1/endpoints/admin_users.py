@@ -12,11 +12,12 @@ from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models import Session, User
+from app.security.csrf import require_csrf
 from app.services.admin_service import ensure_not_last_admin, log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/users", tags=["admin-users"])
+router = APIRouter(prefix="/admin/users", tags=["admin-users"], dependencies=[Depends(require_csrf)])
 
 
 @router.get("")

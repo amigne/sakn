@@ -15,6 +15,7 @@ from app.api.v1.endpoints.ws_codes import (
 from app.config import settings
 from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.database import async_session_factory, get_session
+from app.security.csrf import require_csrf
 from app.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -383,6 +384,7 @@ async def execute_tool(
     request: Request,
     registry: ToolRegistry = Depends(get_registry),
     session=Depends(get_session),
+    _csrf=Depends(require_csrf),
 ):
     """Execute an instant tool."""
     tool = registry.get(tool_name)
