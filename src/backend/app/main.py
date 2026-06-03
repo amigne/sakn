@@ -126,6 +126,11 @@ async def lifespan(app: FastAPI) -> Any:
                         )
                         db.add(existing)
                         await db.flush()
+                    else:
+                        # Sync capability flags from the tool class (source of truth)
+                        # on every boot — not just at row creation.
+                        existing.has_settings = getattr(tool, "has_settings", False)
+                        existing.has_status = getattr(tool, "has_status", False)
                     tool_ids[definition.name] = existing.id
 
                 # Seed default RoleToolPermission rows (all roles → all tools allowed)

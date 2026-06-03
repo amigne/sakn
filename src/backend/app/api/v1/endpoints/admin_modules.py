@@ -47,32 +47,10 @@ async def list_modules(
     session: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin),
 ) -> dict[str, Any]:
-    from app.models.preferences import GlobalSetting
-
     rows = await session.execute(
         select(ToolModule).order_by(ToolModule.name)
     )
     modules = rows.scalars().all()
-
-    # Build set of module names that have at least one GlobalSetting with the module prefix
-    prefix = f"{MODULE_SETTING_PREFIX}"
-    settings_rows = await session.execute(
-        select(GlobalSetting.key).where(GlobalSetting.key.like(f"{prefix}%"))
-    )
-    settings_modules: set[str] = set()
-    for (key,) in settings_rows.all():
-        rest = key[len(prefix):]
-        mod_name = rest.split(".")[0]
-        settings_modules.add(mod_name)
-
-    # Also include modules with DnsServerPreset entries (not stored in GlobalSetting)
-    preset_rows = await session.execute(
-        select(ToolModule.name)
-        .join(DnsServerPreset, DnsServerPreset.tool_module_id == ToolModule.id)
-        .distinct()
-    )
-    for (mod_name,) in preset_rows.all():
-        settings_modules.add(mod_name)
 
     return {
         "modules": [
@@ -83,10 +61,10 @@ async def list_modules(
                 "description_key": m.description_key,
                 "enabled": m.enabled,
                 "version": m.version,
-                # N5 — use the DB column as the primary signal, but also fall
-                # back to the computed value for modules created by seed logic
-                # that sets has_settings after the tool_module row is inserted.
-                "has_settings": m.has_settings or m.name in settings_modules,
+                # Source of truth: tool class → seed → DB column → API.
+                # The seed syncs has_settings / has_status from the tool class
+                # on every boot, so no fallback is needed.
+                "has_settings": m.has_settings,
                 "has_status": m.has_status,
             }
             for m in modules
