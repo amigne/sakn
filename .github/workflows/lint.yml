@@ -38,3 +38,16 @@ jobs:
       - name: Run biome check
         working-directory: src/frontend
         run: npx biome check src/
+
+  compose-env:
+    name: Compose env wiring
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Check critical env vars are wired into compose
+        run: python scripts/check_compose_env.py
