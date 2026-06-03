@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/settings", tags=["admin-settings"])
 
+# Allowlist of GlobalSetting keys that can be modified via PUT /admin/settings.
+# Internal control keys (e.g., lock flags, failure counters) are deliberately
+# excluded — they must only be mutated through their dedicated service methods.
+ALLOWED_SETTING_KEYS = frozenset({
+    "log_retention_days",
+    "session_duration_hours",
+    "max_concurrent_sessions",
+    "visitor_ip_soft_limit",
+    "visitor_ip_hard_limit",
+})
+
 
 @router.get("")
 async def get_settings(
@@ -46,6 +57,11 @@ async def update_settings(
     updated = {}
 
     for key, value in new_settings.items():
+        if key not in ALLOWED_SETTING_KEYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Setting '{key}' is not allowed via this endpoint.",
+            )
         value_str = str(value)
 
         row = await session.execute(
