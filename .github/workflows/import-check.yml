@@ -12,6 +12,8 @@ jobs:
   runtime-import:
     name: Runtime import check
     runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: development
     defaults:
       run:
         working-directory: src/backend
