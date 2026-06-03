@@ -37,7 +37,7 @@ async def ensure_not_last_admin(db: AsyncSession, user_id: str) -> None:
 async def log_admin_action(
     db: AsyncSession,
     *,
-    admin_id: str,
+    admin_id: str | None,
     action: str,
     entity_type: str,
     entity_id: str,

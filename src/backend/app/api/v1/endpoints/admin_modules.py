@@ -94,7 +94,7 @@ async def update_module(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="module.update",
         entity_type="tool_module",
         entity_id=module.id,
@@ -228,7 +228,7 @@ async def update_module_settings(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="module.settings.update",
         entity_type="tool_module",
         entity_id=tool_mod.id,
