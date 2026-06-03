@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
     MAC_OUI_BACKEND_BATCH_MAX_SIZE: "2000",
     MAC_OUI_HISTORY_PAGE_SIZE: "10",
     OUI_SYNC_HOUR: "3",
+    OUI_SYNC_LOG_RETENTION_DAYS: "365",
   },
 };
 
@@ -62,6 +63,7 @@ describe("MacOuiSettingsModal", () => {
       expect(screen.getByDisplayValue("2000")).toBeInTheDocument();
       expect(screen.getByDisplayValue("10")).toBeInTheDocument();
       expect(screen.getByDisplayValue("3")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("365")).toBeInTheDocument();
     });
 
     it("renders error message on API failure", async () => {
@@ -86,6 +88,7 @@ describe("MacOuiSettingsModal", () => {
           MAC_OUI_BACKEND_BATCH_MAX_SIZE: "2000",
           MAC_OUI_HISTORY_PAGE_SIZE: "10",
           OUI_SYNC_HOUR: "3",
+          OUI_SYNC_LOG_RETENTION_DAYS: "365",
         });
       });
     });

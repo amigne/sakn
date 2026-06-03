@@ -155,7 +155,7 @@ async def update_rate_limits(
 
         await log_admin_action(
             session,
-            admin_id=admin_id or "unknown",
+            admin_id=admin_id,
             action="rate_limit.update",
             entity_type="rate_limit_config",
             entity_id=config.id,

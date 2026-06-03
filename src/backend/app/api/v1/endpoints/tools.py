@@ -449,21 +449,23 @@ async def execute_tool(
     except Exception:
         logger.exception("Failed to log tool execution")
 
-    # Look up module_deployed_at for MAC OUI (Sprint 5: câblage date "depuis")
+    # Look up module_deployed_at for MAC OUI (Sprint 5: câblage date "depuis").
+    # Use the request session (read-only) so it sees committed data and stays
+    # testable — a module-level async_session_factory import would not pick up
+    # the test DB monkey-patch.
     module_deployed_at: str | None = None
     if tool_name == "mac_oui" and result.success:
         try:
             from app.models.oui_sync_log import OuiSyncLog
-            async with async_session_factory() as deploy_db:
-                deploy_row = await deploy_db.execute(
-                    select(OuiSyncLog.started_at)
-                    .where(OuiSyncLog.status != "failed")
-                    .order_by(OuiSyncLog.started_at.asc())
-                    .limit(1)
-                )
-                first_sync = deploy_row.scalar_one_or_none()
-                if first_sync is not None:
-                    module_deployed_at = first_sync.date().isoformat()
+            deploy_row = await session.execute(
+                select(OuiSyncLog.started_at)
+                .where(OuiSyncLog.status != "failed")
+                .order_by(OuiSyncLog.started_at.asc())
+                .limit(1)
+            )
+            first_sync = deploy_row.scalar_one_or_none()
+            if first_sync is not None:
+                module_deployed_at = first_sync.date().isoformat()
         except Exception:
             logger.debug("Could not fetch module_deployed_at for mac_oui", exc_info=True)
 

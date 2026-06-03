@@ -66,7 +66,7 @@ async def update_tool(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="tool.update",
         entity_type="tool_module",
         entity_id=tool.id,
@@ -144,7 +144,7 @@ async def update_role_permissions(
 
         await log_admin_action(
             session,
-            admin_id=admin_id or "unknown",
+            admin_id=admin_id,
             action="permission.update",
             entity_type="role_tool_permission",
             entity_id=perm_id,

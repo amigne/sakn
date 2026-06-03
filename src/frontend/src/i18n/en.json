@@ -176,6 +176,7 @@
   "admin.mac_oui_settings.backend_batch_max_size": "Max batch size (backend)",
   "admin.mac_oui_settings.history_page_size": "History page size",
   "admin.mac_oui_settings.sync_hour": "Sync hour (UTC, 0-23)",
+  "admin.mac_oui_settings.sync_log_retention_days": "Sync log retention (days)",
   "admin.mac_oui_settings.save": "Save",
   "admin.mac_oui_settings.saved": "Settings saved.",
   "account.active_sessions": "Active Sessions",

@@ -961,6 +961,24 @@ Sprint 6 est strictement séquentiel après tous les autres.
 
 ---
 
+### 12.8 Sprint 6 (révisé) — Cleanup, outillage & docs
+
+> Note : le périmètre initial du Sprint 6 (« QA finale / Sécurité / Release Notes », §12.6) a été **décalé** en un gate QA/Release ultérieur, exécuté avant le bump `0.2.0` et la remontée `dev0.2.0` → `master`. Le Sprint 6 livré ci-dessous est un sprint de dette + outillage.
+
+**Scope livré** :
+- **CLI** `sakn-cli sync-oui` : sync IEEE à la demande (réutilise `OuiSyncService.sync_all(triggered_by="cli")`), sans POST authentifié. Exit `1` si échec fichier.
+- **#374** — rétention bornée de `oui_sync_log` : setting `OUI_SYNC_LOG_RETENTION_DAYS` (défaut 365, plage 7–3650), job hebdo `oui_sync_log_cleanup` préservant toujours la dernière exécution.
+- **#370** — `audit_logs.admin_id` nullable (migration `batch_alter_table`, portable SQLite) ; suppression du sentinel `"unknown"` (FK invalide).
+- **#364** — `module_deployed_at` lu via la session de requête (servi + testable).
+- NITs #369 / #365 / #366 (tests + commentaire).
+- Docs : `docs/admin/mac-oui-administration.md` (nouveau), CHANGELOG, ACs `AC-MAC-OUI-097..100`.
+
+**Notification d'échec sync (#373)** : reportée — nécessite une infra d'envoi transverse (email/webhook) + ADR. Le marker `ALERT_OUI_SYNC_FAILED_3X` reste la source d'alerte.
+
+**Intégration** : branche `sprint-6-mac-oui-cleanup-cli` → `dev0.2.0-macoui`.
+
+---
+
 ## 13. Doutes / arbitrages MAC OUI
 
 Tous les doutes initiaux ont été levés lors de la revue Sprint 0. Voir `docs/qa/acceptance-mac-oui.md` §15 pour le tableau de résolution complet et la traçabilité.

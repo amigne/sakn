@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUID7Mixin
@@ -50,4 +50,14 @@ class OuiSyncLog(Base, UUID7Mixin):
 
     __table_args__ = (
         Index("ix_oui_sync_log_started_at_desc", started_at.desc()),
+        # Keep in sync with the Alembic migrations. 'cli' was added for the
+        # sakn-cli sync-oui command (Sprint 6).
+        CheckConstraint(
+            "triggered_by IN ('scheduler', 'admin', 'cli')",
+            name="ck_oui_sync_log_triggered_by",
+        ),
+        CheckConstraint(
+            "status IN ('running', 'success', 'partial', 'failed')",
+            name="ck_oui_sync_log_status",
+        ),
     )

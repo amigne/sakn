@@ -8,6 +8,7 @@ interface SettingsState {
   MAC_OUI_BACKEND_BATCH_MAX_SIZE: string;
   MAC_OUI_HISTORY_PAGE_SIZE: string;
   OUI_SYNC_HOUR: string;
+  OUI_SYNC_LOG_RETENTION_DAYS: string;
 }
 
 const DEFAULTS: SettingsState = {
@@ -15,6 +16,7 @@ const DEFAULTS: SettingsState = {
   MAC_OUI_BACKEND_BATCH_MAX_SIZE: "2000",
   MAC_OUI_HISTORY_PAGE_SIZE: "10",
   OUI_SYNC_HOUR: "3",
+  OUI_SYNC_LOG_RETENTION_DAYS: "365",
 };
 
 const SETTING_DEFS = [
@@ -41,6 +43,12 @@ const SETTING_DEFS = [
     labelKey: "admin.mac_oui_settings.sync_hour",
     min: 0,
     max: 23,
+  },
+  {
+    key: "OUI_SYNC_LOG_RETENTION_DAYS" as const,
+    labelKey: "admin.mac_oui_settings.sync_log_retention_days",
+    min: 7,
+    max: 3650,
   },
 ];
 
@@ -70,6 +78,7 @@ export default function MacOuiSettingsModal({ open, onClose }: MacOuiSettingsMod
           remote.MAC_OUI_BACKEND_BATCH_MAX_SIZE ?? DEFAULTS.MAC_OUI_BACKEND_BATCH_MAX_SIZE,
         MAC_OUI_HISTORY_PAGE_SIZE: remote.MAC_OUI_HISTORY_PAGE_SIZE ?? DEFAULTS.MAC_OUI_HISTORY_PAGE_SIZE,
         OUI_SYNC_HOUR: remote.OUI_SYNC_HOUR ?? DEFAULTS.OUI_SYNC_HOUR,
+        OUI_SYNC_LOG_RETENTION_DAYS: remote.OUI_SYNC_LOG_RETENTION_DAYS ?? DEFAULTS.OUI_SYNC_LOG_RETENTION_DAYS,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("admin.failed_load_settings"));
@@ -101,6 +110,7 @@ export default function MacOuiSettingsModal({ open, onClose }: MacOuiSettingsMod
         MAC_OUI_BACKEND_BATCH_MAX_SIZE: values.MAC_OUI_BACKEND_BATCH_MAX_SIZE,
         MAC_OUI_HISTORY_PAGE_SIZE: values.MAC_OUI_HISTORY_PAGE_SIZE,
         OUI_SYNC_HOUR: values.OUI_SYNC_HOUR,
+        OUI_SYNC_LOG_RETENTION_DAYS: values.OUI_SYNC_LOG_RETENTION_DAYS,
       });
       setSaved(true);
     } catch (e) {

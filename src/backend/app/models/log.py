@@ -37,7 +37,7 @@ class SecurityEventLog(Base, UUID7Mixin):
 class AuditLog(Base, UUID7Mixin):
     __tablename__ = "audit_logs"
 
-    admin_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    admin_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)

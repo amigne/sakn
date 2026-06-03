@@ -94,7 +94,7 @@ async def update_module(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="module.update",
         entity_type="tool_module",
         entity_id=module.id,
@@ -119,6 +119,7 @@ _MAC_OUI_SETTING_VALIDATORS: dict[str, tuple[int, int]] = {
     "MAC_OUI_BACKEND_BATCH_MAX_SIZE": (100, 10000),
     "MAC_OUI_HISTORY_PAGE_SIZE": (5, 50),
     "OUI_SYNC_HOUR": (0, 23),
+    "OUI_SYNC_LOG_RETENTION_DAYS": (7, 3650),
 }
 
 
@@ -227,7 +228,7 @@ async def update_module_settings(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="module.settings.update",
         entity_type="tool_module",
         entity_id=tool_mod.id,
