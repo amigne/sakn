@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.auth_service import (
+    _brute_force_duration,
     _check_brute_force_lock,
     _check_ip_bruteforce,
     _record_ip_bruteforce,
@@ -114,3 +115,35 @@ class TestBruteForceLock:
 
         is_locked, _ = _check_brute_force_lock(user)
         assert is_locked is True
+
+
+class TestBruteForceDuration:
+    """Covers #312 — lockout duration is most restrictive matching tier."""
+
+    def test_below_first_tier_returns_none(self):
+        assert _brute_force_duration(3) is None
+
+    def test_first_tier_returns_5_minutes(self):
+        from datetime import timedelta
+        assert _brute_force_duration(5) == timedelta(minutes=5)
+        assert _brute_force_duration(7) == timedelta(minutes=5)
+
+    def test_second_tier_returns_15_minutes(self):
+        from datetime import timedelta
+        assert _brute_force_duration(10) == timedelta(minutes=15)
+
+    def test_third_tier_returns_45_minutes(self):
+        from datetime import timedelta
+        assert _brute_force_duration(15) == timedelta(minutes=45)
+
+    def test_top_tier_returns_90_minutes(self):
+        from datetime import timedelta
+        assert _brute_force_duration(20) == timedelta(minutes=90)
+
+    def test_beyond_top_tier_stays_90_minutes(self):
+        """Continues renewal at the most restrictive tier for all counts > 20."""
+        from datetime import timedelta
+        assert _brute_force_duration(21) == timedelta(minutes=90)
+        assert _brute_force_duration(25) == timedelta(minutes=90)
+        assert _brute_force_duration(50) == timedelta(minutes=90)
+        assert _brute_force_duration(100) == timedelta(minutes=90)

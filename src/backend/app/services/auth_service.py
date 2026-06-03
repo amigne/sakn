@@ -42,10 +42,12 @@ BRUTE_FORCE_TIERS = [
 
 
 def _brute_force_duration(failed_count: int) -> timedelta | None:
+    """Return the most restrictive lockout duration for *failed_count*."""
+    result: timedelta | None = None
     for threshold, duration in BRUTE_FORCE_TIERS:
         if failed_count >= threshold:
-            return duration
-    return None
+            result = duration
+    return result
 
 
 def _check_brute_force_lock(user: User) -> tuple[bool, str | None]:
@@ -289,6 +291,10 @@ async def login(
         user.failed_login_attempts += 1
         duration = _brute_force_duration(user.failed_login_attempts)
         if duration:
+            # _brute_force_duration returns the most restrictive matching
+            # tier, so every failure ≥ 20 gets a fresh 90‑minute lockout.
+            # This provides continuous renewal — an attacker never escapes
+            # the lock window after reaching the top tier (#312).
             user.locked_until = utcnow() + duration
 
         # Log BEFORE commit so the event survives the AppError rollback
