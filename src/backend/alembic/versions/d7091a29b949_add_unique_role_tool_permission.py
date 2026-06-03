@@ -31,21 +31,19 @@ def upgrade() -> None:
         )
     """))
 
-    # Step 2: Add unique constraint
-    op.create_unique_constraint(
-        "uq_role_tool_permission_role_tool",
-        "role_tool_permissions",
-        ["role", "tool_id"],
-    )
-
-    # Step 3: Add index for lookups
-    op.create_index(
-        "ix_role_tool_permission_role_tool",
-        "role_tool_permissions",
-        ["role", "tool_id"],
-    )
+    # Step 2 + 3: Add unique constraint + index in batch mode (SQLite compat)
+    with op.batch_alter_table("role_tool_permissions") as batch_op:
+        batch_op.create_unique_constraint(
+            "uq_role_tool_permission_role_tool",
+            ["role", "tool_id"],
+        )
+        batch_op.create_index(
+            "ix_role_tool_permission_role_tool",
+            ["role", "tool_id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_role_tool_permission_role_tool", table_name="role_tool_permissions")
-    op.drop_constraint("uq_role_tool_permission_role_tool", table_name="role_tool_permissions")
+    with op.batch_alter_table("role_tool_permissions") as batch_op:
+        batch_op.drop_index("ix_role_tool_permission_role_tool")
+        batch_op.drop_constraint("uq_role_tool_permission_role_tool", type_="unique")

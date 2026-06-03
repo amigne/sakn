@@ -35,6 +35,10 @@ class RateLimitConfig(Base, UUID7Mixin):
     hard_limit: Mapped[int] = mapped_column(nullable=False, default=0)
     window_seconds: Mapped[int] = mapped_column(nullable=False, default=60)
 
+    __table_args__ = (
+        UniqueConstraint("role", "tool_id", name="uq_rate_limit_config_role_tool"),
+    )
+
 
 class DnsServerPreset(Base, UUID7Mixin):
     __tablename__ = "dns_server_presets"
