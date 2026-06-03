@@ -165,8 +165,11 @@ async def test_create_dns_server_preset(db_session):
 
 @pytest.mark.asyncio
 async def test_create_global_setting(db_session):
-    setting = await create_global_setting(db_session, key="log_retention_days", value="90")
-    assert setting.key == "log_retention_days"
+    # Use a synthetic key so this unit test does not collide with rows that
+    # API integration tests commit into the shared session-scoped DB (e.g.
+    # admin-settings tests writing "log_retention_days").
+    setting = await create_global_setting(db_session, key="unit_test_setting", value="90")
+    assert setting.key == "unit_test_setting"
     assert setting.value == "90"
 
 
