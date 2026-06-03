@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# bump-version.sh — Atomically bump the project version across both stacks.
+# bump-version.sh — Bump the project version across both stacks.
+#
+# Each file is updated atomically (tmp file + mv), but cross-file
+# atomicity is not guaranteed — use a VCS commit for that.
 #
 # SAKN maintains version strings in two places with incompatible formats:
 #   - src/backend/pyproject.toml  → PEP 440  (0.1.1, 0.1.1.dev0)
@@ -63,26 +66,34 @@ case "$INPUT" in
         ;;
 esac
 
-# Validate base version is roughly SemVer-shaped
-if ! echo "$PEP440" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-    die "Version '$INPUT' does not look like a valid MAJOR.MINOR.PATCH version."
+# Validate version against the 3 supported forms:
+#   MAJOR.MINOR.PATCH          (release)
+#   MAJOR.MINOR.PATCH-dev      (SemVer prerelease)
+#   MAJOR.MINOR.PATCH.devN     (PEP 440 prerelease)
+if ! echo "$INPUT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-dev|\.dev[0-9]+)?$'; then
+    die "Version '$INPUT' must be MAJOR.MINOR.PATCH, MAJOR.MINOR.PATCH-dev, or MAJOR.MINOR.PATCH.devN."
 fi
 
 echo "Bumping version to:"
 echo "  pyproject.toml → $PEP440 (PEP 440)"
 echo "  package.json   → $SEMVER (SemVer)"
 
-# Update pyproject.toml
+# Update pyproject.toml (tmp file → mv for atomicity)
 if [ -f "$PYPROJECT" ]; then
-    sed -i "s/^version = \".*\"/version = \"$PEP440\"/" "$PYPROJECT"
+    sed "s/^version = \".*\"/version = \"$PEP440\"/" "$PYPROJECT" > "$PYPROJECT.tmp"
+    mv "$PYPROJECT.tmp" "$PYPROJECT"
     echo "  ✓ pyproject.toml updated"
 else
     die "pyproject.toml not found at $PYPROJECT"
 fi
 
-# Update package.json
+# Update package.json (jq for precise top-level key, tmp file → mv for atomicity)
 if [ -f "$PACKAGE_JSON" ]; then
-    sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$SEMVER\"/" "$PACKAGE_JSON"
+    if ! command -v jq >/dev/null 2>&1; then
+        die "jq is required but not installed. Install it with your package manager."
+    fi
+    jq --arg v "$SEMVER" '.version = $v' "$PACKAGE_JSON" > "$PACKAGE_JSON.tmp"
+    mv "$PACKAGE_JSON.tmp" "$PACKAGE_JSON"
     echo "  ✓ package.json updated"
 else
     die "package.json not found at $PACKAGE_JSON"
