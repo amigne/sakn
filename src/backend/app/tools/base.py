@@ -85,7 +85,6 @@ class BaseTool:
                 }
                 for p in d.parameters
             ],
-            "enabled": True,
         }
 
     def to_db_model(self) -> ToolModule:
