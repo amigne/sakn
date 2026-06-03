@@ -92,6 +92,31 @@ class TestDnsLookupValidation:
         result = tool.validate_params({"target": "example.com", "recursive_cname": False})
         assert result["recursive_cname"] is False
 
+    def test_rejects_private_resolver_ip(self, tool):
+        """Covers #385 — private resolver IP is blocked (SSRF prevention)."""
+        with pytest.raises(ValueError, match="errors.target_not_allowed"):
+            tool.validate_params({"target": "example.com", "resolver": "10.0.0.1"})
+
+    def test_rejects_localhost_resolver(self, tool):
+        """Covers #385 — localhost resolver IP is blocked."""
+        with pytest.raises(ValueError, match="errors.target_not_allowed"):
+            tool.validate_params({"target": "example.com", "resolver": "127.0.0.1"})
+
+    def test_accepts_public_resolver_ip(self, tool):
+        """Covers #385 — public resolver IP is accepted."""
+        result = tool.validate_params({"target": "example.com", "resolver": "8.8.8.8"})
+        assert result["resolver"] == "8.8.8.8"
+
+    def test_rejects_invalid_resolver_string(self, tool):
+        """Covers #385 — non-IP resolver string is rejected."""
+        with pytest.raises(ValueError, match="errors.target_not_allowed"):
+            tool.validate_params({"target": "example.com", "resolver": "not-an-ip"})
+
+    def test_empty_resolver_accepted(self, tool):
+        """Empty resolver (system default) is accepted."""
+        result = tool.validate_params({"target": "example.com", "resolver": ""})
+        assert result["resolver"] == ""
+
 
 class TestDnsLookupExecute:
     @pytest.mark.asyncio
