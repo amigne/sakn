@@ -15,6 +15,10 @@ from typing import Any
 
 from app.api.errors import AppError
 from app.database import async_session_factory, is_db_available
+from app.monitoring.metrics import (
+    mac_oui_lookup_duration_seconds,
+    mac_oui_lookup_requests_total,
+)
 from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolResult
 from app.tools.mac_oui_lookup_service import lookup_batch
 from app.tools.mac_oui_validator import validate_batch
@@ -165,6 +169,7 @@ class MacOuiLookupTool(BaseTool):
             except Exception:
                 logger.exception("MAC OUI lookup failed")
                 duration_ms = (time.monotonic() - start) * 1000
+                mac_oui_lookup_requests_total.labels(result="error").inc()
                 return ToolResult(
                     success=False,
                     error="errors.internal_error",
@@ -172,6 +177,7 @@ class MacOuiLookupTool(BaseTool):
                 )
         elif validated and not is_db_available():
             duration_ms = (time.monotonic() - start) * 1000
+            mac_oui_lookup_requests_total.labels(result="error").inc()
             return ToolResult(
                 success=False,
                 error="errors.internal_error",
@@ -184,6 +190,17 @@ class MacOuiLookupTool(BaseTool):
         valid_normalized = {v.normalized for v in validated}
 
         duration_ms = (time.monotonic() - start) * 1000
+
+        # Emit Prometheus metrics (ADR-015)
+        hit_count = sum(1 for r in results if r.result is not None)
+        miss_count = len(results) - hit_count
+        if hit_count:
+            mac_oui_lookup_requests_total.labels(result="hit").inc(hit_count)
+        if miss_count:
+            mac_oui_lookup_requests_total.labels(result="miss").inc(miss_count)
+        if rejected:
+            mac_oui_lookup_requests_total.labels(result="rejected").inc(len(rejected))
+        mac_oui_lookup_duration_seconds.observe(duration_ms / 1000.0)
 
         return ToolResult(
             success=True,

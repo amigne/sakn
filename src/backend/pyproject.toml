@@ -29,6 +29,7 @@ dependencies = [
     "apscheduler>=3.10.0",
     "zxcvbn>=4.5.0",
     "httpx>=0.28.1",
+    "prometheus-client>=0.21.0",
 ]
 
 [project.optional-dependencies]
