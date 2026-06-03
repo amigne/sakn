@@ -120,7 +120,7 @@ All configuration via environment variables (12-factor). Loaded into Pydantic `B
 | `REDIS_URL` | Yes (prod) | `redis://redis:6379/0` | Session + rate limit storage |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `PORT` | No | `8000` | Listen port |
-| `ENVIRONMENT` | No | `development` | `development`, `production`, `test` |
+| `ENVIRONMENT` | Yes | — | `development`, `staging`, `production` |
 | `LOG_LEVEL` | No | `INFO` | Python log level |
 | `CORS_ORIGINS` | No | `http://localhost:5173` | Comma-separated |
 | `SMTP_HOST/PORT/USERNAME/PASSWORD/FROM` | No | — | SMTP config |
@@ -188,7 +188,7 @@ Uses `click`/`typer`, shares app context with web server.
 | OQ-002 Loop detection | Defer. |
 | OQ-003 TCP Ping | ICMP-only for MVP. |
 | OQ-004 EDNS Client Subnet | Defer. |
-| OQ-005 Revocation checking | Skip. Display expiry + trust only. |
+| OQ-005 Revocation checking | Implemented: OCSP with CRL fallback (24h disk cache). Revoked leaf certificates invalidate the chain. |
 | OQ-006 DNSSEC | Defer. Display AD flag if available. |
 | OQ-007 Password complexity | 8-128 chars, upper+lower+digit, zxcvbn ≥30 bits. No special char. |
 | OQ-008 Timing attacks | Monitor for MVP. Constant-time post-MVP if needed. |

@@ -140,7 +140,7 @@ Query DNS records for a domain name using configurable record types and nameserv
 #### 3.3.3 Behaviour Rules
 
 - Each selected record type queried independently. Results grouped by type.
-- **Recursive CNAME enabled**: follow CNAME chain until A/AAAA record or loop detected (same target twice in chain). Max chain depth: 10.
+- **Recursive CNAME enabled**: follow CNAME chain until A/AAAA record or loop detected (same target twice in chain). Max chain depth: 16.
 - **Recursive CNAME disabled**: return raw CNAME record(s) without following.
 - Custom DNS server must be a valid IPv4 or IPv6 address. Hostnames NOT accepted.
 - A "Copy to clipboard" button MUST be available for displayed results.
