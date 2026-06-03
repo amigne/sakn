@@ -10,11 +10,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models.preferences import GlobalSetting
+from app.security.csrf import require_csrf
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/settings", tags=["admin-settings"])
+router = APIRouter(prefix="/admin/settings", tags=["admin-settings"], dependencies=[Depends(require_csrf)])
+
+# Allowlist of GlobalSetting keys that can be modified via PUT /admin/settings.
+# Internal control keys (e.g., lock flags, failure counters) are deliberately
+# excluded — they must only be mutated through their dedicated service methods.
+ALLOWED_SETTING_KEYS = frozenset({
+    "log_retention_days",
+    "session_duration_hours",
+    "max_concurrent_sessions",
+    "visitor_ip_soft_limit",
+    "visitor_ip_hard_limit",
+})
 
 
 @router.get("")
@@ -46,6 +58,11 @@ async def update_settings(
     updated = {}
 
     for key, value in new_settings.items():
+        if key not in ALLOWED_SETTING_KEYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Setting '{key}' is not allowed via this endpoint.",
+            )
         value_str = str(value)
 
         row = await session.execute(

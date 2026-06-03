@@ -15,11 +15,12 @@ from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models import ToolModule
 from app.models.tool_module import RateLimitConfig
+from app.security.csrf import require_csrf
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin-rate-limits"])
+router = APIRouter(prefix="/admin", tags=["admin-rate-limits"], dependencies=[Depends(require_csrf)])
 
 
 @router.get("/rate-limits")
@@ -148,8 +149,11 @@ async def update_rate_limits(
                 tool_id=tool_id,
                 soft_limit=item.get("soft_limit", 0),
                 hard_limit=item.get("hard_limit", 0),
-                window_seconds=item.get("window_seconds", 60),
             )
+            # Only set window_seconds if explicitly provided;
+            # otherwise let the model column default (60) apply.
+            if "window_seconds" in item:
+                config.window_seconds = item["window_seconds"]
             session.add(config)
             await session.flush()
 

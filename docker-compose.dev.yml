@@ -14,6 +14,7 @@ services:
       - CORS_ORIGINS=http://localhost:5173,http://localhost:8000
       - RATE_LIMIT_STORAGE=redis
       - TRUSTED_PROXY_HOPS=0
+      - HEALTH_FULL_TOKEN=${HEALTH_FULL_TOKEN:-}
     ports:
       - "8000:8000"
     cap_add:

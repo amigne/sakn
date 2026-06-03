@@ -157,6 +157,31 @@ class TestAdminSettings:
         )
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_put_settings_rejects_unknown_key(self, client: AsyncClient, db_session):
+        """Covers #389 — unknown setting key is rejected with 400."""
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.put(
+            "/api/v1/admin/settings",
+            json={"settings": {"not_allowed_key": "evil_value"}},
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 400
+        assert "not_allowed_key" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_put_settings_allows_known_key(self, client: AsyncClient, db_session):
+        """Covers #389 — known setting key is accepted."""
+        admin_id, token = await _create_admin_session(client, db_session)
+
+        response = await client.put(
+            "/api/v1/admin/settings",
+            json={"settings": {"log_retention_days": "30"}},
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 200
+
 
 class TestAdminRateLimits:
     @pytest.mark.asyncio

@@ -109,6 +109,18 @@ class DnsLookupTool(BaseTool):
         if resolver_ip == "__system__":
             resolver_ip = ""
 
+        if resolver_ip:
+            # Validate the user-supplied resolver IP against the blocklist
+            # to prevent SSRF via arbitrary DNS resolver (#385).
+            from ipaddress import ip_address
+
+            try:
+                ip_address(resolver_ip)
+            except ValueError as err:
+                raise ValueError("errors.target_not_allowed") from err
+            if is_ip_blocked(resolver_ip):
+                raise ValueError("errors.target_not_allowed")
+
         recursive_cname = bool(params.get("recursive_cname", True))
 
         return {
