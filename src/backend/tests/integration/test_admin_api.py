@@ -319,17 +319,21 @@ class TestAdminDnsServers:
 
 
 class TestAdminModules:
-    """Issue #217: Module list includes has_settings flag."""
+    """Issue #217: Module list includes has_settings flag.
+    Issue #376: Module list includes has_status flag."""
 
     @pytest.mark.asyncio
     async def test_modules_include_has_settings(self, client: AsyncClient, db_session):
-        from tests.factories import create_global_setting, create_tool_module
+        from tests.factories import create_tool_module
 
-        # Create a module with a GlobalSetting
-        await create_tool_module(db_session, name="has_settings_mod", enabled=True)
-        await create_global_setting(db_session, key="module.has_settings_mod.foo", value="bar")
-        # Create a module without any GlobalSetting
-        await create_tool_module(db_session, name="no_settings_mod", enabled=True)
+        # Create a module with has_settings=True
+        await create_tool_module(
+            db_session, name="has_settings_mod", enabled=True, has_settings=True,
+        )
+        # Create a module with has_settings=False (default)
+        await create_tool_module(
+            db_session, name="no_settings_mod", enabled=True, has_settings=False,
+        )
 
         admin_id, token = await _create_admin_session(client, db_session)
 
@@ -352,18 +356,13 @@ class TestAdminModules:
             assert "has_settings" in m
 
     @pytest.mark.asyncio
-    async def test_module_with_dns_preset_has_settings_true(self, client: AsyncClient, db_session):
-        """Issue #278: a module with DnsServerPreset entries (but no GlobalSetting)
-        must report has_settings=true so the admin UI shows the gear icon."""
-        from tests.factories import create_dns_server_preset, create_tool_module
+    async def test_module_with_has_settings_true(self, client: AsyncClient, db_session):
+        """A module with has_settings=True must report has_settings=true
+        so the admin UI shows the gear icon."""
+        from tests.factories import create_tool_module
 
-        mod = await create_tool_module(db_session, name="dns_lookup_test", enabled=True)
-        await create_dns_server_preset(
-            db_session,
-            tool_module_id=mod.id,
-            ip_address="1.1.1.1",
-            description="Cloudflare DNS",
-            sort_order=0,
+        await create_tool_module(
+            db_session, name="dns_lookup_test", enabled=True, has_settings=True,
         )
 
         admin_id, token = await _create_admin_session(client, db_session)
@@ -375,5 +374,34 @@ class TestAdminModules:
         modules = response.json()["modules"]
         dns_mod = next(m for m in modules if m["name"] == "dns_lookup_test")
         assert dns_mod["has_settings"] is True, (
-            f"Expected has_settings=True for module with DnsServerPreset, got {dns_mod['has_settings']}"
+            f"Expected has_settings=True for module, got {dns_mod['has_settings']}"
         )
+
+    @pytest.mark.asyncio
+    async def test_modules_include_has_status(self, client: AsyncClient, db_session):
+        """Issue #376: modules must include has_status flag from the DB column."""
+        from tests.factories import create_tool_module
+
+        await create_tool_module(
+            db_session, name="status_mod", enabled=True, has_status=True,
+        )
+        await create_tool_module(
+            db_session, name="no_status_mod", enabled=True, has_status=False,
+        )
+
+        admin_id, token = await _create_admin_session(client, db_session)
+        response = await client.get(
+            "/api/v1/admin/modules",
+            cookies={"sakn_session": token},
+        )
+        assert response.status_code == 200
+        modules = response.json()["modules"]
+
+        has_mod = next(m for m in modules if m["name"] == "status_mod")
+        no_mod = next(m for m in modules if m["name"] == "no_status_mod")
+
+        assert has_mod["has_status"] is True
+        assert no_mod["has_status"] is False
+        # Every module must have the has_status key
+        for m in modules:
+            assert "has_status" in m
