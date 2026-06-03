@@ -37,6 +37,8 @@ export default function MacOuiLookupPage() {
     truncated: boolean;
   } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  // Guards against double-submits on rapid clicks: `status` captured by the
+  // handleStart useCallback can be stale, so we read/write a ref synchronously.
   const runningRef = useRef(false);
 
   // M1 — dynamic max chars from admin-configurable setting

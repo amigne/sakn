@@ -110,6 +110,14 @@ describe("MacOuiResultsTable", () => {
     expect(row?.className).toContain("warning");
   });
 
+  it("exposes the ambiguous warning to screen readers (role=img + aria-label) (#365)", () => {
+    render(<MacOuiResultsTable results={[AMBIGUOUS_ROW]} locale="en-US" />);
+    // The ⚠ marker must carry role="img" with a non-empty accessible name so
+    // screen readers announce it (guards against losing the aria-label).
+    const warn = screen.getByRole("img");
+    expect(warn).toHaveAccessibleName();
+  });
+
   it("does not color unknown vendor rows (no ambiguous flag)", () => {
     const { container } = render(<MacOuiResultsTable results={[UNKNOWN_ROW]} locale="en-US" />);
     const row = container.querySelector("tbody tr");

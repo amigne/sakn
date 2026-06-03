@@ -155,12 +155,9 @@ async def test_config_respects_tool_access_rbac(client: AsyncClient, db_session:
                 id=new_uuid7(), role=ROLE_VISITOR, tool_id=tool.id, allowed=False
             )
         )
-    await db_session.flush()
+    # Commit so the client's request sees the permission change.
+    await db_session.commit()
 
-    # Commit the permission change so client sees it
-    await db_session.flush()
-    # Commit the permission change via _create_session so client sees it
-    await _create_session(db_session, ROLE_AUTHENTICATED)
     # Make the request as a visitor (no cookies) to test RBAC
     response = await client.get("/api/v1/tools/mac_oui/config")
     assert response.status_code == 403
