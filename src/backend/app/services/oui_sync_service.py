@@ -14,6 +14,14 @@ from app.models.mac_oui import MacOui
 from app.models.mac_oui_history import MacOuiHistory
 from app.models.oui_sync_log import OuiSyncLog
 from app.models.preferences import GlobalSetting
+from app.monitoring.metrics import (
+    oui_sync_consecutive_failures,
+    oui_sync_duration_seconds,
+    oui_sync_files_failed,
+    oui_sync_lock_acquisition_total,
+    oui_sync_records_total,
+    oui_sync_runs_total,
+)
 from app.services.oui_parser import parse_ieee_file
 
 logger = logging.getLogger(__name__)
@@ -150,6 +158,7 @@ class OuiSyncService:
                 .values(value=datetime.now(UTC).isoformat())
             )
             await session.commit()
+            oui_sync_lock_acquisition_total.labels(outcome="acquired").inc()
             return True
         # Check TTL on existing flag
         if not await self._is_running(session):
@@ -183,7 +192,9 @@ class OuiSyncService:
                 .values(value="1")
             )
             await session.commit()
+            oui_sync_lock_acquisition_total.labels(outcome="acquired").inc()
             return True
+        oui_sync_lock_acquisition_total.labels(outcome="contended").inc()
         return False
 
     async def sync_all(
@@ -204,6 +215,9 @@ class OuiSyncService:
             async with self._session_factory() as session:
                 if not await self.try_acquire_running_lock(session):
                     self._log.warning("oui_sync_already_running")
+                    oui_sync_runs_total.labels(
+                        trigger=triggered_by, status="locked"
+                    ).inc()
                     report.finished_at = datetime.now(UTC)
                     return report
 
@@ -241,6 +255,9 @@ class OuiSyncService:
             # 3. Finalize log with failed status (only if the row was created)
             if log_id is not None:
                 await self._finalize_log_with_error(log_id, str(e))
+            oui_sync_runs_total.labels(
+                trigger=triggered_by, status="failed"
+            ).inc()
             raise
 
         finally:
@@ -250,6 +267,22 @@ class OuiSyncService:
             await self._cleanup()
 
         report.finished_at = datetime.now(UTC)
+
+        # Emit Prometheus metrics for this sync run (ADR-015)
+        status = "partial" if report.files_failed else "success"
+        oui_sync_runs_total.labels(trigger=triggered_by, status=status).inc()
+        for change_type, count in (
+            ("added", report.added),
+            ("changed", report.changed),
+            ("confirmed", report.confirmed),
+        ):
+            if count:
+                oui_sync_records_total.labels(change_type=change_type).inc(count)
+        if report.started_at:
+            duration = (report.finished_at - report.started_at).total_seconds()
+            if duration > 0:
+                oui_sync_duration_seconds.labels(trigger=triggered_by).observe(duration)
+
         self._log.info(
             "oui_sync_complete",
             extra={
@@ -454,10 +487,12 @@ class OuiSyncService:
 
             await session.commit()
 
-        # Reset failure counter on success
+        # Reset failure counter and metrics on success
         async with self._session_factory() as session:
             await self._set_failure_count(session, oui_type, 0)
             await session.commit()
+        oui_sync_consecutive_failures.labels(file=oui_type).set(0)
+        oui_sync_files_failed.labels(file=oui_type).set(0)
 
         self._log.info(
             "oui_sync_file_complete",
@@ -476,6 +511,8 @@ class OuiSyncService:
             count = await self._get_failure_count(session, oui_type) + 1
             await self._set_failure_count(session, oui_type, count)
             await session.commit()
+            oui_sync_consecutive_failures.labels(file=oui_type).set(count)
+            oui_sync_files_failed.labels(file=oui_type).set(1)
             if count >= 3:
                 self._log.error(
                     "ALERT_OUI_SYNC_FAILED_3X",

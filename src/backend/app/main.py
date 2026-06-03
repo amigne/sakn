@@ -441,6 +441,14 @@ from app.api.errors import AppError, register_error_handlers
 register_error_handlers(app)
 
 
+# Prometheus metrics endpoint (ADR-015)
+# Exposed without authentication — protect at the reverse-proxy level.
+from prometheus_client import make_asgi_app
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
+
 @app.get("/health")
 async def health():
     """Minimal liveness probe — no infrastructure checks, no auth required."""
