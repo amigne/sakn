@@ -13,13 +13,12 @@ import logging
 import time
 from typing import Any
 
+from app.api.errors import AppError
+from app.database import async_session_factory, is_db_available
 from app.monitoring.metrics import (
     mac_oui_lookup_duration_seconds,
     mac_oui_lookup_requests_total,
 )
-
-from app.api.errors import AppError
-from app.database import async_session_factory, is_db_available
 from app.tools.base import BaseTool, ExecutionContext, ToolCategory, ToolDefinition, ToolResult
 from app.tools.mac_oui_lookup_service import lookup_batch
 from app.tools.mac_oui_validator import validate_batch

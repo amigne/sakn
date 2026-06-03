@@ -184,6 +184,7 @@ class OuiSyncService:
                 # Another process reclaimed the lock between the
                 # _is_running check and now — we lost the race.
                 await session.commit()
+                oui_sync_lock_acquisition_total.labels(outcome="contended").inc()
                 return False
             # We own the reclaim — update the flag row.
             await session.execute(

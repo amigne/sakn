@@ -9,9 +9,9 @@ class TestMetricsDefinitions:
     """Verify all metric objects exist with correct types and labels."""
 
     def test_oui_sync_runs_total(self):
-        from app.monitoring.metrics import oui_sync_runs_total
-
         from prometheus_client import Counter
+
+        from app.monitoring.metrics import oui_sync_runs_total
 
         assert isinstance(oui_sync_runs_total, Counter)
         # prometheus_client strips the _total suffix from _name
@@ -19,58 +19,58 @@ class TestMetricsDefinitions:
         assert set(oui_sync_runs_total._labelnames) == {"trigger", "status"}
 
     def test_oui_sync_duration_seconds(self):
-        from app.monitoring.metrics import oui_sync_duration_seconds
-
         from prometheus_client import Histogram
+
+        from app.monitoring.metrics import oui_sync_duration_seconds
 
         assert isinstance(oui_sync_duration_seconds, Histogram)
         assert oui_sync_duration_seconds._name == "oui_sync_duration_seconds"
         assert set(oui_sync_duration_seconds._labelnames) == {"trigger"}
 
     def test_oui_sync_records_total(self):
-        from app.monitoring.metrics import oui_sync_records_total
-
         from prometheus_client import Counter
+
+        from app.monitoring.metrics import oui_sync_records_total
 
         assert isinstance(oui_sync_records_total, Counter)
         assert set(oui_sync_records_total._labelnames) == {"change_type"}
 
     def test_oui_sync_files_failed(self):
-        from app.monitoring.metrics import oui_sync_files_failed
-
         from prometheus_client import Gauge
+
+        from app.monitoring.metrics import oui_sync_files_failed
 
         assert isinstance(oui_sync_files_failed, Gauge)
         assert set(oui_sync_files_failed._labelnames) == {"file"}
 
     def test_oui_sync_consecutive_failures(self):
-        from app.monitoring.metrics import oui_sync_consecutive_failures
-
         from prometheus_client import Gauge
+
+        from app.monitoring.metrics import oui_sync_consecutive_failures
 
         assert isinstance(oui_sync_consecutive_failures, Gauge)
         assert set(oui_sync_consecutive_failures._labelnames) == {"file"}
 
     def test_oui_sync_lock_acquisition_total(self):
-        from app.monitoring.metrics import oui_sync_lock_acquisition_total
-
         from prometheus_client import Counter
+
+        from app.monitoring.metrics import oui_sync_lock_acquisition_total
 
         assert isinstance(oui_sync_lock_acquisition_total, Counter)
         assert set(oui_sync_lock_acquisition_total._labelnames) == {"outcome"}
 
     def test_mac_oui_lookup_requests_total(self):
-        from app.monitoring.metrics import mac_oui_lookup_requests_total
-
         from prometheus_client import Counter
+
+        from app.monitoring.metrics import mac_oui_lookup_requests_total
 
         assert isinstance(mac_oui_lookup_requests_total, Counter)
         assert set(mac_oui_lookup_requests_total._labelnames) == {"result"}
 
     def test_mac_oui_lookup_duration_seconds(self):
-        from app.monitoring.metrics import mac_oui_lookup_duration_seconds
-
         from prometheus_client import Histogram
+
+        from app.monitoring.metrics import mac_oui_lookup_duration_seconds
 
         assert isinstance(mac_oui_lookup_duration_seconds, Histogram)
         assert mac_oui_lookup_duration_seconds._name == "mac_oui_lookup_duration_seconds"
