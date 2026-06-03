@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# OUI prefix lengths (hex chars) per IEEE block size.
+_OUI_PREFIX_LEN = {"MA-L": 6, "MA-M": 7, "MA-S": 9}
+
 router = APIRouter(prefix="/tools", tags=["tools"])
 
 
@@ -563,7 +566,10 @@ async def get_mac_oui_history(
         offset = 0
 
     # Find the MacOui row
-    oui_normalized = oui.strip().upper()
+    # Truncate input to match the stored OUI prefix length (e.g. full 48-bit MAC
+    # "001122334455" → prefix "001122" for MA-L). The DB stores only the OUI
+    # prefix, not the full device MAC.
+    oui_normalized = oui.strip().upper()[: _OUI_PREFIX_LEN[oui_type]]
     oui_row = await session.execute(
         select(MacOui).where(
             MacOui.oui == oui_normalized,
