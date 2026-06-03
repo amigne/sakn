@@ -212,6 +212,36 @@ async def test_status_partial_when_files_failed(client: AsyncClient, db_session:
     assert data["last_run"]["files_failed"] == ["MA-L"]
 
 
+async def test_status_alert_when_all_three_files_failed(client: AsyncClient, db_session: AsyncSession):
+    """Covers #382 — all 3 IEEE files failed → derived status is 'alert', not 'success'."""
+    await _ensure_tool(db_session, "mac_oui", has_status=True)
+    from datetime import UTC, datetime
+
+    log = OuiSyncLog(
+        id=new_uuid7(),
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+        triggered_by="scheduler",
+        status="partial",
+        added=0,
+        changed=0,
+        confirmed=0,
+        files_failed=json.dumps(["MA-L", "MA-M", "MA-S"]),
+    )
+    db_session.add(log)
+    await db_session.flush()
+
+    token = await _create_session(db_session, ROLE_ADMINISTRATOR)
+    response = await client.get(
+        "/api/v1/admin/modules/mac_oui/status",
+        cookies={"sakn_session": token},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "alert"
+    assert data["last_run"]["files_failed"] == ["MA-L", "MA-M", "MA-S"]
+
+
 async def test_status_running_when_active_log(client: AsyncClient, db_session: AsyncSession):
     await _ensure_tool(db_session, "mac_oui", has_status=True)
     from datetime import UTC, datetime

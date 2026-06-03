@@ -348,7 +348,7 @@ async def get_module_status(
             derived_status = "alert"
         elif last_log.files_failed:
             failed_files = _safe_parse_files_failed(last_log.files_failed)
-            derived_status = "partial" if 1 <= len(failed_files) <= 2 else "success"
+            derived_status = "partial" if 1 <= len(failed_files) <= 2 else "alert"
         else:
             derived_status = "success"
 
