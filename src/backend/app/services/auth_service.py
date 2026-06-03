@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.session_service as session_service
 from app.config import settings
-from app.constants.roles import ROLE_AUTHENTICATED
+from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED
 from app.models import EmailVerification, PasswordReset, SecurityEventLog, Session, User, UserPreference
 from app.models.base import ensure_aware, new_uuid7, utcnow
 from app.security.password import hash_password, validate_password_strength, verify_password
@@ -50,6 +50,9 @@ def _brute_force_duration(failed_count: int) -> timedelta | None:
 
 def _check_brute_force_lock(user: User) -> tuple[bool, str | None]:
     """Check if user is temporarily locked. Returns (is_locked, error_message_key)."""
+    # Administrators are exempt from brute-force lockout (R-011, spec-common §6).
+    if user.role == ROLE_ADMINISTRATOR:
+        return False, None
     if user.status == "blocked":
         return True, "errors.user_blocked"
     if user.status == "locked":
