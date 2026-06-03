@@ -61,6 +61,38 @@ jobs:
           uv run alembic upgrade head
           echo "=== All migrations are reversible ==="
 
+  migration-test-sqlite:
+    name: Alembic upgrade/downgrade/upgrade (SQLite)
+    runs-on: ubuntu-latest
+    # No service container: SQLite is file-based. This catches migrations that
+    # rely on Postgres-only DDL (e.g. ALTER TABLE ... ADD/DROP CONSTRAINT) and
+    # must use batch_alter_table to stay portable (SAKN supports SQLite).
+    defaults:
+      run:
+        working-directory: src/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run migrations (upgrade -> downgrade -> upgrade) on SQLite
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./ci_migration_test.db
+          ENVIRONMENT: development
+        run: |
+          set -e
+          echo "=== alembic upgrade head ==="
+          uv run alembic upgrade head
+          echo "=== alembic downgrade base ==="
+          uv run alembic downgrade base
+          echo "=== alembic upgrade head (re-apply) ==="
+          uv run alembic upgrade head
+          echo "=== All migrations are reversible on SQLite ==="
+
   docker-smoke:
     name: Docker build smoke test
     runs-on: ubuntu-latest
