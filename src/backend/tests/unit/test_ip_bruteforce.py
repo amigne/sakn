@@ -2,7 +2,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.auth_service import _check_ip_bruteforce, _record_ip_bruteforce
+from app.services.auth_service import (
+    _check_brute_force_lock,
+    _check_ip_bruteforce,
+    _record_ip_bruteforce,
+)
 
 
 class TestIPBruteforce:
@@ -69,3 +73,44 @@ class TestIPBruteforce:
         with patch("app.redis.connection.get_redis", AsyncMock(return_value=mock_redis)):
             # Should not raise
             await _record_ip_bruteforce("192.168.1.2")
+
+
+class TestBruteForceLock:
+    """Covers #311 — admin exemption from brute-force lockout (R-011)."""
+
+    def test_admin_exempt_from_lockout(self):
+        """Admin with failed attempts and active lockout is never locked."""
+        from unittest.mock import MagicMock
+
+        admin = MagicMock()
+        admin.role = "administrator"
+        admin.status = "active"
+        admin.locked_until = None
+
+        is_locked, _ = _check_brute_force_lock(admin)
+        assert is_locked is False
+
+    def test_admin_exempt_even_with_failed_attempts(self):
+        """Admin exemption takes priority over status/lock checks."""
+        from unittest.mock import MagicMock
+
+        admin = MagicMock()
+        admin.role = "administrator"
+        admin.status = "active"
+        admin.locked_until = MagicMock()
+
+        is_locked, _ = _check_brute_force_lock(admin)
+        assert is_locked is False
+
+    def test_non_admin_still_locked(self):
+        """Non-admin user with lockout is still checked normally."""
+        from datetime import UTC, datetime, timedelta
+        from unittest.mock import MagicMock
+
+        user = MagicMock()
+        user.role = "authenticated"
+        user.status = "active"
+        user.locked_until = datetime.now(UTC) + timedelta(hours=1)
+
+        is_locked, _ = _check_brute_force_lock(user)
+        assert is_locked is True
