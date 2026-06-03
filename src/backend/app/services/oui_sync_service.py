@@ -189,13 +189,17 @@ class OuiSyncService:
                     report.finished_at = datetime.now(UTC)
                     return report
 
-        # 1. Create OuiSyncLog row (status='running')
-        log_id = await self._create_log(
-            triggered_by=triggered_by,
-            triggered_by_user_id=triggered_by_user_id,
-        )
-
+        # 1. Create OuiSyncLog row (status='running'). Kept inside the try so
+        # that any failure here (e.g. a constraint violation) still releases
+        # the running lock via the finally block — otherwise the lock would
+        # stay held until RUNNING_TTL_SECONDS expires.
+        log_id: str | None = None
         try:
+            log_id = await self._create_log(
+                triggered_by=triggered_by,
+                triggered_by_user_id=triggered_by_user_id,
+            )
+
             for oui_type, url in OUI_SOURCES:
                 try:
                     added, changed, confirmed, failed = await self.sync_one(oui_type, url)
@@ -216,8 +220,9 @@ class OuiSyncService:
             await self._finalize_log(log_id, report)
 
         except Exception as e:
-            # 3. Finalize log with failed status
-            await self._finalize_log_with_error(log_id, str(e))
+            # 3. Finalize log with failed status (only if the row was created)
+            if log_id is not None:
+                await self._finalize_log_with_error(log_id, str(e))
             raise
 
         finally:
