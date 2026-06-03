@@ -1,10 +1,26 @@
 import secrets
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 
 CSRF_COOKIE = "sakn_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+
+async def require_csrf(request: Request) -> None:
+    """FastAPI dependency: validate CSRF token on unsafe methods.
+
+    Skips validation for SAFE_METHODS (GET/HEAD/OPTIONS/TRACE).
+    Raises HTTP 403 if the X-CSRF-Token header does not match the
+    sakn_csrf cookie (constant-time comparison).
+    """
+    if request.method in SAFE_METHODS:
+        return
+    if not validate_csrf(request):
+        raise HTTPException(
+            status_code=403,
+            detail="CSRF validation failed. Include the X-CSRF-Token header.",
+        )
 
 
 def generate_csrf_token() -> str:

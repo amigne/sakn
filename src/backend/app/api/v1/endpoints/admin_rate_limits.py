@@ -15,11 +15,12 @@ from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models import ToolModule
 from app.models.tool_module import RateLimitConfig
+from app.security.csrf import require_csrf
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin-rate-limits"])
+router = APIRouter(prefix="/admin", tags=["admin-rate-limits"], dependencies=[Depends(require_csrf)])
 
 
 @router.get("/rate-limits")

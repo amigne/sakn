@@ -14,11 +14,12 @@ from app.database import get_session
 from app.middleware.admin import require_admin
 from app.models import ToolModule
 from app.models.tool_module import DnsServerPreset
+from app.security.csrf import require_csrf
 from app.services.admin_service import log_admin_action
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/modules", tags=["admin-modules"])
+router = APIRouter(prefix="/admin/modules", tags=["admin-modules"], dependencies=[Depends(require_csrf)])
 
 MODULE_SETTING_PREFIX = "module."
 
