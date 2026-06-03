@@ -40,6 +40,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      - WS_REQUIRE_ORIGIN=${WS_REQUIRE_ORIGIN:-true}      
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -49,6 +50,7 @@ services:
       - SMTP_FROM=${SMTP_FROM:-noreply@sakn.example.com}
       - EMAIL_VERIFICATION_REQUIRED=${EMAIL_VERIFICATION_REQUIRED:-true}
       - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
+      - HEALTH_FULL_TOKEN=${HEALTH_FULL_TOKEN:-}
     cap_add:
       - NET_RAW
       - NET_ADMIN
