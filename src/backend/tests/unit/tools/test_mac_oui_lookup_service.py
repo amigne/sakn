@@ -269,6 +269,38 @@ class TestAmbiguity:
         assert rows[1].ambiguous_extends_ma_m is False
         assert rows[1].ambiguous_extends_ma_s is False
 
+    async def test_ambiguous_24bit_without_ma_l_row(self, db_session):
+        """Covers #383 — 24-bit input with no MA-L row but existing MA-M
+        children must still be flagged as ambiguous (ADR-014 §2.6)."""
+        from tests.fixtures.mac_oui_seed import seed_mac_oui_test_data
+
+        await seed_mac_oui_test_data(db_session)
+
+        # Insert a standalone MA-M row for prefix "DEADBE" where no MA-L row
+        # exists. A 24-bit lookup for "DEADBE" will find no MA-L match, but
+        # Phase 3 should still detect the MA-M child and mark it ambiguous.
+        standalone_mam = MacOui(
+            id=new_uuid7(),
+            oui="DEADBEE",
+            oui_type="MA-M",
+            organization="Ghost Corp",
+            address="Unknown",
+            first_seen=date(2025, 1, 1),
+            last_seen=date(2026, 1, 1),
+        )
+        db_session.add(standalone_mam)
+        await db_session.flush()
+
+        entries = [_v(1, "DEADBE", 24)]
+        rows = await lookup_batch(db_session, entries)
+
+        assert len(rows) == 1
+        # No MA-L row → result is None (no organization to report)
+        assert rows[0].result is None
+        # But ambiguity must be True because a MA-M child exists
+        assert rows[0].ambiguous_extends_ma_m is True
+        assert rows[0].ambiguous_extends_ma_s is False
+
 
 # ---------------------------------------------------------------------------
 # lookup_batch — history
