@@ -347,7 +347,7 @@ async def _check_tool_access(
     if perm is None:
         from sqlalchemy.exc import IntegrityError
 
-        perm = RoleToolPermission(role=role, tool_id=tool_mod.id, allowed=True)
+        perm = RoleToolPermission(role=role, tool_id=tool_mod.id, allowed=False)
         session.add(perm)
         try:
             await session.flush()
