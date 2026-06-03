@@ -319,6 +319,36 @@ async def lifespan(app: FastAPI) -> Any:
             except Exception:
                 logger.exception("Orphan preferences cleanup failed")
 
+        @scheduler.scheduled_job("cron", day_of_week="sun", hour=4, minute=0)
+        async def cleanup_oui_sync_log():
+            """Purge old oui_sync_log rows weekly (#374), keeping the latest run."""
+            try:
+                from app.services.oui_sync_log_cleanup_service import (
+                    DEFAULT_RETENTION_DAYS,
+                    RETENTION_SETTING_KEY,
+                    cleanup_old_oui_sync_logs,
+                )
+
+                async with async_session_factory() as db:
+                    from sqlalchemy import select as sel
+
+                    from app.models.preferences import GlobalSetting
+
+                    row = await db.execute(
+                        sel(GlobalSetting).where(GlobalSetting.key == RETENTION_SETTING_KEY)
+                    )
+                    setting = row.scalar_one_or_none()
+                    try:
+                        retention = int(setting.value) if setting else DEFAULT_RETENTION_DAYS
+                    except (ValueError, TypeError):
+                        retention = DEFAULT_RETENTION_DAYS
+                    deleted = await cleanup_old_oui_sync_logs(db, retention)
+                    await db.commit()
+                    if deleted:
+                        logger.info("OUI sync log cleanup", extra={"deleted": deleted})
+            except Exception:
+                logger.exception("OUI sync log cleanup failed")
+
         # Register OUI sync job (idempotent) — must be before scheduler.start()
         # to match the convention used by other scheduled jobs.
         try:

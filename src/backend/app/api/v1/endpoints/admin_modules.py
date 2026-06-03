@@ -119,6 +119,7 @@ _MAC_OUI_SETTING_VALIDATORS: dict[str, tuple[int, int]] = {
     "MAC_OUI_BACKEND_BATCH_MAX_SIZE": (100, 10000),
     "MAC_OUI_HISTORY_PAGE_SIZE": (5, 50),
     "OUI_SYNC_HOUR": (0, 23),
+    "OUI_SYNC_LOG_RETENTION_DAYS": (7, 3650),
 }
 
 
