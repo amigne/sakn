@@ -424,3 +424,61 @@ class TestRbac:
         )
 
         assert response.status_code == 403
+
+
+class TestModuleDeployedAt:
+    """#364 — execute response exposes module_deployed_at (earliest sync date)."""
+
+    async def test_module_deployed_at_from_earliest_sync(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        from datetime import UTC, datetime
+
+        from app.models.oui_sync_log import OuiSyncLog
+
+        await _seed_tool(db_session)
+        await _seed_mac_oui_data(db_session)
+
+        await db_session.execute(delete(OuiSyncLog.__table__))
+        first = datetime(2026, 1, 15, 3, 0, tzinfo=UTC)
+        later = datetime(2026, 5, 20, 3, 0, tzinfo=UTC)
+        for ts in (later, first):  # insert out of order on purpose
+            db_session.add(
+                OuiSyncLog(
+                    id=new_uuid7(),
+                    started_at=ts,
+                    finished_at=ts,
+                    triggered_by="scheduler",
+                    status="success",
+                    added=0,
+                    changed=0,
+                    confirmed=0,
+                )
+            )
+        await db_session.commit()
+
+        response = await client.post(
+            "/api/v1/tools/mac_oui/execute",
+            json={"ouis": ["001122"]},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["result"]["module_deployed_at"] == "2026-01-15"
+
+    async def test_module_deployed_at_absent_without_sync(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        from app.models.oui_sync_log import OuiSyncLog
+
+        await _seed_tool(db_session)
+        await _seed_mac_oui_data(db_session)
+        await db_session.execute(delete(OuiSyncLog.__table__))
+        await db_session.commit()
+
+        response = await client.post(
+            "/api/v1/tools/mac_oui/execute",
+            json={"ouis": ["001122"]},
+        )
+
+        assert response.status_code == 200
+        assert "module_deployed_at" not in response.json()["result"]
