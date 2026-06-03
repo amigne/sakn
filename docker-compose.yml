@@ -40,7 +40,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - WS_REQUIRE_ORIGIN=${WS_REQUIRE_ORIGIN:-true}      
+      - WS_REQUIRE_ORIGIN=${WS_REQUIRE_ORIGIN:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - SMTP_HOST=${SMTP_HOST:-}
