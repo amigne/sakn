@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager, suppress
-from importlib.metadata import version as _pkg_version
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -377,10 +377,18 @@ async def lifespan(app: FastAPI) -> Any:
         pass
 
 
+try:
+    _VERSION = _pkg_version("sakn")
+except PackageNotFoundError as exc:
+    raise RuntimeError(
+        "Package 'sakn' is not installed. Run 'uv sync' or 'pip install -e .' "
+        "from src/backend/."
+    ) from exc
+
 app = FastAPI(
     title="SAKN API",
     description="Swiss Army Knife for Network Engineers",
-    version=_pkg_version("sakn"),
+    version=_VERSION,
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
