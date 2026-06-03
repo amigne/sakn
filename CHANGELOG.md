@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Development cycle for `0.2.0` (backend: `0.2.0.dev0`, frontend: `0.2.0-dev`).
 
+### Added
+
+- MAC OUI: `sakn-cli sync-oui` command to force an on-demand IEEE OUI sync without an authenticated HTTP call.
+- MAC OUI: bounded retention for `oui_sync_log` — weekly purge job and admin setting `OUI_SYNC_LOG_RETENTION_DAYS` (default 365), always keeping the most recent run (#374).
+- Administrator guide for MAC OUI Lookup (`docs/admin/mac-oui-administration.md`).
+
+### Fixed
+
+- Audit log: `audit_logs.admin_id` is now nullable (consistent with `ON DELETE SET NULL`); audit entries with an unknown actor are written with `NULL` instead of the invalid `"unknown"` sentinel that violated the users FK (#370).
+- MAC OUI: `module_deployed_at` is read via the request session so it is correctly served and testable (#364).
+
 ### Security
 
 - Upgrade `vitest` to `^4.1.8` to fix CVE GHSA-5xrq-8626-4rwp (critical, CVSS 9.8 — Vitest UI server unauthorized file access). devDependency only, no production runtime exposure. Ported from `dev0.1.1` (#334).

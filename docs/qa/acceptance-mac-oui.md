@@ -665,6 +665,7 @@ Internet  10.0.0.2   0   00-11-22-33-44-AA   ARPA   Vlan10
 | `MAC_OUI_BACKEND_BATCH_MAX_SIZE` | 2 000 | 100 – 10 000 |
 | `MAC_OUI_HISTORY_PAGE_SIZE` | 10 | 5 – 50 |
 | `OUI_SYNC_HOUR` | 3 | 0 – 23 |
+| `OUI_SYNC_LOG_RETENTION_DAYS` | 365 | 7 – 3650 |
 
 ### AC-MAC-OUI-095 — Settings persisted and applied immediately
 
@@ -677,6 +678,34 @@ Internet  10.0.0.2   0   00-11-22-33-44-AA   ARPA   Vlan10
 **Given** the admin clicks "Trigger sync now"
 **When** the request is sent
 **Then** `POST /api/v1/admin/oui/sync` is called; if a sync is already running, the response is 409 with code `OUI_SYNC_ALREADY_RUNNING`. Else 202 with a task ID.
+
+### AC-MAC-OUI-097 — CLI on-demand sync
+
+**Given** an operator runs `sakn-cli sync-oui`
+**When** the command executes
+**Then** a full IEEE sync runs (recorded in `oui_sync_log` with `triggered_by="cli"`), the result counts are printed, the exit code is `1` if any file failed else `0`, and a graceful message is shown (exit `0`) when a sync is already running.
+*Proof:* `tests/unit/cli/test_sync_oui.py`.
+
+### AC-MAC-OUI-098 — Sync log bounded retention
+
+**Given** `oui_sync_log` rows older than `OUI_SYNC_LOG_RETENTION_DAYS`
+**When** the weekly `oui_sync_log_cleanup` job runs
+**Then** rows older than the retention are deleted while the single most recent run is always preserved.
+*Proof:* `tests/integration/test_oui_sync_log_cleanup.py`.
+
+### AC-MAC-OUI-099 — `module_deployed_at` in execute response
+
+**Given** at least one successful sync exists
+**When** the MAC OUI execute endpoint returns
+**Then** `result.module_deployed_at` is the date of the earliest non-failed sync; it is absent when no sync exists.
+*Proof:* `tests/integration/test_mac_oui_endpoint.py::TestModuleDeployedAt`.
+
+### AC-MAC-OUI-100 — Audit log nullable actor
+
+**Given** an audit-logged admin action with an unknown actor
+**When** the `audit_logs` row is written
+**Then** `admin_id` is `NULL` (consistent with `ON DELETE SET NULL`), not an invalid sentinel.
+*Proof:* `tests/integration/test_audit_log_admin_id_nullable.py`.
 
 ---
 

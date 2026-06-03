@@ -234,6 +234,12 @@ All separators can be mixed in the input text. The extraction is case-insensitiv
 - IEEE files temporarily unavailable during daily sync → keep previous data, log warning, retry next day.
 - Duplicate OUIs in input → deduplicated, one result row per OUI.
 
+#### 3.5.6 Administration
+
+- The daily sync hour and the `oui_sync_log` retention (default 365 days) are admin-configurable (Admin → Modules → MAC OUI Lookup → Settings). A weekly job purges sync-log entries older than the retention while always keeping the most recent run.
+- Administrators can force an on-demand IEEE sync with the `sakn-cli sync-oui` command (no authenticated HTTP call required).
+- See `docs/admin/mac-oui-administration.md` for the full administration guide.
+
 ### 3.6 WHOIS Lookup
 
 #### 3.6.1 Description
