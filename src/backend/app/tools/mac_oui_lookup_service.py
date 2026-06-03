@@ -201,11 +201,16 @@ async def lookup_batch(
                 first_seen=best_row.first_seen,
                 last_seen=best_row.last_seen,
             )
-            # Track 24-bit MA-L matches for ambiguity check
-            if entry.bit_size == 24 and best_type == "MA-L":
-                ma_l_24bit_prefixes.add(entry.normalized[:6])
         else:
             lookup_results[entry.index] = None
+
+        # Track ALL 24-bit prefixes for ambiguity detection (ADR-014 §2.6).
+        # This includes entries without a MA-L row that may still have
+        # MA-M/MA-S children sharing the same 24-bit prefix. The bit_size
+        # gate in Phase 3 assembly prevents ambiguity leakage to >=28-bit
+        # entries that already resolved to their longest prefix.
+        if entry.bit_size == 24:
+            ma_l_24bit_prefixes.add(entry.normalized[:6])
 
         oui_displays[entry.index] = format_oui_display(
             entry.normalized,
