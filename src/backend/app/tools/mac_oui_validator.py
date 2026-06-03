@@ -22,6 +22,11 @@ _SANITIZE_RE = re.compile(r"[^0-9a-fA-F:.\-]")
 
 VALID_LENGTHS = frozenset({6, 7, 9, 12})
 
+# Per-string input length cap to prevent memory/CPU amplification. A valid
+# MAC address is at most 17 chars (AA:BB:CC:DD:EE:FF). This generous cap
+# still blocks multi-MB payloads per entry.  See #386.
+MAX_INPUT_LENGTH = 64
+
 # Mapping of hex-digit length → IEEE bit size.
 _BIT_SIZE: dict[int, Literal[24, 28, 36, 48]] = {
     6: 24,
@@ -47,7 +52,7 @@ class RejectedEntry:
 
     index: int  # 1-based position in the received list
     sample: str  # sanitised: max 20 chars, non-safe chars replaced by '?'
-    reason: Literal["invalid_format", "invalid_length", "non_hex_characters"]
+    reason: Literal["invalid_format", "invalid_length", "non_hex_characters", "too_long"]
 
 
 def sanitize_sample(s: str, max_len: int = 20) -> str:
@@ -85,6 +90,18 @@ def validate_batch(
                     index=idx,
                     sample=sanitize_sample(str(raw)),
                     reason="invalid_format",
+                )
+            )
+            continue
+
+        # Step 0: reject excessively long strings before any processing
+        # to prevent memory/CPU amplification (see #386).
+        if len(raw) > MAX_INPUT_LENGTH:
+            rejected.append(
+                RejectedEntry(
+                    index=idx,
+                    sample=sanitize_sample(raw),
+                    reason="too_long",
                 )
             )
             continue

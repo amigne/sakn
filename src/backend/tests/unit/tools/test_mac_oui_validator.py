@@ -178,6 +178,26 @@ class TestValidateRejection:
         assert len(rejected) == 1
         assert rejected[0].reason == "invalid_length"
 
+    def test_too_long_rejected(self):
+        """Covers #386 — strings > MAX_INPUT_LENGTH (64) are rejected."""
+        too_long = "0" * 65
+        _, rejected = validate_batch([too_long])
+        assert len(rejected) == 1
+        assert rejected[0].reason == "too_long"
+        assert len(rejected[0].sample) <= 20
+
+    def test_length_64_accepted(self):
+        """Covers #386 — strings at exactly MAX_INPUT_LENGTH are accepted."""
+        # A 64-char hex-valid string won't pass length validation (only
+        # 6/7/9/12 are valid), but it should NOT be rejected as too_long.
+        # It should be rejected as invalid_length.
+        at_cap = "0" * 64
+        _, rejected = validate_batch([at_cap])
+        assert len(rejected) == 1
+        assert rejected[0].reason == "invalid_length", (
+            f"Expected invalid_length, got {rejected[0].reason}"
+        )
+
     def test_non_string_rejected(self):
         """Non-string item → invalid_format."""
         _, rejected = validate_batch([12345])  # type: ignore[list-item]
