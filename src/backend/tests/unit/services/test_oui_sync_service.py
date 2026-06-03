@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from app.models.mac_oui import MacOui
 from app.models.mac_oui_history import MacOuiHistory
 from app.models.preferences import GlobalSetting
-from app.services.oui_sync_service import OuiSyncService, classify_change
+from app.services.oui_sync_service import (
+    RUNNING_TTL_SECONDS,
+    OuiSyncService,
+    classify_change,
+)
 
 FIXTURES = pathlib.Path(__file__).parent.parent.parent / "fixtures" / "ieee"
 
@@ -614,6 +618,33 @@ async def test_try_acquire_running_lock_atomic_under_concurrency(_engine):
     losers = [r for r in results if r is False]
     assert len(winners) == 1
     assert len(losers) == 9
+
+
+@pytest.mark.asyncio
+async def test_try_acquire_running_lock_ttl_reclaim_atomic(_engine):
+    """Covers #381 — TTL-reclaim path must be CAS-guarded: exactly 1 wins."""
+    import asyncio
+
+    factory = await _make_test_factory(_engine)
+    await _cleanup_oui_tables(factory)
+    # Seed a stale running flag with an old started_at (TTL exceeded)
+    stale_time = (
+        datetime.now(UTC) - timedelta(seconds=RUNNING_TTL_SECONDS + 60)
+    ).isoformat()
+    await _seed_settings(
+        factory, oui_sync_running="1", oui_sync_started_at=stale_time
+    )
+
+    async def attempt():
+        async with factory() as session:
+            service = OuiSyncService(db_session_factory=factory)
+            return await service.try_acquire_running_lock(session)
+
+    results = await asyncio.gather(*(attempt() for _ in range(10)))
+    winners = [r for r in results if r is True]
+    losers = [r for r in results if r is False]
+    assert len(winners) == 1, f"Expected 1 winner, got {len(winners)}"
+    assert len(losers) == 9, f"Expected 9 losers, got {len(losers)}"
 
 
 @pytest.mark.asyncio

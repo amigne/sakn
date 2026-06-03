@@ -153,16 +153,34 @@ class OuiSyncService:
             return True
         # Check TTL on existing flag
         if not await self._is_running(session):
-            # Flag is stale, reclaim it
+            # Re-read the stale started_at value for use as a CAS
+            # discriminator. Two concurrent reclaimers will observe the
+            # same stale timestamp; the CAS below ensures only one wins.
+            stale_result = await session.execute(
+                select(GlobalSetting).where(
+                    GlobalSetting.key == RUNNING_STARTED_AT_KEY
+                )
+            )
+            stale_setting = stale_result.scalar_one_or_none()
+            stale_started_at = stale_setting.value if stale_setting else ""
+            reclaim_result = await session.execute(
+                update(GlobalSetting)
+                .where(
+                    GlobalSetting.key == RUNNING_STARTED_AT_KEY,
+                    GlobalSetting.value == stale_started_at,
+                )
+                .values(value=datetime.now(UTC).isoformat())
+            )
+            if reclaim_result.rowcount != 1:
+                # Another process reclaimed the lock between the
+                # _is_running check and now — we lost the race.
+                await session.commit()
+                return False
+            # We own the reclaim — update the flag row.
             await session.execute(
                 update(GlobalSetting)
                 .where(GlobalSetting.key == RUNNING_FLAG_KEY)
                 .values(value="1")
-            )
-            await session.execute(
-                update(GlobalSetting)
-                .where(GlobalSetting.key == RUNNING_STARTED_AT_KEY)
-                .values(value=datetime.now(UTC).isoformat())
             )
             await session.commit()
             return True
