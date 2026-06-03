@@ -189,3 +189,47 @@ async def test_history_pagination(client: AsyncClient, db_session: AsyncSession)
     d2 = resp2.json()
     assert len(d2["items"]) == 5
     assert d2["has_more"] is False
+
+
+async def test_history_with_full_mac_address(client: AsyncClient, db_session: AsyncSession):
+    """A full 48-bit MAC input (12 hex chars) should match the stored OUI prefix."""
+    await _ensure_tool_mac_oui(db_session)
+
+    mac = MacOui(
+        id=new_uuid7(),
+        oui="001122",
+        oui_type="MA-L",
+        organization="TestOrg",
+        address="Test Address",
+        first_seen=datetime.now(UTC).date(),
+        last_seen=datetime.now(UTC).date(),
+    )
+    db_session.add(mac)
+    await db_session.flush()
+
+    for i in range(3):
+        db_session.add(
+            MacOuiHistory(
+                id=new_uuid7(),
+                oui_id=mac.id,
+                oui="001122",
+                previous_organization=f"OldOrg{i}",
+                new_organization=f"NewOrg{i}",
+                change_type="name_change",
+                detected_at=datetime.now(UTC),
+            )
+        )
+    await db_session.flush()
+
+    token = await _create_session(db_session, ROLE_ADMINISTRATOR)
+
+    # Full 48-bit MAC address as input
+    response = await client.get(
+        "/api/v1/tools/mac_oui/history?oui=001122334455&oui_type=MA-L&limit=10&offset=0",
+        cookies={"sakn_session": token},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 3
+    assert data["total"] == 3
+    assert data["has_more"] is False
