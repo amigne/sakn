@@ -507,7 +507,7 @@ class OuiSyncService:
         return added, changed, confirmed, False
 
     async def _handle_failure(self, oui_type: str) -> None:
-        """Increment per-file failure counter; emit CRITICAL log at 3 consecutive failures."""
+        """Increment per-file failure counter; emit CRITICAL log + admin email at 3 consecutive failures."""
         async with self._session_factory() as session:
             count = await self._get_failure_count(session, oui_type) + 1
             await self._set_failure_count(session, oui_type, count)
@@ -519,3 +519,49 @@ class OuiSyncService:
                     "ALERT_OUI_SYNC_FAILED_3X",
                     extra={"file": oui_type, "consecutive_failures": count},
                 )
+        # ADR-016: email the admins once, on the transition to the 3rd
+        # consecutive failure (a successful sync resets the counter, so a new
+        # incident re-triggers). Done outside the session block; best-effort.
+        if count == 3:
+            await self._notify_admins_failure(oui_type)
+
+    async def _notify_admins_failure(self, oui_type: str) -> None:
+        """Email active administrators that *oui_type* failed 3x in a row (ADR-016).
+
+        Best-effort: any failure here (no SMTP, no admins, send error) is logged
+        but never propagated — it must not break or mask the sync.
+        """
+        try:
+            from app.constants.roles import ROLE_ADMINISTRATOR
+            from app.models import User
+            from app.services.email_service import send_email
+
+            async with self._session_factory() as session:
+                rows = await session.execute(
+                    select(User.email).where(
+                        User.role == ROLE_ADMINISTRATOR,
+                        User.status == "active",
+                    )
+                )
+                recipients = [email for (email,) in rows.all()]
+
+            if not recipients:
+                self._log.warning(
+                    "oui_sync_alert_no_admin_recipients", extra={"file": oui_type}
+                )
+                return
+
+            subject = f"[SAKN] MAC OUI sync failed 3 consecutive times — {oui_type}"
+            body = (
+                f"<p>The IEEE OUI sync for <b>{oui_type}</b> has failed "
+                f"3 consecutive times.</p>"
+                f"<p>Time (UTC): {datetime.now(UTC).isoformat()}</p>"
+                f"<p>Check <code>/admin/modules/mac_oui/status</code> for the "
+                f"full sync history.</p>"
+            )
+            for email in recipients:
+                await send_email(email, subject, body)
+        except Exception:
+            self._log.exception(
+                "oui_sync_admin_alert_failed", extra={"file": oui_type}
+            )
