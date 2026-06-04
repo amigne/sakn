@@ -1,5 +1,8 @@
 from app.models.base import Base, TimestampMixin, UUID7Mixin, new_uuid7, utcnow
 from app.models.log import AuditLog, SecurityEventLog, ToolExecutionLog
+from app.models.mac_oui import MacOui
+from app.models.mac_oui_history import MacOuiHistory
+from app.models.oui_sync_log import OuiSyncLog
 from app.models.preferences import EmailVerification, GlobalSetting, PasswordReset, UserPreference
 from app.models.session import Session
 from app.models.tool_module import DnsServerPreset, RateLimitConfig, RoleToolPermission, ToolModule
@@ -11,6 +14,9 @@ __all__ = [
     "TimestampMixin",
     "utcnow",
     "new_uuid7",
+    "MacOui",
+    "MacOuiHistory",
+    "OuiSyncLog",
     "User",
     "Session",
     "ToolModule",

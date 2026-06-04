@@ -1,5 +1,6 @@
 # Dependencies
 src/backend/.venv/
+node_modules/
 src/frontend/node_modules/
 
 # Build output

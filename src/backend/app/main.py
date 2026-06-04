@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager, suppress
-from importlib.metadata import version as _pkg_version
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -81,6 +81,7 @@ async def lifespan(app: FastAPI) -> Any:
 
     # Tool registry (always available, even without DB)
     from app.tools.dns_lookup import DnsLookupTool
+    from app.tools.mac_oui_lookup import MacOuiLookupTool
     from app.tools.ping import PingTool
     from app.tools.registry import ToolRegistry
     from app.tools.ssl_viewer import SslViewerTool
@@ -91,6 +92,7 @@ async def lifespan(app: FastAPI) -> Any:
     registry.register(TracerouteTool())
     registry.register(DnsLookupTool())
     registry.register(SslViewerTool())
+    registry.register(MacOuiLookupTool())
     app.state.tool_registry = registry
 
     # Seed tool modules + default config rows (idempotent)
@@ -119,9 +121,16 @@ async def lifespan(app: FastAPI) -> Any:
                             description_key=definition.description_key,
                             enabled=True,
                             version=definition.version,
+                            has_settings=getattr(tool, "has_settings", False),
+                            has_status=getattr(tool, "has_status", False),
                         )
                         db.add(existing)
                         await db.flush()
+                    else:
+                        # Sync capability flags from the tool class (source of truth)
+                        # on every boot — not just at row creation.
+                        existing.has_settings = getattr(tool, "has_settings", False)
+                        existing.has_status = getattr(tool, "has_status", False)
                     tool_ids[definition.name] = existing.id
 
                 # Seed default RoleToolPermission rows (all roles → all tools allowed)
@@ -192,6 +201,12 @@ async def lifespan(app: FastAPI) -> Any:
                     "max_concurrent_sessions": "10",
                     "visitor_ip_soft_limit": "5",
                     "visitor_ip_hard_limit": "500",
+                    # OUI sync failure counters (per-file)
+                    "oui_sync_failures_ma_l": "0",
+                    "oui_sync_failures_ma_m": "0",
+                    "oui_sync_failures_ma_s": "0",
+                    "oui_sync_running": "0",
+                    "oui_sync_started_at": "",
                 }
                 for key, value in default_settings.items():
                     row = await db.execute(
@@ -201,6 +216,26 @@ async def lifespan(app: FastAPI) -> Any:
                         db.add(GlobalSetting(key=key, value=value))
 
                 await db.commit()
+
+                # Reset stale running flag + started_at at startup (in case of previous crash/SIGKILL)
+                row = await db.execute(
+                    select(GlobalSetting).where(
+                        GlobalSetting.key.in_(["oui_sync_running", "oui_sync_started_at"])
+                    )
+                )
+                stale_rows = {s.key: s for s in row.scalars().all()}
+                running_flag = stale_rows.get("oui_sync_running")
+                started_at = stale_rows.get("oui_sync_started_at")
+                if running_flag and running_flag.value == "1":
+                    logger.warning(
+                        "oui_sync_running flag stale at startup, resetting",
+                        extra={"prior_value": running_flag.value},
+                    )
+                    running_flag.value = "0"
+                    if started_at:
+                        started_at.value = ""
+                    await db.commit()
+
         except Exception:
             logger.exception("Seed data creation failed, continuing")
 
@@ -284,6 +319,46 @@ async def lifespan(app: FastAPI) -> Any:
             except Exception:
                 logger.exception("Orphan preferences cleanup failed")
 
+        @scheduler.scheduled_job("cron", day_of_week="sun", hour=4, minute=0)
+        async def cleanup_oui_sync_log():
+            """Purge old oui_sync_log rows weekly (#374), keeping the latest run."""
+            try:
+                from app.services.oui_sync_log_cleanup_service import (
+                    DEFAULT_RETENTION_DAYS,
+                    RETENTION_SETTING_KEY,
+                    cleanup_old_oui_sync_logs,
+                )
+
+                async with async_session_factory() as db:
+                    from sqlalchemy import select as sel
+
+                    from app.models.preferences import GlobalSetting
+
+                    row = await db.execute(
+                        sel(GlobalSetting).where(GlobalSetting.key == RETENTION_SETTING_KEY)
+                    )
+                    setting = row.scalar_one_or_none()
+                    try:
+                        retention = int(setting.value) if setting else DEFAULT_RETENTION_DAYS
+                    except (ValueError, TypeError):
+                        retention = DEFAULT_RETENTION_DAYS
+                    deleted = await cleanup_old_oui_sync_logs(db, retention)
+                    await db.commit()
+                    if deleted:
+                        logger.info("OUI sync log cleanup", extra={"deleted": deleted})
+            except Exception:
+                logger.exception("OUI sync log cleanup failed")
+
+        # Register OUI sync job (idempotent) — must be before scheduler.start()
+        # to match the convention used by other scheduled jobs.
+        try:
+            from app.database import async_session_factory as asf
+            from app.scheduler.jobs.oui_sync_job import register_oui_sync_job
+
+            await register_oui_sync_job(scheduler, asf)
+        except Exception:
+            logger.exception("OUI sync job registration failed")
+
         scheduler.start()
     except Exception:
         logger.exception("Scheduler initialization failed")
@@ -302,10 +377,18 @@ async def lifespan(app: FastAPI) -> Any:
         pass
 
 
+try:
+    _VERSION = _pkg_version("sakn")
+except PackageNotFoundError as exc:
+    raise RuntimeError(
+        "Package 'sakn' is not installed. Run 'uv sync' or 'pip install -e .' "
+        "from src/backend/."
+    ) from exc
+
 app = FastAPI(
     title="SAKN API",
     description="Swiss Army Knife for Network Engineers",
-    version=_pkg_version("sakn"),
+    version=_VERSION,
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
@@ -356,6 +439,14 @@ app.include_router(v1_router)
 from app.api.errors import AppError, register_error_handlers
 
 register_error_handlers(app)
+
+
+# Prometheus metrics endpoint (ADR-015)
+# Exposed without authentication — protect at the reverse-proxy level.
+from prometheus_client import make_asgi_app
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 @app.get("/health")

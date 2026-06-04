@@ -129,6 +129,6 @@ export interface SslResult {
   warnings: { message: string; variant: "error" | "warning" }[];
 }
 
-export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer";
+export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer" | "mac_oui";
 
 export type ExecutionStatus = "idle" | "running" | "completed" | "stopped" | "error";

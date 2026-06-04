@@ -152,6 +152,11 @@ def _group_probes_by_ip(
 
 
 class TracerouteTool(BaseTool):
+    # Metadata carried on the class for seed / introspection.
+    # These are consumed by main.py seed logic for the ToolModule row.
+    has_settings: bool = True  # show_private_hops setting
+    has_status: bool = False
+
     def __init__(self, executor: SubprocessExecutor | None = None):
         self._executor = executor or SubprocessExecutor(hard_timeout=600.0)
 

@@ -1,0 +1,30 @@
+name: Import Check
+
+on:
+  push:
+    branches: [master, main, dev0.1.*, dev0.2.*]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-import:
+    name: Runtime import check
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: development
+    defaults:
+      run:
+        working-directory: src/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.14'
+      - name: Install runtime dependencies only
+        run: uv sync --no-dev --frozen
+      - name: Verify app.main imports
+        run: uv run python -c "import app.main"
+      - name: Verify app.cli.main imports
+        run: uv run python -c "import app.cli.main"

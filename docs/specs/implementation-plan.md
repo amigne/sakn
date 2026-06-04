@@ -1,8 +1,8 @@
 # Implementation Plan — SAKN MVP
 
-> **Version:** 3.0 — Vertical slices, frontend-first
+> **Version:** 3.1 — Sprint 0 review: MAC OUI section realigned (frontend-heavy, 6 sprints)
 > **Status:** Draft
-> **Date:** 2026-05-14
+> **Date:** 2026-05-31
 
 ---
 
@@ -683,3 +683,319 @@ Slices 5 and 6 can run in parallel (both depend on Slice 4 for auth). Slice 2 is
 | 6 | DNS query returns real records, TLS cert chain renders with validation |
 | 7 | Admin panel controls real data: block user, change rate limits, view real logs |
 | 8 | French UI, dark mode, mobile-friendly, production Docker |
+
+
+---
+
+## 12. MAC OUI Lookup (Module v0.2.0)
+
+**Goal** : implement the MAC OUI Lookup tool — extract MAC/OUI patterns from arbitrary text in the browser, normalize, send a list to the backend, lookup vendor/manufacturer in a local database synced daily from IEEE, display results with change history.
+
+**Architecture rappel** : extraction côté **frontend** (tolérant, ADR-014), backend reçoit une liste d'OUI/MAC normalisée et fait un lookup pur en zero-trust. Voir ADR-013 et ADR-014 pour les décisions structurantes.
+
+**Integration branch** : `dev0.2.0-macoui`. Sprints 1-6 PR vers cette branche.
+
+### 12.0 Sprint dependency graph
+
+```
+Sprint 1 (Models) ──► Sprint 2 (IEEE Sync)  ──┐
+                  └─► Sprint 3 (Backend lookup) ──┐
+                                                  ├──► Sprint 5 (Admin/Obs) ──► Sprint 6 (QA/Release)
+                                Sprint 4 (Frontend) ──┘
+```
+
+Sprints 2 et 3 peuvent démarrer en parallèle après merge du Sprint 1. Sprint 4 démarre dès que le contrat API du Sprint 3 est stable. Sprint 5 fusionne admin/observabilité une fois 2-3-4 mergés. Sprint 6 valide l'ensemble.
+
+---
+
+### 12.1 Sprint 1 — Data Models & DB Migration
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-backend.md` §4.2 (corrigé), ADR-013 §5.1 |
+| **Depends on** | Slice 1 (existing environment) |
+| **PR target** | `dev0.2.0-macoui` |
+
+**Scope** :
+- Modèle `MacOui` avec **`UNIQUE(oui, oui_type)`** (correction de spec actée ADR-013 §2.4).
+- Modèle `MacOuiHistory` avec FK `ON DELETE CASCADE`.
+- Migration Alembic auto-générée, revue manuelle (CHECK constraints, FK cascade, index `ix_*`).
+- Pas de seed data dans la migration (le seed du tool / RBAC arrivera au Sprint 3 dans le pattern existant `main.py:126-137`).
+- Tests unitaires modèles (contraintes, unicité, cascade, défauts auto).
+
+**Files touched** :
+- `src/backend/app/models/mac_oui.py` (new)
+- `src/backend/app/models/mac_oui_history.py` (new)
+- `src/backend/app/models/__init__.py` (exports)
+- `src/backend/alembic/versions/<id>_add_mac_oui_tables.py` (new)
+- `src/backend/tests/unit/database/test_mac_oui_model.py` (new)
+- `src/backend/tests/unit/database/test_mac_oui_history_model.py` (new)
+
+**Risks** :
+- **Compatibilité SQLite vs PostgreSQL** : CHECK constraints sur `oui_type` et `change_type`. Vérifier le rendu Alembic sur les 2 DB.
+- **Convention d'index** : suivre les noms existants (`ix_*`) en relisant une migration récente.
+- **Ordre du downgrade** : `history` avant `mac_oui` (FK cascade) pour rejouer proprement.
+
+---
+
+### 12.2 Sprint 2 — IEEE Sync Service
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-backend.md` §9.6 (URLs à corriger en HTTPS), ADR-013 §2 |
+| **Depends on** | Sprint 1 |
+
+**Scope** :
+- Parser pur (`oui_parser.py`) qui transforme `OUI (hex) \t Org \t Address` → `ParsedOuiEntry`. Aucun I/O.
+- Service de sync (`oui_sync_service.py`) :
+  - Téléchargement **HTTPS** des 3 fichiers (timeout 120 s, configurable `OUI_DOWNLOAD_TIMEOUT_SECONDS`).
+  - Logique upsert + comparaison champ par champ (ADR-013 §2.2).
+  - Classification `change_type` à **3 valeurs** (`name_change`, `address_change`, `revoked`) — pas de `reassigned`.
+  - Compteur d'échecs consécutifs **par fichier** ; CRITICAL log `ALERT_OUI_SYNC_FAILED_3X` au 3ᵉ échec.
+  - Pas de DELETE, pas de purge.
+- Job APScheduler quotidien à `OUI_SYNC_HOUR` UTC (défaut 03), `max_instances=1`, `coalesce=True`.
+- Endpoint admin `POST /api/v1/admin/oui/sync` (déclenchement manuel). 409 si déjà en cours.
+- Fixtures IEEE échantillonnées (10-20 entrées par fichier).
+- Tests : parsing, idempotence, détection de changement, résilience aux pannes réseau (mocked).
+
+**Files touched** :
+- `src/backend/app/services/oui_parser.py` (new)
+- `src/backend/app/services/oui_sync_service.py` (new)
+- `src/backend/app/scheduler/jobs/oui_sync_job.py` (new)
+- `src/backend/app/api/admin/oui_sync.py` (new)
+- `src/backend/app/config.py` (ajout `OUI_SYNC_HOUR`, `OUI_SYNC_ENABLED`, `OUI_DOWNLOAD_TIMEOUT_SECONDS`)
+- Liste centrale des codes d'erreur : `OUI_SYNC_ALREADY_RUNNING`
+- `src/backend/tests/unit/services/test_oui_parser.py`
+- `src/backend/tests/unit/services/test_oui_sync_service.py`
+- `src/backend/tests/integration/test_oui_sync_endpoint.py`
+- `src/backend/tests/fixtures/ieee/{oui,mam,oui36}-sample.txt`
+
+**Risks** :
+- **Changement de format IEEE** : le format `(hex)` tabulé est stable depuis 20+ ans mais non contractuel. Skip-malformed-lines limite la casse.
+- **Heuristique `revoked`** : dépend du mot-clé `revoked` ou `----` dans `organization`. Si IEEE change son format, tous les `revoked` deviendront `name_change`. Monitoring Sprint 5.
+- **SSRF** : URLs IEEE hardcodées, l'endpoint admin n'accepte aucun paramètre URL.
+
+---
+
+### 12.3 Sprint 3 — Backend Tool & API (lookup pur, zero-trust)
+
+| Agent | `backend-dev` |
+|---|---|
+| **Documents** | `spec-tools-instant.md` §4 (à corriger : pas d'extraction backend), `spec-api-contract.md` §9-10, ADR-014 §2.7 |
+| **Depends on** | Sprint 1 (modèles) ; Sprint 2 fortement recommandé (sinon fixture seed) |
+
+**Scope** :
+- `MacOuiLookupTool(BaseTool)` (chercher le pattern existant via DNS/SSL tools).
+- **Pas d'extraction regex côté backend**. Le tool reçoit `{ "ouis": [str, ...] }` déjà normalisé par le frontend.
+- Validation stricte (`re.fullmatch(r"^[0-9A-F]{6,12}$")`, longueur ∈ {6,7,9,12}).
+- Sanitisation des entrées rejetées (`sample` 20 chars max, charset `[0-9a-fA-F:.\-]`, autres chars → `?`).
+- Réponse **200 OK** avec `results[]` + `rejected[]` + `parse_stats` (cf. ADR-014 §2.7 + acceptance §8).
+- 422 réservé au JSON malformé ou taille batch dépassée (`MAC_OUI_TOO_MANY_INPUTS`).
+- Lookup en **1 seule requête SQL** (`WHERE (oui, oui_type) IN (...)`) pour éviter N+1. Règle longest-prefix appliquée côté Python.
+- Détection OUI ambigu : si l'utilisateur soumet un préfixe 24-bit qui n'a pas de MA-L correspondant à un fabricant final ou qui appartient à une plage IEEE Registration Authority, retourner `ambiguous_extends_ma_m` / `ambiguous_extends_ma_s`.
+- Enregistrement du tool dans `ToolModule` avec `has_settings=true` ET `has_status=true` (nouveau flag).
+- Seed `RoleToolPermission` pour les 3 rôles avec `allowed=True` (pattern existant `main.py:126-137`).
+- Codes d'erreur : `MAC_OUI_TOO_MANY_INPUTS` (422), pas de `MAC_OUI_PARSE_EMPTY` (la liste vide retourne 200 OK).
+- Tests : validation stricte, rejection sanitisée (incluant payload XSS `<script>alert(1)</script>`), longest prefix, OUI ambigu, batch limit.
+
+**Files touched** :
+- `src/backend/app/tools/instant/mac_oui_lookup.py` (new)
+- `src/backend/app/tools/instant/mac_oui_lookup_service.py` (new)
+- Registre des tools (intégration)
+- `src/backend/app/models/tool_module.py` (ajout `has_status: bool` si pas déjà existant)
+- Migration data pour seeder le tool (idempotente)
+- i18n FR + EN backend (uniquement clés strictement utilisées server-side : `errors.mac_oui_too_many_inputs`)
+- `src/backend/tests/unit/tools/test_mac_oui_lookup_service.py`
+- `src/backend/tests/integration/test_mac_oui_endpoint.py`
+
+**Risks** :
+- **N+1 queries** : risque si l'implémentation boucle sur chaque entrée. Test obligatoire : compter les requêtes SQL avec un event listener SQLAlchemy.
+- **Sanitisation XSS** : test obligatoire avec payload contenant `<script>`. Vérifier que `sample` retourné est inoffensif.
+- **`has_status` flag** : nouvelle colonne sur `ToolModule`. Doit être backward-compatible (default `False`).
+
+---
+
+### 12.4 Sprint 4 — Frontend Page (extraction tolérante + UX)
+
+| Agent | `frontend-dev` |
+|---|---|
+| **Documents** | `ui-spec.md` SCR-26, `spec-frontend.md` §4.1 (à corriger : décrire l'extraction frontend), ADR-014 §2-3 |
+| **Depends on** | Sprint 3 (API stable) |
+
+**Scope** :
+- Page `MacOuiLookupPage.tsx` avec `<textarea>` (max configurable via `MAC_OUI_FRONTEND_INPUT_MAX_CHARS`, défaut 50 000 — limite hardcodée par défaut, lue depuis settings Sprint 5).
+- **Regex tolérante** côté JS (cf. ADR-014 §3) : 4 séparateurs (`:`, `-`, `.`, `""`), longueurs {6, 7, 9, 12}.
+- Normalisation (strip separators, uppercase, validation, dédup) avant envoi.
+- Affichage résultats :
+  - Tableau avec OUI display (MA-M/MA-S avec `_` underscore stylé en gris, tooltip).
+  - Légende sous tableau pour MA-M/MA-S.
+  - Ligne en **orange** pour OUI ambigu (`ambiguous_extends_ma_m` ou `_ma_s`), tooltip d'invitation.
+  - Historique dépliable par OUI (lazy load infinite scroll, taille de page = `MAC_OUI_HISTORY_PAGE_SIZE`).
+  - En-tête historique : « Historique collecté depuis [date de mise en service du module] ».
+  - Bandeau `rejected[]` au-dessus du tableau (avec samples sanitisés affichés via React escape).
+  - Copy clipboard global + par ligne.
+- États gérés : idle / typing / submitting / success / empty / error.
+- Composants UI **strictement existants** : `Modal`, `ToggleSwitch`, `TextInput`, `Button`, `Spinner` (cf. `src/frontend/src/components/ui/`).
+- Sidebar : entrée MAC OUI ajoutée (insérer entre TLS et WHOIS si présent, sinon en fin).
+- i18n FR + EN (toutes les clés `tools.mac_oui.*`, `errors.mac_oui_too_many_inputs`).
+- Accessibilité : `aria-label`, focus management, navigation clavier, contraste.
+- Tests Vitest : extraction (25+ chaînes annexe A ADR-014), normalisation, dédup, états page.
+- Test Playwright golden path : login → page → coller ARP table → résultats.
+
+**Files touched** :
+- `src/frontend/src/pages/tools/MacOuiLookupPage.tsx` (new)
+- `src/frontend/src/pages/tools/components/MacOuiResultsTable.tsx` (new)
+- `src/frontend/src/pages/tools/components/MacOuiHistoryDetails.tsx` (new)
+- `src/frontend/src/pages/tools/components/MacOuiParseStats.tsx` (new)
+- `src/frontend/src/pages/tools/components/MacOuiRejectedBanner.tsx` (new)
+- `src/frontend/src/lib/macOuiExtractor.ts` (regex + normalisation + dédup)
+- `src/frontend/src/api/tools/macOui.ts` (client typé)
+- `src/frontend/src/i18n/locales/{en,fr}/tools/mac_oui.json` (new)
+- `src/frontend/src/Router.tsx` (ajouter route `/mac-oui`)
+- `src/frontend/src/components/layout/Sidebar.tsx` (entrée)
+- Tests : `MacOuiLookupPage.test.tsx`, `MacOuiResultsTable.test.tsx`, `macOuiExtractor.test.ts`, `tests/e2e/mac-oui-lookup.spec.ts`
+
+**Risks** :
+- **ReDoS frontend** : test obligatoire avec payload pathologique (50 000 chars). Quantifiers fixes uniquement (cf. ADR-014 §5.3).
+- **Performance rendu** : 500+ OUI uniques peuvent ralentir React. Prévoir virtualisation si nécessaire (chercher si TanStack Virtual déjà utilisé ailleurs dans le projet).
+- **Faux positifs timestamps** : `12:34:56` matche OUI 3 octets. Politique acceptée (cf. ADR-014 §2.2 et acceptance AC-MAC-OUI-019). À surveiller en testing utilisateur.
+- **Limite textarea** : 50 000 chars défaut hardcodé. La lecture depuis settings Sprint 5 arrive après. Documenter la dépendance.
+
+---
+
+### 12.5 Sprint 5 — Admin, Observabilité & Robustesse
+
+| Agent | `backend-dev` + `frontend-dev` |
+|---|---|
+| **Documents** | acceptance §14 (administration) |
+| **Depends on** | Sprints 2, 3, 4 |
+
+**Scope backend** :
+- Modèle `OuiSyncLog` (table persistante : timestamps, status, counts, files_failed JSON, error_message). Migration.
+- Endpoint **générique** `GET /api/v1/admin/modules/{tool_name}/status` retournant `{status, last_run, history[]}`. `null` si le module n'a pas de statut.
+- Métriques (utiliser le système existant ; si aucun → logs structurés et le noter dans `Known limitations`).
+- Paramétrage via `ToolModuleSetting` (ou mécanisme équivalent existant) :
+  - `MAC_OUI_FRONTEND_INPUT_MAX_CHARS` (1 000 – 200 000, défaut 50 000)
+  - `MAC_OUI_BACKEND_BATCH_MAX_SIZE` (100 – 10 000, défaut 2 000)
+  - `MAC_OUI_HISTORY_PAGE_SIZE` (5 – 50, défaut 10)
+  - `OUI_SYNC_HOUR` (0 – 23, défaut 3)
+- Endpoint paginé pour l'historique : `GET /api/v1/tools/mac_oui/history?oui=...&oui_type=...&offset=...&limit=...`
+- Test ReDoS, test performance, test de payload pathologique (50k chars frontend → liste 2 000 entrées backend).
+
+**Scope frontend** :
+- Tableau Admin > Modules : **nouvelle colonne « Statut »** entre les permissions et « Paramètres ».
+  - Cellule : icône colorée pour modules avec `has_status=true`, **vide sinon** (pas de tiret).
+  - Couleurs : 🟢 success / 🟡 partial / 🔴 alert / ⚪ idle.
+- Clic icône → ouvre **Modal centré** (composant existant `Modal.tsx`) avec :
+  - Date dernière sync (locale-formatted)
+  - Statut par fichier (MA-L/MA-M/MA-S)
+  - Compteurs added/changed/confirmed
+  - Compteurs d'échecs consécutifs par fichier
+  - Bouton « Lancer une sync maintenant » (POST endpoint Sprint 2)
+  - Tableau des 30 dernières exécutions
+- Modal Settings du module : 4 paramètres ci-dessus.
+- Polling intelligent (backoff + stop après N tentatives) quand une sync est en cours.
+- i18n FR + EN pour `admin.oui_sync.*`, `admin.status`.
+
+**Files touched** :
+- `src/backend/app/models/oui_sync_log.py` (new)
+- `src/backend/alembic/versions/<id>_add_oui_sync_log.py` (new)
+- `src/backend/app/api/admin/module_status.py` (new, générique)
+- `src/backend/app/api/v1/endpoints/tools/mac_oui_history.py` (new, paginé)
+- `src/backend/app/services/oui_sync_service.py` (modifier pour persister dans `oui_sync_log`)
+- `src/frontend/src/pages/admin/AdminModulesPage.tsx` (ajouter colonne Statut)
+- `src/frontend/src/pages/admin/components/MacOuiStatusModal.tsx` (new)
+- `src/frontend/src/pages/admin/components/MacOuiSettingsModal.tsx` (new ou extension du pattern existant)
+- Tests intégration backend + Vitest frontend
+- Tests `@pytest.mark.perf`
+
+**Risks** :
+- **Système de métriques absent** : si rien n'existe dans le projet, fallback en logs structurés et issue de suivi.
+- **Polling frontend** : risque de boucle infinie sur erreur. Implémenter backoff exponentiel + stop après N erreurs consécutives.
+- **Rétention `oui_sync_log`** : pas de purge ce sprint. Issue de suivi `severity:low` pour purge éventuelle après N jours.
+
+---
+
+### 12.6 Sprint 6 — QA finale, Sécurité, Release Notes
+
+| Agent | `qa` + `security` |
+|---|---|
+| **Documents** | `docs/qa/acceptance-mac-oui.md`, ADR-013, ADR-014 |
+| **Depends on** | Sprints 1-5 mergés |
+
+**Scope** :
+- Statut chaque AC `AC-MAC-OUI-XXX` en `passed`/`failed`/`dropped` avec preuve (test path + line number).
+- Revue sécurité dédiée : `docs/security/review-mac-oui.md`.
+  - Tests sécurité effectivement exécutés : ReDoS frontend + backend, DoS mémoire, XSS (payload `<script>`), authz admin endpoints, SSRF sur endpoint admin sync.
+- Suite complète `pytest` depuis `src/backend/` (CI ne lance pas pytest).
+- Suite complète frontend (tsc, lint, vitest, playwright).
+- Vérification d'indentation manuelle sur au moins 1 fichier par sprint (rappel #288/#289).
+- Smoke tests régression sur Ping, Traceroute, DNS, TLS.
+- Cross-check specs ↔ implémentation : section par section, `OK` ou `DEVIATION (justification)`.
+- Release notes `docs/release/release-notes-0.2.0-mac-oui.md`.
+- Recommandation finale : `accept` / `accept with reservations` / `reject`.
+
+**Files touched** :
+- `docs/qa/qa-report-mac-oui.md` (new)
+- `docs/security/review-mac-oui.md` (new)
+- `docs/release/release-notes-0.2.0-mac-oui.md` (new)
+- `docs/qa/acceptance-mac-oui.md` (statuts AC mis à jour)
+- `CHANGELOG.md` (ligne sous `[0.2.0]` si le fichier existe)
+
+**Risks** :
+- **AC non couverts** : tout AC sans test → issue de suivi, recommandation `reject` ou `accept with reservations`.
+- **Régression sur tools existants** : smoke tests manuels obligatoires.
+- **Performance prod-like** : si la base contient les vrais 50 000 OUI IEEE, vérifier que les requêtes de lookup restent < 500 ms pour 1 000 entrées.
+
+---
+
+### 12.7 Sprint dependency notes
+
+Sprint 2 fournit la donnée réelle nécessaire à un testing utile des Sprints 3 et 4. **Recommandation forte** : exécuter une première sync (manuelle via endpoint admin) dès la fin du Sprint 2, pour disposer des vraies données IEEE pendant les Sprints 3-4-5.
+
+Sprints 2 et 3 peuvent démarrer en parallèle après merge Sprint 1, à condition que le Sprint 3 utilise une fixture seed pour ses tests d'intégration (sans dépendre d'une DB peuplée par le Sprint 2).
+
+Sprint 4 dépend du contrat API du Sprint 3 stable. Si le Sprint 3 livre tôt, le Sprint 4 peut chevaucher la fin du Sprint 5.
+
+Sprint 6 est strictement séquentiel après tous les autres.
+
+---
+
+### 12.8 Sprint 6 (révisé) — Cleanup, outillage & docs
+
+> Note : le périmètre initial du Sprint 6 (« QA finale / Sécurité / Release Notes », §12.6) a été **décalé** en un gate QA/Release ultérieur, exécuté avant le bump `0.2.0` et la remontée `dev0.2.0` → `master`. Le Sprint 6 livré ci-dessous est un sprint de dette + outillage.
+
+**Scope livré** :
+- **CLI** `sakn-cli sync-oui` : sync IEEE à la demande (réutilise `OuiSyncService.sync_all(triggered_by="cli")`), sans POST authentifié. Exit `1` si échec fichier.
+- **#374** — rétention bornée de `oui_sync_log` : setting `OUI_SYNC_LOG_RETENTION_DAYS` (défaut 365, plage 7–3650), job hebdo `oui_sync_log_cleanup` préservant toujours la dernière exécution.
+- **#370** — `audit_logs.admin_id` nullable (migration `batch_alter_table`, portable SQLite) ; suppression du sentinel `"unknown"` (FK invalide).
+- **#364** — `module_deployed_at` lu via la session de requête (servi + testable).
+- NITs #369 / #365 / #366 (tests + commentaire).
+- Docs : `docs/admin/mac-oui-administration.md` (nouveau), CHANGELOG, ACs `AC-MAC-OUI-097..100`.
+
+**Notification d'échec sync (#373)** : reportée — nécessite une infra d'envoi transverse (email/webhook) + ADR. Le marker `ALERT_OUI_SYNC_FAILED_3X` reste la source d'alerte.
+
+**Intégration** : branche `sprint-6-mac-oui-cleanup-cli` → `dev0.2.0-macoui`.
+
+---
+
+## 13. Doutes / arbitrages MAC OUI
+
+Tous les doutes initiaux ont été levés lors de la revue Sprint 0. Voir `docs/qa/acceptance-mac-oui.md` §15 pour le tableau de résolution complet et la traçabilité.
+
+**Décisions structurantes actées en revue** :
+
+| Sujet | Décision |
+|---|---|
+| Architecture | Frontend extrait/normalise (tolérant), backend valide strict + lookup pur |
+| Protocole IEEE | **HTTPS** (testé fonctionnel 2026-05-31) |
+| `change_type` | 3 valeurs : `name_change` (englobe acquisition), `address_change`, `revoked`. `reassigned` abandonné. |
+| Rétention | **Aucune suppression**, jamais |
+| Contrainte unicité | `UNIQUE(oui, oui_type)` (correction de spec appliquée Sprint 0) |
+| Format MA-M/MA-S | `XX:XX:XX:X_` et `XX:XX:XX:XX:X_` (underscore = wildcard, CSS grisé) |
+| OUI ambigu | Affichage orange + invitation à fournir MAC complète |
+| Rejet backend | 200 OK avec `rejected[]` sanitisé (20 chars, charset filter) |
+| Historique | Lazy load infinite scroll, 10 par défaut, configurable admin |
+| Settings admin | 4 paramètres exposés dans Administration > Modules > MAC OUI > Settings |
+| Statut admin | Nouvelle colonne « Statut » + icône colorée + Modal centré |
+| RBAC | Pattern standard SAKN (`allowed=True` pour les 3 rôles au seed) |
