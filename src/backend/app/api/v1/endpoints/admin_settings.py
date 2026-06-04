@@ -79,7 +79,7 @@ async def update_settings(
 
         await log_admin_action(
             session,
-            admin_id=admin_id or "unknown",
+            admin_id=admin_id,
             action="settings.update",
             entity_type="global_setting",
             entity_id=key,

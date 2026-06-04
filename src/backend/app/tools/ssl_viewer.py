@@ -37,6 +37,11 @@ WEAK_KEY_SIZES: dict[type, int] = {
 
 
 class SslViewerTool(BaseTool):
+    # Metadata carried on the class for seed / introspection.
+    # These are consumed by main.py seed logic for the ToolModule row.
+    has_settings: bool = False
+    has_status: bool = False
+
     def get_definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="ssl_viewer",

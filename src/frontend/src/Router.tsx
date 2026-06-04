@@ -23,6 +23,7 @@ import VerifyEmailSentPage from "@/pages/auth/VerifyEmailSentPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import DnsLookupPage from "@/pages/tools/DnsLookupPage";
+import MacOuiLookupPage from "@/pages/tools/MacOuiLookupPage";
 import NoToolsPage from "@/pages/tools/NoToolsPage";
 // Tools
 import PingPage from "@/pages/tools/PingPage";
@@ -63,6 +64,14 @@ export default function Router() {
         element={
           <ToolGuard toolName="ssl_viewer">
             <SslViewerPage />
+          </ToolGuard>
+        }
+      />
+      <Route
+        path="/mac-oui"
+        element={
+          <ToolGuard toolName="mac_oui">
+            <MacOuiLookupPage />
           </ToolGuard>
         }
       />

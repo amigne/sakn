@@ -30,6 +30,11 @@ STATISTICS_SEPARATOR = "---"
 
 
 class PingTool(BaseTool):
+    # Metadata carried on the class for seed / introspection.
+    # These are consumed by main.py seed logic for the ToolModule row.
+    has_settings: bool = False
+    has_status: bool = False
+
     def __init__(self, executor: SubprocessExecutor | None = None):
         self._executor = executor or SubprocessExecutor(hard_timeout=90.0)
 

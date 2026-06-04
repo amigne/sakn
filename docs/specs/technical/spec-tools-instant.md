@@ -125,6 +125,7 @@ Structured output with:
   - `last_seen`: date the OUI was last confirmed in IEEE files
 - `history`: array of `{oui, previous_organization, new_organization, change_type, changed_at}`, empty if no changes. Change types: `name_change`, `address_change`, `revoked`, `reassigned`.
 - `parse_stats`: `{total_input_chars, mac_oui_count, unique_oui_count}`
+- `module_deployed_at` (optional): date (`YYYY-MM-DD`) of the earliest non-failed OUI sync — the point from which change history is meaningful. Absent when no sync has run yet.
 
 ### 4.4 Pattern Extraction
 
@@ -149,6 +150,8 @@ The extraction regex matches hex pairs separated by `:`, `-`, `.`, or run togeth
   3. For each parsed OUI: if it exists with the same org/address → update `last_seen`. If org or address changed → insert `MacOuiHistory` row, then update. If new → insert.
   4. Any OUI not seen in this sync → mark `last_seen` = previous value (no deletion — historical entries retained for forensic value).
 - **Error handling**: if a file download fails, log warning, skip that file, keep existing data. Three consecutive daily failures → admin alert.
+- **On-demand sync**: `sakn-cli sync-oui` triggers the same process out of schedule (recorded with `triggered_by="cli"`).
+- **Sync log retention**: each run appends an `oui_sync_log` row. A weekly job (`oui_sync_log_cleanup`) purges rows older than `OUI_SYNC_LOG_RETENTION_DAYS` (default 365, admin-configurable), always preserving the most recent run.
 
 ---
 

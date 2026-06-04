@@ -27,5 +27,6 @@
   "email_password_required": "L'email et le mot de passe sont obligatoires.",
   "email_required": "L'email est obligatoire.",
   "missing_reset_token": "Jeton de réinitialisation manquant.",
-  "unexpected_error": "Une erreur inattendue est survenue."
+  "unexpected_error": "Une erreur inattendue est survenue.",
+  "mac_oui_too_many_inputs": "Trop d'entrées OUI. La limite est de {{max}} entrées. Réduisez le nombre d'adresses MAC dans votre texte et réessayez."
 }

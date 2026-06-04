@@ -13,6 +13,15 @@
     "admin_created": "Administrator {email} created successfully.",
     "admin_exists": "Administrator {email} already exists."
   },
+  "errors": {
+    "mac_oui_too_many_inputs": "Too many inputs. Maximum is {max}."
+  },
+  "tools": {
+    "mac_oui": {
+      "name": "MAC OUI",
+      "description": "Resolve MAC addresses and OUI prefixes to vendor organizations."
+    }
+  },
   "system": {
     "startup": "SAKN backend starting...",
     "shutdown": "SAKN backend shutting down...",

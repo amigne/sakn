@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints.account import router as account_router
 from app.api.v1.endpoints.admin_logs import router as admin_logs_router
 from app.api.v1.endpoints.admin_modules import router as admin_modules_router
+from app.api.v1.endpoints.admin_oui_sync import router as admin_oui_sync_router
 from app.api.v1.endpoints.admin_rate_limits import router as admin_rate_limits_router
 from app.api.v1.endpoints.admin_settings import router as admin_settings_router
 from app.api.v1.endpoints.admin_tools import router as admin_tools_router
@@ -23,6 +24,7 @@ v1_router.include_router(admin_users_router)
 v1_router.include_router(admin_tools_router)
 v1_router.include_router(admin_rate_limits_router)
 v1_router.include_router(admin_modules_router)
+v1_router.include_router(admin_oui_sync_router)
 v1_router.include_router(admin_logs_router)
 v1_router.include_router(admin_settings_router)
 v1_router.include_router(public_settings_router)

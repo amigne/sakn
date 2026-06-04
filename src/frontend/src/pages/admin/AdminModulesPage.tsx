@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { ModuleStatus, ModuleStatusKind } from "@/api/admin/moduleStatus";
+import { getModuleStatus } from "@/api/admin/moduleStatus";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button, Modal, Spinner, TextInput, ToggleSwitch } from "@/components/ui";
 import {
@@ -16,8 +18,26 @@ import {
 import { api } from "@/services/api";
 import type { AccessPermission, DnsServerPreset, ToolModule } from "@/types/admin";
 import { toolDisplayName } from "@/types/admin";
+import MacOuiSettingsModal from "./components/MacOuiSettingsModal";
+import MacOuiStatusModal from "./components/MacOuiStatusModal";
 
 const ROLES = ["administrator", "authenticated", "visitor"] as const;
+
+const STATUS_COLOR: Record<ModuleStatusKind, string> = {
+  running: "bg-blue-500",
+  success: "bg-green-500",
+  partial: "bg-amber-500",
+  alert: "bg-red-500",
+  idle: "bg-gray-400",
+};
+
+function StatusIcon({ status, onClick }: { status: ModuleStatusKind; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="focus-ring rounded-full p-1" aria-label={status} title={status}>
+      <span className={`block h-3 w-3 rounded-full ${STATUS_COLOR[status] ?? "bg-gray-400"}`} />
+    </button>
+  );
+}
 
 export default function AdminModulesPage() {
   const { t } = useTranslation();
@@ -36,6 +56,11 @@ export default function AdminModulesPage() {
   const [presetDesc, setPresetDesc] = useState("");
   const [presetError, setPresetError] = useState("");
 
+  // Module status (Sprint 5)
+  const [statusByModule, setStatusByModule] = useState<Record<string, ModuleStatus | null>>({});
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showMacOuiSettings, setShowMacOuiSettings] = useState(false);
+
   // Traceroute settings
   const [showTracerouteSettings, setShowTracerouteSettings] = useState(false);
   const [showPrivateHops, setShowPrivateHops] = useState(true);
@@ -52,6 +77,18 @@ export default function AdminModulesPage() {
       const [modData, permData] = await Promise.all([listModules(), listRolePermissions()]);
       setModules(modData.modules);
       setPermissions(permData.permissions);
+
+      // Fetch status for modules that have has_status=true (best-effort)
+      const statusModules = modData.modules.filter((m) => m.has_status);
+      if (statusModules.length > 0) {
+        const statusResults = await Promise.allSettled(statusModules.map((m) => getModuleStatus(m.name)));
+        const statusMap: Record<string, ModuleStatus | null> = {};
+        statusModules.forEach((m, i) => {
+          const result = statusResults[i];
+          statusMap[m.name] = result?.status === "fulfilled" ? result.value : null;
+        });
+        setStatusByModule(statusMap);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t("admin.failed_load_modules"));
     } finally {
@@ -111,6 +148,8 @@ export default function AdminModulesPage() {
     } else if (moduleName === "traceroute") {
       setShowTracerouteSettings(true);
       loadTracerouteSettings();
+    } else if (moduleName === "mac_oui") {
+      setShowMacOuiSettings(true);
     }
   }, []);
 
@@ -288,6 +327,12 @@ export default function AdminModulesPage() {
                 ))}
                 <th
                   scope="col"
+                  className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-16"
+                >
+                  {t("admin.status")}
+                </th>
+                <th
+                  scope="col"
                   className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase w-20"
                 >
                   {t("admin.settings")}
@@ -322,6 +367,20 @@ export default function AdminModulesPage() {
                         </td>
                       );
                     })}
+                    {/* Status column (Sprint 5): empty for has_status=false */}
+                    <td className="px-3 py-2">
+                      <div className="flex justify-center">
+                        {mod.has_status ? (
+                          <StatusIcon
+                            status={statusByModule[mod.name]?.status ?? "idle"}
+                            // TODO: dispatch by mod.name when a 2nd module exposes has_status (NIT N2)
+                            onClick={() => {
+                              if (mod.name === "mac_oui") setShowStatusModal(true);
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-center">
                         {mod.has_settings && (
@@ -463,6 +522,12 @@ export default function AdminModulesPage() {
             </div>
           )}
         </Modal>
+
+        {/* MAC OUI Status Modal (Sprint 5) */}
+        <MacOuiStatusModal open={showStatusModal} onClose={() => setShowStatusModal(false)} />
+
+        {/* MAC OUI Settings Modal (Sprint 5) */}
+        <MacOuiSettingsModal open={showMacOuiSettings} onClose={() => setShowMacOuiSettings(false)} />
       </div>
     </AdminLayout>
   );

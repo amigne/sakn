@@ -1,8 +1,8 @@
 # Backend Specification — SAKN MVP
 
-> **Version:** 4.0 — Added MAC OUI, WHOIS, Secret Generator marker
+> **Version:** 4.1 — MAC OUI: `UNIQUE(oui, oui_type)` instead of `UNIQUE(oui)` (ADR-013)
 > **Status:** Draft
-> **Date:** 2026-05-21
+> **Date:** 2026-05-31
 
 Server-side architecture: API, data model, security, rate limiting, logging, Docker, module system. Load with `spec-common.md` and `spec-api-contract.md`. For tool-specific logic, also load `spec-tools-live.md` or `spec-tools-instant.md`.
 
@@ -386,7 +386,7 @@ URL prefix (`/api/v1/`). Deprecation: old version maintained 6+ months with `Dep
 | Field | Type | Constraints |
 |---|---|---|
 | id | UUIDv7 | PK |
-| oui | VARCHAR(12) | UNIQUE, NOT NULL — prefix in bare hex (uppercase, e.g., `001122`) |
+| oui | VARCHAR(12) | NOT NULL — prefix in bare hex (uppercase, e.g., `001122`) |
 | oui_type | VARCHAR(4) | NOT NULL — `MA-L`, `MA-M`, or `MA-S` |
 | organization | VARCHAR(255) | NOT NULL — vendor/manufacturer name |
 | address | TEXT | NOT NULL — organization address as registered with IEEE |
@@ -395,7 +395,9 @@ URL prefix (`/api/v1/`). Deprecation: old version maintained 6+ months with `Dep
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() |
 | updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() |
 
-**Index**: `(oui)` unique for lookup. `(oui_type)` for filtering.
+**Constraints**: `UNIQUE(oui, oui_type)` — a given 24-bit prefix can appear simultaneously in MA-L (carved-out IEEE pool block) and as the prefix of MA-M / MA-S assignments. The pair `(oui, oui_type)` is unique. See ADR-013 §2.4 for the rationale.
+
+**Index**: `(oui)` for lookup. `(oui_type)` for filtering.
 
 **SQLite compat**: `sa.String(12)` for oui, `sa.String(4)` for oui_type, `sa.Text()` for address.
 

@@ -13,6 +13,15 @@
     "admin_created": "Administrateur {email} créé avec succès.",
     "admin_exists": "L'administrateur {email} existe déjà."
   },
+  "errors": {
+    "mac_oui_too_many_inputs": "Trop d'entrées. Le maximum est de {max}."
+  },
+  "tools": {
+    "mac_oui": {
+      "name": "MAC OUI",
+      "description": "Recherche les adresses MAC et préfixes OUI dans la base IEEE."
+    }
+  },
   "system": {
     "startup": "Démarrage du backend SAKN...",
     "shutdown": "Arrêt du backend SAKN...",

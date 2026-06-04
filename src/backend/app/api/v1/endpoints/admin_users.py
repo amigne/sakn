@@ -171,7 +171,7 @@ async def _change_user_status(
 
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action=action,
         entity_type="user",
         entity_id=user_id,
@@ -247,7 +247,7 @@ async def promote_user(
     user.role = ROLE_ADMINISTRATOR
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
-        session, admin_id=admin_id or "unknown",
+        session, admin_id=admin_id,
         action="user.promote", entity_type="user", entity_id=user_id,
         old_value={"role": old_role}, new_value={"role": ROLE_ADMINISTRATOR},
     )
@@ -272,7 +272,7 @@ async def demote_user(
     user.role = ROLE_AUTHENTICATED
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
-        session, admin_id=admin_id or "unknown",
+        session, admin_id=admin_id,
         action="user.demote", entity_type="user", entity_id=user_id,
         old_value={"role": old_role}, new_value={"role": ROLE_AUTHENTICATED},
     )
@@ -298,7 +298,7 @@ async def admin_verify_email(
         user.status = "active"
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
-        session, admin_id=admin_id or "unknown",
+        session, admin_id=admin_id,
         action="user.verify_email", entity_type="user", entity_id=user_id,
         new_value={"email_verified": True},
     )
@@ -381,7 +381,7 @@ async def update_notes(
     admin_id = getattr(request.state, "user_id", None)
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="user.notes",
         entity_type="user",
         entity_id=user_id,
@@ -438,7 +438,7 @@ async def delete_user(
 
     await log_admin_action(
         session,
-        admin_id=admin_id or "unknown",
+        admin_id=admin_id,
         action="user.delete",
         entity_type="user",
         entity_id=user_id,

@@ -27,5 +27,6 @@
   "email_password_required": "Email and password are required.",
   "email_required": "Email is required.",
   "missing_reset_token": "Missing reset token.",
-  "unexpected_error": "An unexpected error occurred."
+  "unexpected_error": "An unexpected error occurred.",
+  "mac_oui_too_many_inputs": "Too many OUI inputs. The limit is {{max}} entries. Reduce the MAC addresses in your text and try again."
 }

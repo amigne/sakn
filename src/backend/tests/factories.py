@@ -68,6 +68,8 @@ async def create_tool_module(
     *,
     name: str = "ping",
     enabled: bool = True,
+    has_settings: bool = False,
+    has_status: bool = False,
 ) -> ToolModule:
     tool = ToolModule(
         id=new_uuid7(),
@@ -76,6 +78,8 @@ async def create_tool_module(
         description_key=f"tools.{name}.description",
         enabled=enabled,
         version="1.0.0",
+        has_settings=has_settings,
+        has_status=has_status,
     )
     db.add(tool)
     await db.flush()
