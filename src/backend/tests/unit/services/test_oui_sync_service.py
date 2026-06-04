@@ -681,3 +681,85 @@ async def test_sync_one_raises_no_double_increment(_engine, monkeypatch):
     async with factory() as session:
         count = await service._get_failure_count(session, "MA-L")
     assert count == 0, f"Failure counter should be 0, got {count}"
+
+
+# ── #373: admin email alert on 3 consecutive failures (ADR-016) ───────────────
+
+
+@pytest.mark.asyncio
+async def test_email_alert_sent_on_third_consecutive_failure(_engine):
+    """Covers #373 — admin email is sent on the transition to count == 3."""
+    from unittest.mock import patch
+
+    from app.constants.roles import ROLE_ADMINISTRATOR
+    from app.models import User
+    from tests.factories import create_user
+
+    factory = await _make_test_factory(_engine)
+    admin_email = "oui_alert_admin@test.com"
+    async with factory() as session, session.begin():
+        existing = await session.execute(select(User).where(User.email == admin_email))
+        if existing.scalar_one_or_none() is None:
+            await create_user(session, email=admin_email, role=ROLE_ADMINISTRATOR, status="active")
+    await _seed_settings(factory, oui_sync_failures_ma_l="2")  # next failure → 3
+
+    service = OuiSyncService(db_session_factory=factory)
+    with patch(
+        "app.services.email_service.send_email", new=AsyncMock(return_value=True)
+    ) as mock_send:
+        await service._handle_failure("MA-L")
+
+    assert mock_send.await_count >= 1
+    recipients = {call.args[0] for call in mock_send.await_args_list}
+    assert admin_email in recipients
+
+
+@pytest.mark.asyncio
+async def test_email_alert_not_resent_on_fourth_failure(_engine):
+    """Covers #373 — transition-only: no email when count goes 3 → 4."""
+    from unittest.mock import patch
+
+    factory = await _make_test_factory(_engine)
+    await _seed_settings(factory, oui_sync_failures_ma_m="3")  # next failure → 4
+
+    service = OuiSyncService(db_session_factory=factory)
+    with patch(
+        "app.services.email_service.send_email", new=AsyncMock(return_value=True)
+    ) as mock_send:
+        await service._handle_failure("MA-M")
+
+    assert mock_send.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_email_alert_not_sent_below_threshold(_engine):
+    """Covers #373 — no email below 3 consecutive failures."""
+    from unittest.mock import patch
+
+    factory = await _make_test_factory(_engine)
+    await _seed_settings(factory, oui_sync_failures_ma_s="0")  # next failure → 1
+
+    service = OuiSyncService(db_session_factory=factory)
+    with patch(
+        "app.services.email_service.send_email", new=AsyncMock(return_value=True)
+    ) as mock_send:
+        await service._handle_failure("MA-S")
+
+    assert mock_send.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_email_alert_is_best_effort(_engine):
+    """Covers #373 — a send failure must not propagate / break the sync."""
+    from unittest.mock import patch
+
+    factory = await _make_test_factory(_engine)
+    await _seed_settings(factory, oui_sync_failures_ma_l="2")  # next failure → 3
+
+    service = OuiSyncService(db_session_factory=factory)
+    with patch(
+        "app.services.email_service.send_email",
+        new=AsyncMock(side_effect=RuntimeError("smtp boom")),
+    ):
+        # Must not raise despite the send error.
+        await service._handle_failure("MA-L")
