@@ -76,6 +76,24 @@ async def _ensure_tool(db: AsyncSession) -> ToolModule:
         await db.flush()
     else:
         tool.enabled = True
+    # Seed explicit allow permissions for all roles. Since #404 (default-deny),
+    # _check_tool_access no longer auto-grants on a missing row (the RBAC test
+    # below overrides visitor to allowed=False to assert the 403 path).
+    from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
+
+    for role in (ROLE_VISITOR, ROLE_AUTHENTICATED, ROLE_ADMINISTRATOR):
+        perm_row = await db.execute(
+            select(RoleToolPermission).where(
+                RoleToolPermission.role == role,
+                RoleToolPermission.tool_id == tool.id,
+            )
+        )
+        perm = perm_row.scalar_one_or_none()
+        if perm is None:
+            db.add(RoleToolPermission(id=new_uuid7(), role=role, tool_id=tool.id, allowed=True))
+        else:
+            perm.allowed = True
+    await db.flush()
     return tool
 
 

@@ -88,6 +88,11 @@ async def _create_test_client(_engine) -> AsyncClient:
                 raise
 
     app.dependency_overrides[get_session] = override_get_session
+    # Disable CSRF validation (added for tools/execute in #405) — the perf
+    # client doesn't set the X-CSRF-Token header, like the shared conftest client.
+    from app.security.csrf import require_csrf
+
+    app.dependency_overrides[require_csrf] = lambda: None
     original_factory = db_module.async_session_factory
     original_rl_factory = rl_module.async_session_factory
     original_mw_factory = getattr(mw_module, "async_session_factory", None)
