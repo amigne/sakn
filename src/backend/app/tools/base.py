@@ -31,6 +31,7 @@ class ToolDefinition:
     version: str
     parameters: list[ToolParameter] = field(default_factory=list)
     requires_privileges: list[str] = field(default_factory=list)
+    backend: bool = True  # False = frontend-only (never executed server-side)
 
 
 @dataclass
@@ -72,6 +73,7 @@ class BaseTool:
             "display_name_key": d.display_name_key,
             "description_key": d.description_key,
             "category": d.category.value,
+            "backend": d.backend,
             "version": d.version,
             "parameters": [
                 {

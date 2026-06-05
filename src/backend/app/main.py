@@ -84,6 +84,7 @@ async def lifespan(app: FastAPI) -> Any:
     from app.tools.mac_oui_lookup import MacOuiLookupTool
     from app.tools.ping import PingTool
     from app.tools.registry import ToolRegistry
+    from app.tools.secret_generator import SecretGeneratorTool
     from app.tools.ssl_viewer import SslViewerTool
     from app.tools.traceroute import TracerouteTool
 
@@ -93,6 +94,7 @@ async def lifespan(app: FastAPI) -> Any:
     registry.register(DnsLookupTool())
     registry.register(SslViewerTool())
     registry.register(MacOuiLookupTool())
+    registry.register(SecretGeneratorTool())
     app.state.tool_registry = registry
 
     # Seed tool modules + default config rows (idempotent)

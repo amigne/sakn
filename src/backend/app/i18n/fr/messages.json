@@ -14,7 +14,8 @@
     "admin_exists": "L'administrateur {email} existe déjà."
   },
   "errors": {
-    "mac_oui_too_many_inputs": "Trop d'entrées. Le maximum est de {max}."
+    "mac_oui_too_many_inputs": "Trop d'entrées. Le maximum est de {max}.",
+    "tool_is_frontend_only": "Cet outil s'exécute entièrement dans le navigateur et n'a pas de point d'exécution côté serveur."
   },
   "tools": {
     "mac_oui": {
