@@ -1,7 +1,7 @@
 # ADR-017: Frontend-Only Tool Pattern
 
 ## Status
-Proposed — 2026-06-05
+Accepted — 2026-06-05 (implemented in PR #429)
 
 ## Context
 
