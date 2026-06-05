@@ -27,6 +27,7 @@
   "token_expired": "Ce lien a expiré. Veuillez en demander un nouveau.",
   "token_used": "Ce lien a déjà été utilisé.",
   "tool_disabled": "Cet outil est actuellement désactivé.",
+  "tool_is_frontend_only": "Cet outil s'exécute entièrement dans le navigateur et n'a pas de point d'accès backend.",
   "too_long": "Trop long.",
   "too_short": "Trop court.",
   "tool_unavailable_title": "Outil indisponible",

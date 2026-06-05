@@ -27,6 +27,7 @@ import MacOuiLookupPage from "@/pages/tools/MacOuiLookupPage";
 import NoToolsPage from "@/pages/tools/NoToolsPage";
 // Tools
 import PingPage from "@/pages/tools/PingPage";
+import SecretGeneratorPage from "@/pages/tools/SecretGeneratorPage";
 import SslViewerPage from "@/pages/tools/SslViewerPage";
 import TraceroutePage from "@/pages/tools/TraceroutePage";
 
@@ -72,6 +73,14 @@ export default function Router() {
         element={
           <ToolGuard toolName="mac_oui">
             <MacOuiLookupPage />
+          </ToolGuard>
+        }
+      />
+      <Route
+        path="/secret-generator"
+        element={
+          <ToolGuard toolName="secret_generator">
+            <SecretGeneratorPage />
           </ToolGuard>
         }
       />

@@ -66,29 +66,45 @@ class TestSecretGeneratorTool:
         d = tool.get_definition()
         assert len(d.parameters) == 7
         param_names = [p.name for p in d.parameters]
-        assert "length" in param_names
-        assert "uppercase" in param_names
-        assert "lowercase" in param_names
-        assert "digits" in param_names
-        assert "symbols" in param_names
-        assert "exclude_similar" in param_names
-        assert "custom_charset" in param_names
+        assert param_names == [
+            "length",
+            "uppercase",
+            "lowercase",
+            "digits",
+            "symbols",
+            "token_length",
+            "hex_length",
+        ]
 
     def test_length_parameter_constraints(self):
         tool = SecretGeneratorTool()
         d = tool.get_definition()
         length_param = next(p for p in d.parameters if p.name == "length")
         assert length_param.type == "integer"
-        assert length_param.default == 32
-        assert length_param.constraints == {"min": 8, "max": 1024}
+        assert length_param.default == 20
+        assert length_param.constraints == {"min": 8, "max": 128}
 
-    def test_custom_charset_constraints(self):
+    def test_token_length_parameter_constraints(self):
         tool = SecretGeneratorTool()
         d = tool.get_definition()
-        cs_param = next(p for p in d.parameters if p.name == "custom_charset")
-        assert cs_param.type == "string"
-        assert cs_param.default == ""
-        assert cs_param.constraints == {"max_length": 128}
+        param = next(p for p in d.parameters if p.name == "token_length")
+        assert param.type == "integer"
+        assert param.default == 43
+        assert param.constraints == {"min": 16, "max": 256}
+
+    def test_hex_length_parameter_constraints(self):
+        tool = SecretGeneratorTool()
+        d = tool.get_definition()
+        param = next(p for p in d.parameters if p.name == "hex_length")
+        assert param.type == "integer"
+        assert param.default == 64
+        assert param.constraints == {"min": 16, "max": 512}
+
+    def test_symbols_default_true(self):
+        tool = SecretGeneratorTool()
+        d = tool.get_definition()
+        symbols_param = next(p for p in d.parameters if p.name == "symbols")
+        assert symbols_param.default is True
 
     def test_api_definition_structure(self):
         tool = SecretGeneratorTool()

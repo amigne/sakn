@@ -15,6 +15,7 @@ const AUTHENTICATED_SCREENS = [
   { name: "DNS Lookup", path: "/dns-lookup" },
   { name: "SSL Viewer", path: "/ssl-viewer" },
   { name: "Traceroute", path: "/traceroute" },
+  { name: "Secret Generator", path: "/secret-generator" },
   { name: "Profile", path: "/profile" },
   { name: "Sessions", path: "/sessions" },
   { name: "Delete Account", path: "/delete-account" },

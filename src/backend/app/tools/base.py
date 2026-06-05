@@ -16,7 +16,7 @@ class ToolParameter:
     name: str
     type: str  # "string" | "integer" | "boolean" | "enum"
     label_key: str
-    description_key: str
+    description_key: str = ""
     required: bool = False
     default: Any = None
     constraints: dict[str, Any] = field(default_factory=dict)

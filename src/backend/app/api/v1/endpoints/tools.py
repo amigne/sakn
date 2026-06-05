@@ -324,8 +324,7 @@ async def _check_tool_access(
     tool_name: str, request: Request, session
 ) -> None:
     """Raise HTTPException if tool is disabled or role not allowed."""
-    from fastapi import HTTPException
-
+    from app.api.errors import AppError
     from app.models import ToolModule
     from app.models.tool_module import RoleToolPermission
 
@@ -337,15 +336,11 @@ async def _check_tool_access(
     )
     tool_mod = row.scalar_one_or_none()
     if tool_mod is None or not tool_mod.enabled:
-        raise HTTPException(
+        raise AppError(
             status_code=403,
-            detail={
-                "error": {
-                    "code": "TOOL_DISABLED",
-                    "message_key": "errors.tool_disabled",
-                    "message": f"Tool '{tool_name}' is not available.",
-                }
-            },
+            code="TOOL_DISABLED",
+            message_key="errors.tool_disabled",
+            message=f"Tool '{tool_name}' is not available.",
         )
 
     # Check role permission — auto-create if missing (self-healing from seed failures)
@@ -376,15 +371,11 @@ async def _check_tool_access(
             if perm is None:
                 raise  # should not happen — constraint exists, must be a different error
     if not perm.allowed:
-        raise HTTPException(
+        raise AppError(
             status_code=403,
-            detail={
-                "error": {
-                    "code": "ROLE_NOT_ALLOWED",
-                    "message_key": "errors.role_not_allowed",
-                    "message": f"Your role does not have access to '{tool_name}'.",
-                }
-            },
+            code="ROLE_NOT_ALLOWED",
+            message_key="errors.role_not_allowed",
+            message=f"Your role does not have access to '{tool_name}'.",
         )
 
 
@@ -400,17 +391,13 @@ async def execute_tool(
     """Execute an instant tool."""
     tool = registry.get(tool_name)
     if tool is None:
-        from fastapi import HTTPException
+        from app.api.errors import AppError
 
-        raise HTTPException(
+        raise AppError(
             status_code=404,
-            detail={
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message_key": "errors.not_found",
-                    "message": f"Tool '{tool_name}' not found",
-                }
-            },
+            code="NOT_FOUND",
+            message_key="errors.not_found",
+            message=f"Tool '{tool_name}' not found",
         )
 
     # Frontend-only tools must never be executed server-side (ADR-017)
