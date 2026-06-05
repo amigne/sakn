@@ -33,7 +33,7 @@ Defines visual design, layout, navigation, interaction patterns, responsive beha
 
 ```
 +--------------+----------------------------------------------------+
-| [Logo/Brand] |                        [Lang] [Theme] [User menu]  |  <- Top bar
+| [Logo/Brand] |                 [IP] [Lang] [Theme] [User menu]  |  <- Top bar
 +--------------+----------------------------------------------------+
 | [Tool List]  | [Tool content area -- varies by tool and view]     |
 | - Ping       |                                                    |
@@ -277,6 +277,27 @@ Three modes: Light, Dark, System (`prefers-color-scheme`). Default: System. Them
 ### 7.3 Language Switcher
 
 Top bar, next to theme toggle. Displays two-letter code (EN/FR). Changes UI immediately. See `spec-frontend.md` §6 for implementation.
+
+### 7.4 Visitor IP
+
+Top bar, positioned **immediately to the left of the language switcher** (order: `[IP] [Lang] [Theme] [User]`).
+
+- **Content**: a small network/globe icon followed by the visitor's IP address (e.g., `🌐 203.0.113.7`). The address is the server-perceived client IP (see `functional-spec.md` §2.4 and `spec-api-contract.md` §3.9).
+- **Style**: muted text (same treatment as the language code), monospace for the address, single line, no wrapping.
+- **Interaction**: clicking the element copies the IP to the clipboard and shows brief feedback (label switches to a "copied" state for ~2 s, i18n `common.ip_copied`). A `title`/tooltip reads `common.your_ip` ("Your IP address" / "Votre adresse IP"). Keyboard-focusable, activatable with Enter/Space, with a visible focus ring.
+- **Accessibility**: the control has an accessible name from `common.your_ip`; the copied feedback is announced via `aria-live="polite"`.
+- **Loading**: fetched once on mount (`GET /api/v1/whoami`). While pending, nothing is shown (no layout shift placeholder beyond reserved inline space).
+- **Failure / unavailable**: if the request fails or returns no address, the element is **omitted** entirely (no error text).
+- **Responsive**: hidden below the `sm` breakpoint (< 640px) to preserve top-bar space, consistent with the brand text hiding below 350px. On hidden viewports the IP remains available via the account/session pages where applicable.
+- **Privacy**: this exposes only the visitor's own address to themselves — no new information disclosure. See `functional-spec.md` §2.4.
+
+#### 7.4.1 Top bar — desktop (authenticated)
+
+```
++--------------+----------------------------------------------------+
+| [Logo] SAKN  |        🌐 203.0.113.7  [EN]  [☾]  [ AB ▾ ]         |
++--------------+----------------------------------------------------+
+```
 
 ---
 

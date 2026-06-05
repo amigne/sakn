@@ -290,6 +290,28 @@ No auth required. Sets `sakn_csrf` cookie. Used by frontend after 403 CSRF misma
 }
 ```
 
+### 3.9 Who Am I (Client IP)
+
+```
+GET /auth/whoami
+```
+
+No auth required (available to anonymous and authenticated visitors alike). No CSRF (read-only `GET`). Returns the **server-perceived client IP** for the current request.
+
+The address is taken from the connection scope as set by `TrustedProxyMiddleware` (`request.client.host`), i.e. the trusted-proxy-derived client IP per `TRUSTED_PROXY_HOPS` (see `docs/adr/003-proxy-trust-policy.md`). The endpoint MUST NOT read or echo a raw `X-Forwarded-For`/`X-Real-IP` header directly — only the already-validated `request.client.host`.
+
+**Response** (200):
+```json
+{
+  "ip": "203.0.113.7"
+}
+```
+
+- `ip` is a string (IPv4 or IPv6, verbatim). If the client address cannot be determined, `ip` is `null` (the frontend then omits the top-bar element).
+- No rate-limit beyond the global default; the response is per-request and not cached client-side (fetched once per page load).
+
+Consumed by the top-bar visitor-IP element (`ui-spec.md` §7.4, `functional-spec.md` §2.4).
+
 ---
 
 ## 4. Preferences
@@ -916,4 +938,9 @@ common.filter
 common.next
 common.previous
 common.page_info
+common.your_ip
+common.ip_copied
 ```
+
+`common.your_ip` — tooltip/accessible name for the top-bar visitor IP element (e.g., "Your IP address" / "Votre adresse IP").
+`common.ip_copied` — transient feedback after the IP is copied to the clipboard (e.g., "Copied!" / "Copié !").

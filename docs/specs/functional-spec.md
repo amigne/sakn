@@ -47,6 +47,17 @@ Administrators inherit all capabilities of Authenticated Users. Authenticated Us
 
 Visitors can use any tool explicitly enabled for the `visitor` role via the access rights configuration. Default: **deny** if no configuration exists.
 
+### 2.4 Visitor IP Display
+
+The top bar displays the visitor's own public IP address — the address the server sees for the request — to the **left of the language switcher**. This serves SAKN's audience of network engineers, for whom "what is my IP as seen from here?" is a frequent first question.
+
+- Shown to **all** visitors (anonymous and authenticated alike) — no authentication required.
+- The address is the **server-perceived client IP**, derived through SAKN's trusted-proxy policy (see `docs/adr/003-proxy-trust-policy.md`). It is never taken from an untrusted, client-controlled header echoed back to the user.
+- Supports both IPv4 and IPv6 (the address is displayed verbatim as the server resolves it).
+- The address is informational and read-only. Clicking it copies it to the clipboard (convenience for engineers pasting it elsewhere).
+- If the address cannot be determined, the element is omitted rather than showing an error or a placeholder.
+- The element may be hidden on very narrow viewports to preserve top-bar space (see `ui-spec.md` §7.4).
+
 ---
 
 ## 3. Tools
