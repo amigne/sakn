@@ -794,7 +794,12 @@ class TestRegisterCommitsBeforeResponse:
 
 
 class TestWhoami:
-    """AC-MYIP-001 → 007, 016, 017: GET /auth/whoami — public, no-CSRF, client IP."""
+    """AC-MYIP-001, 002, 004, 007, 016, 017: GET /auth/whoami — public, no-CSRF, client IP.
+
+    Trusted-hops derivation itself (AC-MYIP-003) is covered at the middleware level in
+    tests/unit/test_proxy_trust.py; here we guard that the endpoint relies on
+    request.client.host and never reflects a raw client-controlled header (AC-MYIP-004/017).
+    """
 
     @pytest.mark.asyncio
     async def test_returns_200_with_client_ip(self, client: AsyncClient):
@@ -804,6 +809,23 @@ class TestWhoami:
         data = resp.json()
         assert "ip" in data
         assert isinstance(data["ip"], str)
+
+    @pytest.mark.asyncio
+    async def test_does_not_reflect_spoofed_forwarded_header(self, client: AsyncClient):
+        """AC-MYIP-004/017: with TRUSTED_PROXY_HOPS=0 (test default) a client-supplied
+        X-Forwarded-For is ignored — the spoofed value must never be reflected back.
+
+        This is the security-regression guard: it fails if the endpoint ever starts
+        reading a raw header instead of request.client.host (already validated by
+        TrustedProxyMiddleware).
+        """
+        spoofed = "203.0.113.255"
+        resp = await client.get(
+            "/api/v1/auth/whoami",
+            headers={"X-Forwarded-For": f"{spoofed}, 198.51.100.1"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["ip"] != spoofed
 
     @pytest.mark.asyncio
     async def test_no_auth_required(self, client: AsyncClient):
