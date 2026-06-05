@@ -74,10 +74,10 @@
 **When** the top bar renders
 **Then** the IP element is not rendered (no error text, no placeholder). The rest of the top bar is unaffected.
 
-### AC-MYIP-013 — Hidden below `sm` breakpoint
-**Given** a viewport width < 640px
+### AC-MYIP-013 — Visible at all viewport sizes
+**Given** a viewport width < 640px (issue #428)
 **When** the top bar renders
-**Then** the IP element is hidden; the language/theme/user controls remain.
+**Then** the IP element remains visible alongside the language/theme/user controls (no `hidden` breakpoint class).
 
 ### AC-MYIP-014 — Keyboard focus ring
 **Given** keyboard navigation
