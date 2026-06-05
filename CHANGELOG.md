@@ -11,6 +11,7 @@ Development cycle for `0.2.0` (backend: `0.2.0.dev0`, frontend: `0.2.0-dev`).
 
 ### Added
 
+- Top-bar visitor IP display with click-to-copy and `GET /auth/whoami` public endpoint (#426).
 - **MAC OUI Lookup tool**: resolve MAC/OUI prefixes to their registered IEEE organization. Tolerant frontend extraction of MAC/OUI patterns from arbitrary text, zero-trust backend validation, single-query longest-prefix lookup against a local IEEE database, ambiguity detection (24-bit prefixes extended by MA-M/MA-S), and per-OUI change history.
 - MAC OUI: daily IEEE OUI synchronization (MA-L / MA-M / MA-S over HTTPS) via APScheduler, persisted in `oui_sync_log`, with per-file consecutive-failure tracking.
 - MAC OUI admin: module **Status** view and **Settings** modal (frontend input cap, backend batch size, history page size, sync hour, sync-log retention) — Admin → Modules.

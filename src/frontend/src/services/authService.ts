@@ -50,6 +50,14 @@ export async function fetchCsrfToken(): Promise<{ message_key: string; message: 
   return api("/auth/csrf");
 }
 
+export async function whoami(): Promise<{ ip: string | null }> {
+  try {
+    return await api<{ ip: string | null }>("/auth/whoami");
+  } catch {
+    return { ip: null };
+  }
+}
+
 interface ProfileUpdate {
   first_name?: string | null;
   last_name?: string | null;

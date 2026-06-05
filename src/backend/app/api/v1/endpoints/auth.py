@@ -268,6 +268,16 @@ async def me(
     }
 
 
+@router.get("/whoami")
+async def whoami(request: Request):
+    """Return the server-perceived client IP for the current request.
+
+    Public (no auth), no CSRF (read-only GET). Uses request.client.host,
+    which is already corrected by TrustedProxyMiddleware per TRUSTED_PROXY_HOPS.
+    """
+    return {"ip": request.client.host if request.client else None}
+
+
 @router.get("/csrf")
 async def get_csrf(
     request: Request,

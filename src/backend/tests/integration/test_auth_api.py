@@ -793,6 +793,73 @@ class TestRegisterCommitsBeforeResponse:
         assert verification is not None, "Verification token must be committed after register returns."
 
 
+class TestWhoami:
+    """AC-MYIP-001 → 007, 016, 017: GET /auth/whoami — public, no-CSRF, client IP."""
+
+    @pytest.mark.asyncio
+    async def test_returns_200_with_client_ip(self, client: AsyncClient):
+        """AC-MYIP-001: endpoint returns the client IP as a string."""
+        resp = await client.get("/api/v1/auth/whoami")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ip" in data
+        assert isinstance(data["ip"], str)
+
+    @pytest.mark.asyncio
+    async def test_no_auth_required(self, client: AsyncClient):
+        """AC-MYIP-002: endpoint is public — no 401 for anonymous requests."""
+        resp = await client.get("/api/v1/auth/whoami")
+        assert resp.status_code == 200
+        assert "ip" in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_no_csrf_required(self, client: AsyncClient):
+        """AC-MYIP-007: read-only GET does not require CSRF."""
+        resp = await client.get("/api/v1/auth/whoami")
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_response_shape(self, client: AsyncClient):
+        """AC-MYIP-016: response contains only 'ip', no secrets or PII."""
+        resp = await client.get("/api/v1/auth/whoami")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"ip"}
+        # No session token, no user data, no server internals
+
+    @pytest.mark.asyncio
+    async def test_authenticated_also_works(self, client: AsyncClient, db_session: AsyncSession):
+        """AC-MYIP-002 (extended): authenticated user also gets their IP."""
+        # Register + activate + login
+        resp = await client.post("/api/v1/auth/register", json={
+            "email": "whoami-auth@example.com",
+            "password": STRONG_PW,
+            "password_confirm": STRONG_PW,
+            "first_name": "Test",
+            "last_name": "User",
+        })
+        assert resp.status_code == 201
+
+        result = await db_session.execute(select(User).where(User.email == "whoami-auth@example.com"))
+        user = result.scalar_one_or_none()
+        user.status = "active"
+        user.email_verified_at = utcnow()
+        await db_session.commit()
+
+        resp = await client.post("/api/v1/auth/login", json={
+            "email": "whoami-auth@example.com",
+            "password": STRONG_PW,
+        })
+        assert resp.status_code == 200
+
+        # whoami should work with the session cookie
+        resp = await client.get("/api/v1/auth/whoami")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ip" in data
+        assert isinstance(data["ip"], str)
+
+
 class TestRegisterDuplicateEmailRace:
     """Regression guard for PR #293: the IntegrityError path must be enum-safe and audited.
 
