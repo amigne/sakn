@@ -48,6 +48,9 @@ export default function SecretGeneratorPage() {
   const clipboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks whether this tool wrote the current clipboard contents, so reset()
+  // only clears the clipboard it actually populated (never unrelated content).
+  const wroteToClipboardRef = useRef(false);
 
   const clipboardAvailable = isClipboardAvailable();
 
@@ -106,8 +109,10 @@ export default function SecretGeneratorPage() {
           break;
       }
     } catch (err) {
+      // The only SecretGeneratorError code is "no_charset_selected", which
+      // validate() already guards for password mode; this is a defensive fallback.
       if (err instanceof SecretGeneratorError) {
-        setValidationError(t(`tools.secret_generator.${err.code}` as unknown as TemplateStringsArray));
+        setValidationError(t("tools.secret_generator.no_charset_selected"));
       } else {
         setValidationError(String(err));
       }
@@ -142,9 +147,10 @@ export default function SecretGeneratorPage() {
       clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = null;
     }
-    // Clear clipboard if we wrote to it
-    if (clipboardAvailable) {
+    // Clear clipboard only if THIS tool wrote to it (never unrelated content).
+    if (clipboardAvailable && wroteToClipboardRef.current) {
       navigator.clipboard.writeText("").catch(() => {});
+      wroteToClipboardRef.current = false;
     }
   }, [clipboardAvailable]);
 
@@ -155,6 +161,7 @@ export default function SecretGeneratorPage() {
     navigator.clipboard
       .writeText(result.secret)
       .then(() => {
+        wroteToClipboardRef.current = true;
         setCopied(true);
         setClipboardSeconds(CLIPBOARD_CLEAR_S);
 
@@ -166,6 +173,7 @@ export default function SecretGeneratorPage() {
         if (clipboardTimerRef.current !== null) clearTimeout(clipboardTimerRef.current);
         clipboardTimerRef.current = setTimeout(() => {
           navigator.clipboard.writeText("").catch(() => {});
+          wroteToClipboardRef.current = false;
           setClipboardSeconds(0);
         }, CLIPBOARD_CLEAR_S * 1000);
 
