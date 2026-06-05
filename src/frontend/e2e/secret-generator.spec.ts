@@ -187,7 +187,7 @@ test.describe("Secret Generator Page", () => {
     });
 
     // Click Copy
-    await page.getByRole("button", { name: /Copy/i }).click();
+    await page.getByRole("button", { name: "Copy results" }).click();
 
     // "Copied!" toast should appear
     await expect(page.getByText("Copied!")).toBeVisible();
