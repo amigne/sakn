@@ -91,7 +91,7 @@ Out of scope (trusted boundaries, handled by existing SAKN infrastructure):
 **Rationale**:
 - `Math.random()` is a PRNG seeded from a non-cryptographic source (typically xorshift128+ in V8). Its state can be recovered from a small number of outputs.
 - `crypto.getRandomValues()` is backed by the OS CSPRNG (`/dev/urandom` on Linux, `SecRandomCopyBytes` on macOS, `BCryptGenRandom` on Windows).
-- The Web Crypto API is available in all modern browsers and secure contexts (HTTPS/localhost). SAKN is deployed over HTTPS.
+- `crypto.getRandomValues()` is available in all modern browsers **including insecure (HTTP) contexts** — unlike `crypto.subtle` and the Clipboard API, which require a secure context. Generation therefore never depends on HTTPS; HTTPS is enforced separately at the deployment layer (see §3.4).
 
 ### 2.3 Clipboard Auto-Clear (30 Seconds)
 
@@ -101,7 +101,7 @@ Out of scope (trusted boundaries, handled by existing SAKN infrastructure):
 - Users often forget they've copied a secret. An SSH private key or database password lingering in the clipboard for hours is a significant risk.
 - 30 seconds is enough time to paste the secret into the target application.
 - The timer resets on each new Copy — the user isn't racing a countdown, they get a fresh 30 s each time.
-- The clear is best-effort: it only clears if the clipboard still contains the original secret (avoiding overwriting unrelated content).
+- The clear is **best-effort** on two counts: (1) it only clears if the clipboard still contains the original secret (avoiding overwriting unrelated content), and (2) the deferred clipboard access runs without transient activation, which Firefox/Safari block and Chrome may gate — where blocked, the clear silently no-ops. The auto-clear is a defense-in-depth convenience, **not** a guarantee; users should still treat copied secrets as exposed until pasted. See AC-SECRET-037.
 
 ### 2.4 No Secret Logging
 
@@ -162,9 +162,9 @@ Out of scope (trusted boundaries, handled by existing SAKN infrastructure):
 **Scenario**: An operator deploys SAKN over plain HTTP. Generated secrets are not transmitted to the backend, but the page itself is served insecurely, allowing MITM injection of malicious JavaScript that steals secrets.
 
 **Mitigation**:
-- SAKN's deployment documentation (`docker-compose.yml`) configures Caddy with automatic HTTPS.
-- The Web Crypto API requires a secure context (HTTPS or localhost). Over plain HTTP, `crypto.getRandomValues` is unavailable, and the tool fails safe (doesn't generate secrets).
-- **Acceptance**: The CSPRNG requirement enforces HTTPS at the browser level.
+- SAKN's deployment documentation (`docker-compose.yml`) configures Caddy with automatic HTTPS, and SAKN sets HSTS so browsers refuse plain-HTTP downgrades after the first secure visit.
+- ⚠️ **Correction**: `crypto.getRandomValues()` is **available in insecure contexts** (plain HTTP). Only `crypto.subtle` (SubtleCrypto) and the Clipboard API require a secure context. The Secret Generator uses only `getRandomValues()`, so it **will** generate secrets over HTTP — the CSPRNG requirement does **not** enforce HTTPS. The only client-side degradation over HTTP is that the Clipboard API (Copy / auto-clear) becomes unavailable (the UI falls back to manual selection, see UI spec §5.5.6).
+- **Acceptance**: This threat is mitigated at the **deployment** layer (Caddy auto-HTTPS + HSTS), not by the browser crypto API. Operators MUST serve SAKN over HTTPS; a plain-HTTP deployment is a misconfiguration that exposes the page (and all of SAKN) to MITM, independent of this tool.
 
 ### 3.5 Threat: Secret exfiltrated via backend logs (non-existent)
 

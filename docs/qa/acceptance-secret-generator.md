@@ -150,11 +150,11 @@
 **When** the token is generated
 **Then** the entropy line displays `"43 caractères (258 bits)"` (43 × 6 = 258)
 
-### AC-SECRET-023 — Actual length displayed when alignment mismatch
+### AC-SECRET-023 — Output trimmed to exactly the requested length
 
 **Given** Token mode, length = 43
-**When** the token is generated (33 random bytes = 264 bits → 44 base64url chars → trimmed to 43)
-**Then** if the actual output length differs from the request, the actual length is displayed
+**When** the token is generated (33 random bytes → 44 base64url chars → trimmed to 43)
+**Then** the output is exactly 43 characters and the displayed length equals the requested length. `ceil(length * 6 / 8)` bytes always yield ≥ `length` base64url chars, so the output is never shorter than requested (entropy = `length × 6`).
 
 ### AC-SECRET-024 — Length bounds enforced (16–256)
 
@@ -250,11 +250,12 @@
 **When** the user clicks "Copy"
 **Then** `navigator.clipboard.writeText()` is called with the secret. The button shows "Copied!" (i18n `tools.secret_generator.copied`) for 2 seconds, then reverts to "Copy."
 
-### AC-SECRET-037 — Auto-clear after 30 seconds
+### AC-SECRET-037 — Auto-clear after 30 seconds (best-effort)
 
 **Given** the user clicks "Copy" and does NOT paste within 30 seconds
 **When** 30 seconds elapse
-**Then** the clipboard is cleared (set to empty string). The auto-clear timer is visible as a countdown (30 → 0).
+**Then** the application *attempts* to clear the clipboard (set to empty string) and the auto-clear countdown (30 → 0) is shown.
+**Note**: clearing is **best-effort**. Writing/reading the clipboard 30 s after the Copy click happens without a user gesture (transient activation), which Firefox and Safari block and Chrome may gate behind a permission. Where the browser blocks it, the clear silently no-ops (no error surfaced). The countdown UI and the auto-clear notice (§5.5.4) inform the user regardless. PASS = the clear is attempted and succeeds in a Chromium secure context with clipboard permission; degradation on other browsers is expected, not a FAIL.
 
 ### AC-SECRET-038 — Auto-clear preserves unrelated content
 

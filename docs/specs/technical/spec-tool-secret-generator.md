@@ -268,33 +268,22 @@ Total: 32 characters.
 
 ### 3.3 Token Mode — Base64url (RFC 4648 §5)
 
+Base64url alphabet: `A-Z a-z 0-9 - _` (64 characters, each encodes 6 bits).
+
 Algorithm:
 ```
 byte_count = ceil(length * 6 / 8)
 bytes = getRandomBytes(byte_count)
-encoded = base64url_encode(bytes)  // no padding (= stripped)
-actual_length = encoded.length  // may be ≤ length (never more than 1 char shorter)
+encoded = base64url_encode(bytes)   // no padding (= stripped)
+secret = encoded.slice(0, length)   // trim to exactly `length` chars
+entropy_bits = length * 6
 ```
 
-Base64url alphabet: `A-Z a-z 0-9 - _` (64 characters, each encodes 6 bits).
+`ceil(length * 6 / 8)` bytes always encode to **at least** `length` base64url characters (`ceil(4·byte_count/3) ≥ length`), so the trim yields **exactly** `length` characters. Output length therefore always equals the requested length — never shorter. Each character independently encodes 6 bits, so the trimmed token has `length * 6` bits of entropy.
 
-`ceil(length * 6 / 8)` ensures enough bytes are generated. The encoded string may be 0–1 characters shorter than requested if the byte count doesn't align exactly. The frontend displays the **actual** length and bit count.
+**Entropy calculation**: `entropy_bits = length * 6`
 
-**Entropy calculation**: `entropy_bits = actual_length * 6`
-
-**Default 43 chars → 258 bits**: `ceil(43 * 6 / 8) = ceil(32.25) = 33 bytes → base64url = 44 chars`. 44 × 6 = 264 bits. If the output is 44 chars, the frontend displays "44 caractères (264 bits)."
-
-To get exactly 43 chars (258 bits) as the spec default: generate `ceil(43 * 6 / 8) = 33 bytes`, encode to base64url, trim to 43 chars. The trimmed secret still has `43 * 6 = 258` bits of entropy because each character independently encodes 6 bits.
-
-**Revised algorithm**:
-```
-byte_count = ceil(length * 6 / 8)
-bytes = getRandomBytes(byte_count)
-encoded = base64url_encode(bytes)
-secret = encoded.slice(0, length)
-actual_length = secret.length
-entropy_bits = actual_length * 6
-```
+**Default 43 chars → 258 bits**: `ceil(43 * 6 / 8) = 33 bytes → base64url = 44 chars → trimmed to 43 chars`. Entropy = `43 × 6 = 258` bits. The frontend displays "43 caractères (258 bits)."
 
 ### 3.4 Hex Mode — Lowercase Hexadecimal
 
