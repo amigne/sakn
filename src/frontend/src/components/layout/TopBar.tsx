@@ -152,7 +152,7 @@ export default function TopBar({ onToggleSidebar, showHamburger = false }: TopBa
                 handleCopyIp();
               }
             }}
-            className="hidden sm:flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title={t("common.your_ip")}
             aria-label={t("common.your_ip")}
             data-testid="ip-display"
