@@ -477,12 +477,12 @@
 
 | Status | Count |
 |---|---|
-| ✅ PASS | 55 |
-| ❌ FAIL | 4 |
+| ✅ PASS | 56 |
+| ❌ FAIL | 3 |
 | ⚠️ QUALIFIED PASS | 3 |
 | N/A | 1 |
 
-**Overall: 59 PASS / 4 FAIL / 0 blockers**
+**Overall: 60 PASS / 3 FAIL / 0 blockers** (AC-SECRET-018 resolved by spec alignment, #435)
 
 ### 17.2 Detailed Results
 
