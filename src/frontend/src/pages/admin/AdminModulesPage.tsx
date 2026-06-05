@@ -320,9 +320,9 @@ export default function AdminModulesPage() {
                   <th
                     key={role}
                     scope="col"
-                    className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase capitalize"
+                    className="px-3 py-2 text-center text-xs font-semibold text-[var(--color-text-secondary)] uppercase"
                   >
-                    {role}
+                    {t(`roles.${role}`)}
                   </th>
                 ))}
                 <th

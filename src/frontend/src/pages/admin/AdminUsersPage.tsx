@@ -153,7 +153,7 @@ export default function AdminUsersPage() {
                       <td className="px-3 py-2">
                         <Badge variant={statusVariant(user.status)}>{user.status}</Badge>
                       </td>
-                      <td className="px-3 py-2 text-[var(--color-text)] capitalize">{user.role}</td>
+                      <td className="px-3 py-2 text-[var(--color-text)]">{t(`roles.${user.role}`)}</td>
                       <td className="px-3 py-2 text-[var(--color-text-secondary)]">
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
