@@ -113,23 +113,10 @@ class SecretGeneratorTool(BaseTool):
             version="1.0.0",
             backend=False,
             parameters=[
-                # Mode selector
-                ToolParameter(
-                    name="mode",
-                    type="enum",
-                    label_key="tools.secret_generator.mode_label",
-                    description_key="tools.secret_generator.mode_desc",
-                    required=True,
-                    default="password",
-                    constraints={
-                        "options": ["password", "token", "hex"],
-                        "option_labels": {
-                            "password": "tools.secret_generator.mode_password",
-                            "token": "tools.secret_generator.mode_token",
-                            "hex": "tools.secret_generator.mode_hex",
-                        },
-                    },
-                ),
+                # NOTE: there is no `mode` parameter — mode (Password / Token /
+                # Hex) is a pure UI concept rendered as tabs (decision in PR #434).
+                # The definition exposes all parameters flat; the frontend shows
+                # the relevant ones per active tab.
                 # Password mode
                 ToolParameter(
                     name="length",
@@ -391,8 +378,6 @@ Per `spec-api-contract.md` §10.3. All keys must exist in both `fr.json` and `en
 ```
 tools.secret_generator.name
 tools.secret_generator.description
-tools.secret_generator.mode_label
-tools.secret_generator.mode_desc
 tools.secret_generator.mode_password
 tools.secret_generator.mode_token
 tools.secret_generator.mode_hex
