@@ -102,7 +102,12 @@ class TestSecretGeneratorTool:
         assert "parameters" in api_def
 
     async def test_execute_raises_not_implemented_error(self):
-        """execute() must raise NotImplementedError — it is never called server-side."""
+        """execute() is not overridden (ADR-017 §3.3) and raises NotImplementedError.
+
+        The base BaseTool.execute() raises it as a safety net; it is never
+        called server-side because the endpoint's backend=False guard returns
+        405 first.
+        """
         tool = SecretGeneratorTool()
         from app.tools.base import ExecutionContext
 
@@ -113,7 +118,7 @@ class TestSecretGeneratorTool:
             role="visitor",
             request_id="r",
         )
-        with pytest.raises(NotImplementedError, match="never be executed server-side"):
+        with pytest.raises(NotImplementedError):
             await tool.execute({}, ctx)
 
     def test_has_settings_false(self):

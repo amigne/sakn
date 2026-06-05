@@ -15,7 +15,7 @@
   },
   "errors": {
     "mac_oui_too_many_inputs": "Too many inputs. Maximum is {max}.",
-    "tool_frontend_only": "This tool runs exclusively in the browser."
+    "tool_is_frontend_only": "This tool runs entirely in the browser and has no backend execution endpoint."
   },
   "tools": {
     "mac_oui": {

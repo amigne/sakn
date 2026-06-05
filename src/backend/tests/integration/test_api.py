@@ -420,8 +420,8 @@ class TestFrontendOnlyTool:
         )
         assert resp.status_code == 405
         data = resp.json()
-        assert data["error"]["code"] == "METHOD_NOT_ALLOWED"
-        assert data["error"]["message_key"] == "errors.tool_frontend_only"
+        assert data["error"]["code"] == "TOOL_IS_FRONTEND_ONLY"
+        assert data["error"]["message_key"] == "errors.tool_is_frontend_only"
         assert "browser" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio

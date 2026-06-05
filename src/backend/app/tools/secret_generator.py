@@ -1,12 +1,8 @@
-from typing import Any
-
 from app.tools.base import (
     BaseTool,
-    ExecutionContext,
     ToolCategory,
     ToolDefinition,
     ToolParameter,
-    ToolResult,
 )
 
 
@@ -85,15 +81,6 @@ class SecretGeneratorTool(BaseTool):
             ],
         )
 
-    async def execute(
-        self, params: dict[str, Any], context: ExecutionContext
-    ) -> ToolResult:
-        """Never executed server-side — the endpoint enforces backend=False.
-
-        Raises NotImplementedError as a safety net.  The execute_tool endpoint
-        checks ``tool.get_definition().backend`` and returns 405 before ever
-        calling this method.
-        """
-        raise NotImplementedError(
-            "SecretGeneratorTool must never be executed server-side."
-        )
+    # execute() is intentionally NOT overridden (ADR-017 §3.3): the base
+    # BaseTool.execute() already raises NotImplementedError, and the execute
+    # endpoint's backend=False guard returns 405 before it is ever reached.

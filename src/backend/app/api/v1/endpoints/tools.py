@@ -419,9 +419,9 @@ async def execute_tool(
 
         raise AppError(
             status_code=405,
-            code="METHOD_NOT_ALLOWED",
-            message_key="errors.tool_frontend_only",
-            message="This tool runs exclusively in the browser.",
+            code="TOOL_IS_FRONTEND_ONLY",
+            message_key="errors.tool_is_frontend_only",
+            message="This tool runs entirely in the browser and has no backend execution endpoint.",
         )
 
     await _check_tool_access(tool_name, request, session)
