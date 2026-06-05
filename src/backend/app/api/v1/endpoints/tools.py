@@ -34,6 +34,7 @@ def get_registry(request: Request) -> ToolRegistry:
         from app.tools.dns_lookup import DnsLookupTool
         from app.tools.mac_oui_lookup import MacOuiLookupTool
         from app.tools.ping import PingTool
+        from app.tools.secret_generator import SecretGeneratorTool
         from app.tools.ssl_viewer import SslViewerTool
         from app.tools.traceroute import TracerouteTool
 
@@ -43,6 +44,7 @@ def get_registry(request: Request) -> ToolRegistry:
         registry.register(DnsLookupTool())
         registry.register(SslViewerTool())
         registry.register(MacOuiLookupTool())
+        registry.register(SecretGeneratorTool())
         request.app.state.tool_registry = registry
     return request.app.state.tool_registry
 
@@ -409,6 +411,17 @@ async def execute_tool(
                     "message": f"Tool '{tool_name}' not found",
                 }
             },
+        )
+
+    # Frontend-only tools must never be executed server-side (ADR-017)
+    if tool.get_definition().backend is False:
+        from app.api.errors import AppError
+
+        raise AppError(
+            status_code=405,
+            code="METHOD_NOT_ALLOWED",
+            message_key="errors.tool_frontend_only",
+            message="This tool runs exclusively in the browser.",
         )
 
     await _check_tool_access(tool_name, request, session)

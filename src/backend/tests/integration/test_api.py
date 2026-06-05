@@ -353,3 +353,185 @@ class TestPublicDnsServers:
         assert resp.status_code == 200
         data = resp.json()
         assert data == {"tool": "dns_no_perm", "servers": []}
+
+
+# ── Frontend-Only Tools (ADR-017) ──────────────────────────────────────────
+
+
+class TestFrontendOnlyTool:
+    """Integration tests for frontend-only tools (backend=False)."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_rate_limiter(self):
+        """Clear in-memory rate limit counters between tests."""
+        from app.redis.rate_limit_store import get_rate_limiter
+
+        get_rate_limiter().clear_for_tests()
+
+    @pytest.mark.asyncio
+    async def test_secret_generator_listed_with_backend_false(self, client):
+        """GET /tools includes secret_generator with backend=false."""
+        from app.database import async_session_factory
+        from tests.factories import create_role_permission, create_tool_module
+
+        async with async_session_factory() as db:
+            tool = await create_tool_module(
+                db, name="secret_generator", enabled=True
+            )
+            await create_role_permission(
+                db, role=ROLE_VISITOR, tool_id=tool.id, allowed=True
+            )
+            await db.commit()
+
+        try:
+            resp = await client.get("/api/v1/tools")
+            assert resp.status_code == 200
+            data = resp.json()
+            sg = [t for t in data["tools"] if t["name"] == "secret_generator"]
+            assert len(sg) == 1
+            assert sg[0]["backend"] is False
+            assert sg[0]["category"] == "security"
+        finally:
+            async with async_session_factory() as db:
+                from sqlalchemy import delete
+
+                from app.models.tool_module import RoleToolPermission, ToolModule
+
+                await db.execute(
+                    delete(RoleToolPermission).where(
+                        RoleToolPermission.tool_id == tool.id
+                    )
+                )
+                await db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool.id)
+                )
+                await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_execute_secret_generator_returns_405(self, client):
+        """POST /tools/secret_generator/execute returns 405 Method Not Allowed.
+
+        The 405 guard fires before _check_tool_access, so no DB rows are needed —
+        the tool just needs to be in the registry (which it is via get_registry).
+        """
+        resp = await client.post(
+            "/api/v1/tools/secret_generator/execute",
+            json={"length": 64},
+        )
+        assert resp.status_code == 405
+        data = resp.json()
+        assert data["error"]["code"] == "METHOD_NOT_ALLOWED"
+        assert data["error"]["message_key"] == "errors.tool_frontend_only"
+        assert "browser" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_secret_generator_disabled_absent_from_listing(self, client):
+        """When enabled=false, secret_generator is absent from GET /tools."""
+        from app.database import async_session_factory
+        from tests.factories import create_role_permission, create_tool_module
+
+        async with async_session_factory() as db:
+            tool = await create_tool_module(
+                db, name="secret_generator", enabled=False
+            )
+            await create_role_permission(
+                db, role=ROLE_VISITOR, tool_id=tool.id, allowed=True
+            )
+            await db.commit()
+
+        try:
+            resp = await client.get("/api/v1/tools")
+            assert resp.status_code == 200
+            data = resp.json()
+            sg = [t for t in data["tools"] if t["name"] == "secret_generator"]
+            assert len(sg) == 0
+        finally:
+            async with async_session_factory() as db:
+                from sqlalchemy import delete
+
+                from app.models.tool_module import RoleToolPermission, ToolModule
+
+                await db.execute(
+                    delete(RoleToolPermission).where(
+                        RoleToolPermission.tool_id == tool.id
+                    )
+                )
+                await db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool.id)
+                )
+                await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_secret_generator_no_permission_absent_from_listing(
+        self, client
+    ):
+        """When role has allowed=False, tool is absent from GET /tools."""
+        from app.database import async_session_factory
+        from tests.factories import create_role_permission, create_tool_module
+
+        async with async_session_factory() as db:
+            tool = await create_tool_module(
+                db, name="secret_generator", enabled=True
+            )
+            await create_role_permission(
+                db, role=ROLE_VISITOR, tool_id=tool.id, allowed=False
+            )
+            await db.commit()
+
+        try:
+            resp = await client.get("/api/v1/tools")
+            assert resp.status_code == 200
+            data = resp.json()
+            sg = [t for t in data["tools"] if t["name"] == "secret_generator"]
+            assert len(sg) == 0
+        finally:
+            async with async_session_factory() as db:
+                from sqlalchemy import delete
+
+                from app.models.tool_module import RoleToolPermission, ToolModule
+
+                await db.execute(
+                    delete(RoleToolPermission).where(
+                        RoleToolPermission.tool_id == tool.id
+                    )
+                )
+                await db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool.id)
+                )
+                await db.commit()
+
+    @pytest.mark.asyncio
+    async def test_existing_tools_backend_true(self, client):
+        """Existing tools (ping) expose backend=true (regression check)."""
+        from app.database import async_session_factory
+        from tests.factories import create_role_permission, create_tool_module
+
+        async with async_session_factory() as db:
+            tool = await create_tool_module(db, name="ping", enabled=True)
+            await create_role_permission(
+                db, role=ROLE_VISITOR, tool_id=tool.id, allowed=True
+            )
+            await db.commit()
+
+        try:
+            resp = await client.get("/api/v1/tools")
+            assert resp.status_code == 200
+            data = resp.json()
+            ping_tools = [t for t in data["tools"] if t["name"] == "ping"]
+            assert len(ping_tools) == 1
+            assert ping_tools[0]["backend"] is True
+        finally:
+            async with async_session_factory() as db:
+                from sqlalchemy import delete
+
+                from app.models.tool_module import RoleToolPermission, ToolModule
+
+                await db.execute(
+                    delete(RoleToolPermission).where(
+                        RoleToolPermission.tool_id == tool.id
+                    )
+                )
+                await db.execute(
+                    delete(ToolModule).where(ToolModule.id == tool.id)
+                )
+                await db.commit()

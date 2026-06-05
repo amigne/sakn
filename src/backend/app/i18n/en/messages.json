@@ -14,7 +14,8 @@
     "admin_exists": "Administrator {email} already exists."
   },
   "errors": {
-    "mac_oui_too_many_inputs": "Too many inputs. Maximum is {max}."
+    "mac_oui_too_many_inputs": "Too many inputs. Maximum is {max}.",
+    "tool_frontend_only": "This tool runs exclusively in the browser."
   },
   "tools": {
     "mac_oui": {
