@@ -305,4 +305,75 @@ describe("SecretGeneratorPage", () => {
     // writeText was never called (we didn't copy, so no write)
     expect(mockWriteText).not.toHaveBeenCalled();
   });
+
+  // ── 30s auto-clear timer guard (#437) ───────────────────────────────
+  // Copies the secret, then advances the 30s timer and asserts the guard
+  // reads the clipboard and only clears when it still holds OUR secret.
+
+  async function copyAndGetSecret(): Promise<string> {
+    fireEvent.click(screen.getByText("Regenerate"));
+    const ta = screen.getAllByRole("textbox").find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
+    const secret = ta.value;
+    await act(async () => {
+      fireEvent.click(screen.getByText("Copy"));
+    });
+    // Flush writeText().then() so the 30s timer gets scheduled.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return secret;
+  }
+
+  it("auto-clear clears the clipboard when it still holds the generated secret", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<SecretGeneratorPage />);
+      const secret = await copyAndGetSecret();
+      mockReadText.mockResolvedValue(secret); // clipboard still owns our secret
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      // writeText("") was issued by the timer to wipe the secret.
+      expect(mockWriteText).toHaveBeenCalledWith("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("auto-clear leaves the clipboard untouched when content changed", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<SecretGeneratorPage />);
+      await copyAndGetSecret();
+      mockReadText.mockResolvedValue("unrelated-content-the-user-copied");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      // Only the initial copy write happened — never a blind clear.
+      expect(mockWriteText).not.toHaveBeenCalledWith("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("auto-clear does not clear when the clipboard cannot be read", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<SecretGeneratorPage />);
+      await copyAndGetSecret();
+      mockReadText.mockRejectedValue(new Error("read permission denied"));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(mockWriteText).not.toHaveBeenCalledWith("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
