@@ -528,8 +528,6 @@
   "tools.mac_oui.clipboard_unavailable": "Clipboard not available.",
   "tools.secret_generator.name": "Secret Generator",
   "tools.secret_generator.description": "Generate strong passwords, tokens, and hex secrets locally in your browser.",
-  "tools.secret_generator.mode_label": "Mode",
-  "tools.secret_generator.mode_desc": "Select the type of secret to generate.",
   "tools.secret_generator.mode_password": "Password",
   "tools.secret_generator.mode_token": "Token",
   "tools.secret_generator.mode_hex": "Hex",

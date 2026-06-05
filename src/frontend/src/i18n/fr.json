@@ -528,8 +528,6 @@
   "tools.mac_oui.clipboard_unavailable": "Presse-papiers non disponible.",
   "tools.secret_generator.name": "Générateur de secrets",
   "tools.secret_generator.description": "Générez des mots de passe, jetons et secrets hexadécimaux localement dans votre navigateur.",
-  "tools.secret_generator.mode_label": "Mode",
-  "tools.secret_generator.mode_desc": "Sélectionnez le type de secret à générer.",
   "tools.secret_generator.mode_password": "Mot de passe",
   "tools.secret_generator.mode_token": "Jeton",
   "tools.secret_generator.mode_hex": "Hex",
