@@ -1,8 +1,8 @@
 # UI/UX Specification — SAKN
 
 > **Version:** 3.0 — Added MAC OUI, WHOIS, Secret Generator screens
-> **Status:** Draft
-> **Date:** 2026-05-21
+> **Status:** Active — Secret Generator screen (SCR-28) implemented (PR #434)
+> **Date:** 2026-06-05
 
 Defines visual design, layout, navigation, interaction patterns, responsive behavior, and accessibility. For the API contract between frontend and backend, see `docs/specs/technical/spec-api-contract.md`. For tool execution protocols, see `spec-tools-live.md` and `spec-tools-instant.md`.
 

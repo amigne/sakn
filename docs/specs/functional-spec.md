@@ -1,8 +1,8 @@
 # Functional Specification — SAKN (Swiss Army Knife for Network Engineers)
 
 > **Version:** 3.0 — New modules (MAC OUI, WHOIS, Secret Generator)
-> **Status:** Draft
-> **Date:** 2026-05-21
+> **Status:** Active — Secret Generator implemented (PR #434)
+> **Date:** 2026-06-05
 
 Defines **what** the application does: user roles, tool capabilities, business rules, and constraints. For **how** it is built, see `docs/specs/technical/`. For **how** it looks, see `docs/specs/ui-spec.md`.
 

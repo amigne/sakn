@@ -1,8 +1,8 @@
 # Technical Specifications — SAKN MVP
 
 > **Version:** 3.0
-> **Status:** Draft
-> **Date:** 2026-05-14
+> **Status:** Active — Secret Generator implemented (PR #434)
+> **Date:** 2026-06-05
 
 This directory contains the technical specifications split by concern. Load only the documents relevant to your task.
 

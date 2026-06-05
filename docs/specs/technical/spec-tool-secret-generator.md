@@ -1,7 +1,7 @@
 # Secret Generator Tool Specification
 
 > **Version:** 1.0
-> **Status:** Draft — Sprint 0 documentation
+> **Status:** Final — Implemented (PR #434)
 > **Date:** 2026-06-05
 > **Module:** Secret Generator (`secret_generator`)
 > **References:** `functional-spec.md` §3.7, `spec-api-contract.md` §6/§10.3, `ui-spec.md` SCR-28, ADR-017
