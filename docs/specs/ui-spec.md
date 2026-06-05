@@ -597,7 +597,7 @@ Admin screens follow this pattern: admin tabs (below top bar) + content area.
 |              | │ aB3$kL9mN2xP5qR7sT1uV8wY4zA6cD0eF             │ |
 |              | └────────────────────────────────────────────────┘ |
 |              |                                                    |
-|              | 🟢 Very strong — 43 caractères (258 bits)          |
+|              | 🟡 Strong — 20 caractères (~129 bits)                |
 |              |                                                    |
 |              |                    [📋 Copy]  [🔄 Regenerate]      |
 |              | Le secret sera effacé du presse-papier dans 30 s   |

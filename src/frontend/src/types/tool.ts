@@ -166,6 +166,6 @@ export interface SecretGeneratorResult {
   strength: Strength;
 }
 
-export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer" | "mac_oui";
+export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer" | "mac_oui" | "secret_generator";
 
 export type ExecutionStatus = "idle" | "running" | "completed" | "stopped" | "error";
