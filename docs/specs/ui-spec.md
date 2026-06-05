@@ -132,6 +132,8 @@ Each tool screen: **Parameters Panel** (top) + **Output Panel** (bottom). Both v
 
 **Continuous tools** (Ping, Traceroute): Start button → transforms to red "Stop" button → WebSocket streaming → results appear incrementally → Stop button or completion reverts to Start. Navigation away = implicit stop. Partial results retained with "Execution stopped by user" note.
 
+**Client-side tools** (Secret Generator): No Start button, no server request. Parameters are interactive controls (sliders, toggles, checkboxes) that trigger immediate regeneration on change. The result is displayed instantly in a read-only field with Copy and Regenerate buttons. Regenerate generates a new secret with current parameters.
+
 ### 4.3 Disabled States
 
 - Tool disabled (globally or per role): sidebar entry not rendered. Direct URL shows "Tool not available."
@@ -221,6 +223,129 @@ Grouped cards, one per record type: A, AAAA, CNAME, MX, NS, TXT, SRV, SOA, PTR, 
 ### 5.4 TLS/SSL Certificate Viewer Output
 
 Structured cards. Copy button. Each certificate in the chain: collapsible section with subject, issuer, validity, SANs, key algorithm/size, fingerprints, extended key usage. Errors in RED: expired, name mismatch, self-signed, untrusted root, weak key (< 2048 bits RSA). Full chain valid → green "Chain valid" badge.
+
+### 5.5 Secret Generator
+
+#### 5.5.1 Layout
+
+Three-column layout on desktop: **Mode Tabs** (left) + **Parameters** (center) + **Result** (right). On tablet/mobile, single-column stacked: Mode Tabs → Parameters → Result.
+
+The tool does **not** have a "Start" button — generation is instant on parameter change. See §4.2 "Client-side tools."
+
+#### 5.5.2 Mode Tabs
+
+Three mutually exclusive tabs (radio-group pattern with tab appearance):
+
+| Tab | Icon | Label key |
+|---|---|---|
+| Password | `🔑` | `tools.secret_generator.mode_password` |
+| Token | `🎫` | `tools.secret_generator.mode_token` |
+| Hex | `🔢` | `tools.secret_generator.mode_hex` |
+
+Active tab is highlighted with the primary action color. Switching modes immediately regenerates a secret with the new mode's default parameters.
+
+#### 5.5.3 Parameters by Mode
+
+**Password mode parameters:**
+
+| Control | Parameter | Default | Range |
+|---|---|---|---|
+| Slider + number input | Length | 20 | 8–128 |
+| Toggle | Uppercase (A-Z) | On | — |
+| Toggle | Lowercase (a-z) | On | — |
+| Toggle | Digits (0-9) | On | — |
+| Toggle | Symbols (!@#...) | On | — |
+
+At least one character set toggle must be enabled. Disabling the last remaining set is prevented (toggle snaps back). When only one set is enabled, the toggle appears disabled with a tooltip: "At least one character set must be selected."
+
+**Token mode parameters:**
+
+| Control | Parameter | Default | Range |
+|---|---|---|---|
+| Slider + number input | Length (chars) | 43 | 16–256 |
+
+Below the slider: informational text `"Chaque caractère encode 6 bits (base64url)."` (i18n: `tools.secret_generator.param_length_token_desc`).
+
+**Hex mode parameters:**
+
+| Control | Parameter | Default | Range |
+|---|---|---|---|
+| Slider + number input | Length (chars) | 64 | 16–512 |
+
+Below the slider: informational text `"Chaque caractère encode 4 bits (hexadécimal)."` (i18n: `tools.secret_generator.param_length_hex_desc`).
+
+#### 5.5.4 Result Area
+
+**Secret display**: read-only `<textarea>` or `<div contenteditable="false">` with monospace font (system-ui monospace stack), `overflow-x: auto`, `white-space: pre`, `user-select: all`. Font size: 1.1rem. Background: `var(--color-card-bg)`, border: 1px solid `var(--color-border)`, padding: 12px, border-radius: 4px. Minimum height: 3em.
+
+**Entropy and strength line** (below the secret):
+
+```
+🔒 Very strong — 43 caractères (258 bits)
+```
+
+Components:
+- Strength badge: icon + label + color. See §5.5.5 for thresholds.
+- Length: `"N caractères"` (i18n plural-aware)
+- Entropy: `"(X bits)"` (i18n: `tools.secret_generator.entropy`)
+
+**Action buttons** (right-aligned, below the secret):
+
+| Button | Icon | Label key | Behavior |
+|---|---|---|---|
+| Copy | 📋 | `tools.secret_generator.copy` | Copies secret to clipboard. Shows temporary "Copied!" toast (i18n: `tools.secret_generator.copied`), then reverts after 2 s. Hidden when Clipboard API unavailable. |
+| Regenerate | 🔄 | `tools.secret_generator.regenerate` | Generates a new secret with current parameters. Visually flashes the secret field (brief background pulse). |
+
+**Auto-clear notice**: small text below the buttons: `"Le secret sera effacé du presse-papier dans 30 secondes."` (i18n: `tools.secret_generator.auto_clear_notice`). Accompanied by a countdown timer (30 → 0) that resets on each Copy click.
+
+#### 5.5.5 Strength Indicator
+
+Entropy thresholds (bits of entropy):
+
+| Range | Label | Color | CSS variable |
+|---|---|---|---|
+| < 64 bits | Weak | Red | `var(--color-error)` |
+| 64–127 bits | Fair | Orange | `var(--color-warning)` |
+| 128–255 bits | Strong | Blue | `var(--color-info)` |
+| ≥ 256 bits | Very Strong | Green | `var(--color-success)` |
+
+Each level has an associated icon: Weak (⚠️), Fair (🔶), Strong (🔵), Very Strong (🟢).
+
+Strength is updated on every regeneration. The label, icon, and color are announced to screen readers via `aria-live="polite"`.
+
+#### 5.5.6 Degraded States
+
+**Clipboard API unavailable** (old browser, HTTP origin, missing permission):
+- "Copy" button is hidden.
+- A hint is displayed: `"La copie automatique n'est pas disponible. Sélectionnez le secret et copiez-le manuellement (Ctrl+C)."` (i18n: `tools.secret_generator.clipboard_unavailable`).
+- The secret field remains selectable (`user-select: all`).
+
+**JavaScript disabled**:
+- The tool is unusable. A server-rendered `<noscript>` message is displayed: `"Cet outil nécessite JavaScript pour fonctionner."` (i18n: `tools.secret_generator.js_disabled`).
+- The sidebar still shows the tool entry (if enabled), but the page body is the noscript message.
+
+**No character set selected** (Password mode):
+- Prevented at the UI level (last toggle snaps back). If somehow bypassed, the secret field displays the i18n message `tools.secret_generator.no_charset_selected` and no secret is generated.
+
+#### 5.5.7 Responsive Behavior
+
+| Breakpoint | Layout |
+|---|---|
+| Desktop (≥ 1024px) | Three-column: Tabs \| Parameters \| Result |
+| Tablet (768–1023px) | Two-column: Tabs + Parameters \| Result |
+| Mobile (< 768px) | Single-column stacked: Tabs → Parameters → Result |
+
+On mobile: sliders are full-width. Toggle switches have larger touch targets (≥ 44px). The secret field is full-width with horizontal scroll for long secrets.
+
+#### 5.5.8 Accessibility
+
+- **Mode tabs**: implement as radio group with `role="tablist"`, `role="tab"`, `aria-selected`, keyboard navigation (Arrow Left/Right).
+- **Parameters**: all controls have visible `<label>` elements. Slider has `aria-valuemin`, `aria-valuemax`, `aria-valuenow`. Number input is synchronized with slider.
+- **Result announcement**: the secret field has `aria-live="polite"` to announce new secrets to screen readers. The announcement reads: "Secret generated: [strength level], [N] characters, [X] bits of entropy."
+- **Focus order**: Mode tabs → Parameters (top to bottom) → Regenerate → Copy (if available).
+- **Reduced motion**: the flash/pulse animation on regenerate is disabled when `prefers-reduced-motion: reduce`.
+- **Contrast**: all strength indicator colors meet 4.5:1 against the card background in both themes.
+- **Zoom**: usable at 200% without horizontal scroll on the page (secret field internal scroll is acceptable).
 
 ---
 
@@ -430,6 +555,64 @@ Admin screens follow this pattern: admin tabs (below top bar) + content area.
 +--------------+----------------------------------------------------+
 | [Footer]                                                         |
 +-------------------------------------------------------------------+
+```
+
+### 12.3 Secret Generator — Desktop
+
+```
++--------------+----------------------------------------------------+
+| [Logo/Brand] |                        [EN v] [    ] [User v]     |
++--------------+----------------------------------------------------+
+| [Ping]       | Secret Generator                                   |
+| [Traceroute] |                                                    |
+| [DNS]        | [🔑 Password] [🎫 Token] [🔢 Hex]                   |
+| [TLS]        |                                                    |
+| [MAC OUI]    | Length: [========|============] 20  (8-128)        |
+| [WHOIS]      |                                                    |
+| [SecretGen]* | ☑ Uppercase (A-Z)   ☑ Lowercase (a-z)             |
+|              | ☑ Digits (0-9)       ☑ Symbols (!@#...)             |
+|              |                                                    |
+|              | ┌────────────────────────────────────────────────┐ |
+|              | │ aB3$kL9mN2xP5qR7sT1uV8wY4zA6cD0eF             │ |
+|              | └────────────────────────────────────────────────┘ |
+|              |                                                    |
+|              | 🟢 Very strong — 43 caractères (258 bits)          |
+|              |                                                    |
+|              |                    [📋 Copy]  [🔄 Regenerate]      |
+|              | Le secret sera effacé du presse-papier dans 30 s   |
++--------------+----------------------------------------------------+
+| [Footer]                                                         |
++-------------------------------------------------------------------+
+```
+
+### 12.4 Secret Generator — Mobile (< 768px)
+
+```
++---------------------------+
+| [🍔] Secret Generator     |
++---------------------------+
+| [🔑 Password] [🎫] [🔢]  |
++---------------------------+
+| Length: [======] 20       |
+|                           |
+| ☑ Uppercase (A-Z)         |
+| ☑ Lowercase (a-z)         |
+| ☑ Digits (0-9)            |
+| ☑ Symbols (!@#...)        |
++---------------------------+
+| ┌───────────────────────┐ |
+| │ aB3$kL9mN2xP5qR7sT    │ |
+| │ 1uV8wY4zA6cD0eF      │ |
+| └───────────────────────┘ |
+|                           |
+| 🟢 Very strong            |
+| 43 caractères (258 bits)  |
+|                           |
+| [📋 Copy]  [🔄 Regen.]   |
+| Auto-clear 30 s           |
++---------------------------+
+| [Footer]                  |
++---------------------------+
 ```
 
 ---

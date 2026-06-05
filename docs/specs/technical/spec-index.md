@@ -16,7 +16,8 @@ This directory contains the technical specifications split by concern. Load only
 | `spec-backend.md` | API design, data model, security, rate limiting, logging, Docker, module system | ~470 lines |
 | `spec-frontend.md` | React component tree, state management, i18n, theming, WebSocket client, CSRF handling | ~170 lines |
 | `spec-tools-live.md` | WebSocket protocol, Ping, Traceroute, subprocess sandboxing, privileges | ~200 lines |
-| `spec-tools-instant.md` | HTTP tool execution, DNS Lookup, TLS/SSL Viewer | ~85 lines |
+| `spec-tools-instant.md` | HTTP tool execution, DNS Lookup, TLS/SSL Viewer, MAC OUI, WHOIS | ~200 lines |
+| `spec-tool-secret-generator.md` | Frontend-only tool pattern, Secret Generator (client-side crypto, no backend execution) | ~270 lines |
 | `spec-api-contract.md` | Request/response schemas, pagination, error codes, message keys — the frontend/backend contract | ~345 lines |
 
 ---
@@ -43,6 +44,7 @@ This directory contains the technical specifications split by concern. Load only
 | **Build frontend admin pages** | `spec-common.md` → `spec-frontend.md` → `spec-api-contract.md` |
 | **Write tests** | `spec-common.md` + whichever spec covers the code under test |
 | **Add a new tool (post-MVP)** | `spec-common.md` → `spec-backend.md` (§9.5) → `spec-api-contract.md` |
+| **Implement Secret Generator** | `spec-common.md` → `spec-frontend.md` → `spec-tool-secret-generator.md` → `spec-api-contract.md` |
 | **Security audit** | `spec-common.md` → `spec-backend.md` |
 | **Frontend/backend integration** | `spec-api-contract.md` + relevant tool specs |
 
@@ -62,7 +64,10 @@ spec-common.md          ← loaded first for every task
     ├── spec-tools-live.md      ← Ping & Traceroute (WebSocket)
     │       └── spec-api-contract.md
     │
-    └── spec-tools-instant.md   ← DNS & TLS (HTTP)
+    ├── spec-tools-instant.md   ← DNS, TLS, MAC OUI, WHOIS (HTTP)
+    │       └── spec-api-contract.md
+    │
+    └── spec-tool-secret-generator.md  ← Secret Generator (frontend-only, no backend execution)
             └── spec-api-contract.md
 ```
 

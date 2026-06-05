@@ -318,7 +318,7 @@ Entropy = `length * 4` bits. Default 64 chars → 256 bits. Equivalent to `opens
 - Uses `crypto.getRandomValues()` (Web Crypto API) for CSPRNG — never `Math.random()`.
 - The primary parameter in all 3 modes is the **output length in characters**. Entropy in bits is displayed alongside: `"N caractères (X bits)"`.
 - **Password mode**: uniform distribution via rejection sampling to avoid modulo bias. At least one character set must be enabled.
-- **Token mode**: generates `ceil(length * 6 / 8)` random bytes, encodes in base64url (RFC 4648 §5, `-` and `_`, no `=` padding). The output length may be 1 char shorter than requested if the byte count doesn't align exactly — in which case the actual length and bit count are displayed.
+- **Token mode**: generates `ceil(length * 6 / 8)` random bytes, encodes in base64url (RFC 4648 §5, `-` and `_`, no `=` padding), then trims the encoded string to exactly `length` characters. `ceil(length * 6 / 8)` bytes always yield at least `length` base64url characters, so the output is always exactly the requested length. Each character independently encodes 6 bits, so the trimmed token has `length * 6` bits of entropy.
 - **Hex mode**: generates `ceil(length / 2)` random bytes, encodes as lowercase hexadecimal. Output length is always even (each byte = 2 hex chars); odd requested lengths are rounded up and the actual length is displayed.
 - Generated secret is displayed in a read-only monospace field.
 - A "Copy to clipboard" button copies the secret. The clipboard is auto-cleared after 30 seconds.
