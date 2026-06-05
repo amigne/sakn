@@ -7,6 +7,7 @@ const TOOL_ROUTES: Record<string, string> = {
   traceroute: "/traceroute",
   dns_lookup: "/dns",
   ssl_viewer: "/ssl",
+  secret_generator: "/secret-generator",
 };
 
 let cache: { names: string[]; checked: boolean; userId: string | undefined } = {
@@ -56,7 +57,11 @@ export function useAvailableTools() {
       })
       .catch(() => {
         if (!cancelled) {
-          cache = { names: ["ping", "traceroute", "dns_lookup", "ssl_viewer"], checked: true, userId };
+          cache = {
+            names: ["ping", "traceroute", "dns_lookup", "ssl_viewer", "secret_generator"],
+            checked: true,
+            userId,
+          };
           setTools(cache.names);
           setChecked(true);
         }

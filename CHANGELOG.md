@@ -19,6 +19,7 @@ Development cycle for `0.2.0` (backend: `0.2.0.dev0`, frontend: `0.2.0-dev`).
 - MAC OUI: bounded retention for `oui_sync_log` — weekly purge job and admin setting `OUI_SYNC_LOG_RETENTION_DAYS` (default 365), always keeping the most recent run (#374).
 - MAC OUI: email alert to administrators on the 3rd consecutive sync failure of an IEEE file, reusing the existing email service (best-effort; ADR-016, #373).
 - Observability: Prometheus metrics exposed at `/metrics` for OUI sync and lookup (ADR-015, #372).
+- **Secret Generator**: frontend-only tool for generating cryptographically secure secrets directly in the browser. Three modes — Password (configurable charsets, rejection sampling), Token (base64url, equivalent to Python `secrets.token_urlsafe()`), Hex (lowercase, equivalent to `openssl rand -hex`). Uses Web Crypto API (`crypto.getRandomValues`) for CSPRNG. Clipboard copy with 30-second auto-clear. Strength indicator (weak/fair/strong/very strong) with entropy in bits. No backend execution endpoint (ADR-017). i18n in English and French. (#434).
 - Administrator guide for MAC OUI Lookup (`docs/admin/mac-oui-administration.md`).
 - CI: SQLite job added to `migration-check` (migrations now validated on Postgres **and** SQLite); runtime import check for missing production dependencies (#368); compose env-wiring guard (`scripts/check_compose_env.py`).
 - Docker: wire `HEALTH_FULL_TOKEN` and `WS_REQUIRE_ORIGIN` into the compose `environment:` blocks; `.env.example` documents them (#409).
