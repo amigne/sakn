@@ -51,6 +51,11 @@ export default function SecretGeneratorPage() {
   // Tracks whether this tool wrote the current clipboard contents, so reset()
   // only clears the clipboard it actually populated (never unrelated content).
   const wroteToClipboardRef = useRef(false);
+  // Tracks whether the initial mount effect has run, so the parameter-watch
+  // effect does not re-generate on the very first render.
+  const mountedRef = useRef(false);
+  // Debounce timer for auto-regeneration on parameter change.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clipboardAvailable = isClipboardAvailable();
 
@@ -60,6 +65,7 @@ export default function SecretGeneratorPage() {
       if (clipboardTimerRef.current !== null) clearTimeout(clipboardTimerRef.current);
       if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
       if (countdownIntervalRef.current !== null) clearInterval(countdownIntervalRef.current);
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
     };
   }, []);
 
@@ -70,6 +76,30 @@ export default function SecretGeneratorPage() {
       countdownIntervalRef.current = null;
     }
   }, [clipboardSeconds]);
+
+  // ── Auto-generate on mount ──────────────────────────────────────────
+  useEffect(() => {
+    generate();
+    mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Auto-regenerate on parameter change (debounced 150 ms) ──────────
+  useEffect(() => {
+    // Skip the initial render — mount effect already generated.
+    if (!mountedRef.current) return;
+
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      generate();
+    }, 150);
+
+    return () => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, passwordLength, uppercase, lowercase, digits, symbols, tokenLength, hexLength]);
 
   // ── Validate ─────────────────────────────────────────────────────────
   const validate = useCallback((): boolean => {

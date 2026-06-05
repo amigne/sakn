@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SecretGeneratorPage from "../SecretGeneratorPage";
 
@@ -110,10 +110,19 @@ describe("SecretGeneratorPage", () => {
 
   // ── Generation ──────────────────────────────────────────────────────
 
-  it("generates a password on first click of Regenerate", () => {
+  it("auto-generates a secret on mount without requiring a click", () => {
     render(<SecretGeneratorPage />);
+    // After mount, a textarea with the generated secret should be in the document
+    const textareas = screen.getAllByRole("textbox");
+    const secretTextarea = textareas.find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
+    expect(secretTextarea).toBeTruthy();
+    expect(secretTextarea.value.length).toBeGreaterThan(0);
+  });
+
+  it("regenerates on explicit click of Regenerate", () => {
+    render(<SecretGeneratorPage />);
+    // Already auto-generated; clicking Regenerate should produce a fresh secret
     fireEvent.click(screen.getByText("Regenerate"));
-    // A result textarea should appear with the generated secret
     const textareas = screen.getAllByRole("textbox");
     const secretTextarea = textareas.find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
     expect(secretTextarea).toBeTruthy();
@@ -122,7 +131,6 @@ describe("SecretGeneratorPage", () => {
 
   it("generates different secrets on consecutive Regenerate clicks", () => {
     render(<SecretGeneratorPage />);
-    fireEvent.click(screen.getByText("Regenerate"));
     const textareas1 = screen.getAllByRole("textbox");
     const ta1 = textareas1.find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
     const secret1 = ta1.value;
@@ -161,6 +169,43 @@ describe("SecretGeneratorPage", () => {
     expect(secretTextarea).toBeTruthy();
     // Hex output should only contain hex chars
     expect(/^[0-9a-f]+$/.test(secretTextarea.value)).toBe(true);
+  });
+
+  // ── Auto-regeneration on parameter change (#436) ────────────────────
+
+  it("auto-regenerates when a charset toggle is changed", async () => {
+    render(<SecretGeneratorPage />);
+    // After mount, a secret is already generated
+    const textareas1 = screen.getAllByRole("textbox");
+    const ta1 = textareas1.find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
+    const secret1 = ta1.value;
+    expect(secret1.length).toBeGreaterThan(0);
+
+    // Toggle the "Symbols" switch off — should trigger debounced regeneration
+    const switches = screen.getAllByRole("switch");
+    // The switches are Uppercase, Lowercase, Digits, Symbols
+    const symbolsSwitch = switches[3]!;
+    await act(async () => {
+      fireEvent.click(symbolsSwitch);
+    });
+
+    // Wait for debounce (150ms) + React re-render
+    await waitFor(
+      () => {
+        const textareas2 = screen.getAllByRole("textbox");
+        const ta2 = textareas2.find((el) => el.tagName === "TEXTAREA")! as HTMLTextAreaElement;
+        expect(ta2.value.length).toBeGreaterThan(0);
+        expect(ta2.value).not.toBe(secret1);
+      },
+      { timeout: 500 },
+    );
+  });
+
+  it("shows entropy information after auto-generation on mount", () => {
+    render(<SecretGeneratorPage />);
+    // No need to click Regenerate — auto-gen already produced a result
+    expect(screen.getByText(/characters/)).toBeInTheDocument();
+    expect(screen.getByText(/bits/)).toBeInTheDocument();
   });
 
   // ── Strength indicator ──────────────────────────────────────────────
