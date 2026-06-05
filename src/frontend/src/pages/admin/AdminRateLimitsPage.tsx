@@ -158,7 +158,7 @@ export default function AdminRateLimitsPage() {
             <tbody>
               {globalLimits.map((limit) => (
                 <tr key={limit.id || `global-${limit.role}`} className="border-b border-[var(--color-border)]">
-                  <td className="px-3 py-2 font-medium text-[var(--color-text)] capitalize">{limit.role}</td>
+                  <td className="px-3 py-2 font-medium text-[var(--color-text)]">{t(`roles.${limit.role}`)}</td>
                   <EditableCell id={limit.id || `${limit.role}-soft`} field="soft_limit" value={limit.soft_limit} />
                   <EditableCell id={limit.id || `${limit.role}-hard`} field="hard_limit" value={limit.hard_limit} />
                 </tr>

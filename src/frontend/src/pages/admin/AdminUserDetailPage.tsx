@@ -157,7 +157,7 @@ export default function AdminUserDetailPage() {
             <Badge variant={statusVariant(user.status)}>{user.status}</Badge>
           </div>
           <p className="text-sm text-[var(--color-text)]">
-            <span className="font-medium">{t("admin.role")}:</span> {user.role}
+            <span className="font-medium">{t("admin.role")}:</span> {t(`roles.${user.role}`)}
           </p>
           <p className="text-sm text-[var(--color-text)]">
             <span className="font-medium">{t("admin.email_verified")}</span>{" "}
