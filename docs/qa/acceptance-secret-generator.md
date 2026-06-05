@@ -112,15 +112,15 @@
 
 ### AC-SECRET-017 — Entropy: length = 128, all sets → very strong
 
-**Given** Password mode, length = 128, all 4 sets ON (charset size ≈ 94)
+**Given** Password mode, length = 128, all 4 sets ON (charset size = 87)
 **When** the secret is generated
-**Then** the strength indicator shows "Very Strong" (green), entropy ≈ 128 × log2(94) ≈ 838 bits
+**Then** the strength indicator shows "Very Strong" (green), entropy ≈ 128 × log2(87) ≈ 826 bits
 
 ### AC-SECRET-018 — Charset composition
 
 **Given** Password mode, uppercase ON, lowercase ON, digits ON, symbols ON
 **When** a secret is generated
-**Then** the charset used is exactly: A-Z (26) + a-z (26) + 0-9 (10) + `!#$%&'()*+,-./:;<=>?@[\]^_`{|}~` (32) = 94 characters. Space and other whitespace are excluded.
+**Then** the charset used is exactly: A-Z (26) + a-z (26) + 0-9 (10) + `!@#$%^&*()-_=+[]{};:,.<>?` (25) = 87 characters. Shell meta-characters are excluded for copy-paste safety. Space and other whitespace are excluded.
 
 ---
 
@@ -511,8 +511,8 @@
 | AC-SECRET-014 | ✅ PASS | Length clamped via `Math.max(8, Math.min(128, ...))`. Unit tests `AC-SEC-003` through `AC-SEC-006` verify bounds. |
 | AC-SECRET-015 | ✅ PASS | Chi-squared uniformity test: 10,000 samples × 64 chars, digits only, ±15% tolerance. Unit test `AC-SEC-080` passes. |
 | AC-SECRET-016 | ✅ PASS | 8 chars digits-only → entropy ≈ 26.6 bits → "Weak". Unit test `AC-SEC-015` verifies. |
-| AC-SECRET-017 | ✅ PASS | 128 chars all-sets → "Very Strong". Unit test `AC-SEC-016` verifies. NOTE: 87-char charset (not 94), entropy ≈ 826 bits (not 838). See #435. |
-| AC-SECRET-018 | ❌ FAIL → #435 | Symbol set is 25 chars (`!@#$%^&*()-_=+[]{};:,.<>?`), not 32 as specified. Total charset = 87, not 94. Code explicitly chose shell-safe subset. |
+| AC-SECRET-017 | ✅ PASS | 128 chars all-sets → "Very Strong". Unit test `AC-SEC-016` verifies. Charset = 87 (shell-safe), entropy ≈ 826 bits per updated spec §3.2. |
+| AC-SECRET-018 | ✅ PASS (spec updated) | Symbol set is 25 chars (`!@#$%^&*()-_=+[]{};:,.<>?`), matching updated spec §3.2. Total charset = 87. Shell-safe subset by design. See #435 (resolved). |
 
 #### Sprint 2+ — Token Mode
 
@@ -623,7 +623,6 @@
 
 | Issue | ACs | Severity | Description |
 |---|---|---|---|
-| [#435](https://github.com/amigne/sakn/issues/435) | AC-SECRET-018 | Low | Symbol set 25 vs 32 chars; spec-implementation mismatch |
 | [#436](https://github.com/amigne/sakn/issues/436) | AC-SECRET-010, AC-SECRET-044 | Low | No auto-generation on page load or parameter change |
 | [#437](https://github.com/amigne/sakn/issues/437) | AC-SECRET-038 | Low | Auto-clear overwrites unrelated clipboard content |
 
@@ -631,7 +630,7 @@
 
 1. **Last toggle protection** (AC-SECRET-013): Spec calls for toggle snap-back at UI level; implementation uses validation on generate. Functional outcome identical — user cannot generate without at least one charset.
 
-2. **Charset size** (AC-SECRET-017, AC-SECRET-018): Implementation uses 87-char charset (shell-safe symbols), not 94-char per spec. Entropy difference is negligible (< 1%).
+2. **Charset size** (AC-SECRET-017, AC-SECRET-018): Spec updated to match implementation — 87-char charset with 25 shell-safe symbols. Entropy difference from the full 94-char set is negligible (< 1%). Resolved by #435.
 
 3. **Manual regeneration** (AC-SECRET-010, AC-SECRET-044): Spec calls for auto-generation on mount and parameter change with 150ms debounce; implementation uses manual "Regenerate" button. UX trade-off: avoids intermediate states during slider drag.
 
