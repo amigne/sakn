@@ -87,7 +87,7 @@ POST /api/v1/tools/secret_generator/execute
 }
 ```
 
-The 405 is enforced in the execute route handler (likely `api_v1.py` or a middleware), **not** by raising `NotImplementedError` in the tool class. The tool class never defines `execute()` — it is a pure definition holder.
+The 405 is enforced in the execute route handler (`app/api/v1/endpoints/tools.py`, `execute_tool`), **not** by raising `NotImplementedError` in the tool class. The tool class never defines `execute()` — it is a pure definition holder.
 
 Rationale: see ADR-017 §3.2.
 
@@ -367,7 +367,7 @@ Detection: check `navigator.clipboard?.writeText` at mount time. If unavailable:
 | `src/backend/app/tools/base.py` | Add `backend: bool = True` to `ToolDefinition`; serialize in `to_api_definition()` |
 | `src/backend/app/tools/secret_generator.py` | **New file**: `SecretGeneratorTool` class with `get_definition()` only |
 | `src/backend/app/main.py` | Register `SecretGeneratorTool` in the registry (seed handled automatically) |
-| `src/backend/app/api/api_v1.py` or execute route handler | Guard: if tool has `backend: false`, return 405 before calling `execute()` |
+| `src/backend/app/api/v1/endpoints/tools.py` (`execute_tool`) | Guard: if tool has `backend: false`, return 405 before calling `execute()` |
 | `src/backend/app/models/tool_module.py` | No change — `ToolModule` schema unchanged |
 | `src/frontend/src/...` | **Not touched this sprint** — Sprint 2+ |
 

@@ -129,6 +129,43 @@ export interface SslResult {
   warnings: { message: string; variant: "error" | "warning" }[];
 }
 
+// ── Secret Generator ─────────────────────────────────────────────────
+
+export type SecretGeneratorMode = "password" | "token" | "hex";
+
+export interface SecretGeneratorPasswordParams {
+  mode: "password";
+  length: number;
+  uppercase: boolean;
+  lowercase: boolean;
+  digits: boolean;
+  symbols: boolean;
+}
+
+export interface SecretGeneratorTokenParams {
+  mode: "token";
+  length: number;
+}
+
+export interface SecretGeneratorHexParams {
+  mode: "hex";
+  length: number;
+}
+
+export type SecretGeneratorParams =
+  | SecretGeneratorPasswordParams
+  | SecretGeneratorTokenParams
+  | SecretGeneratorHexParams;
+
+export type Strength = "weak" | "fair" | "strong" | "very_strong";
+
+export interface SecretGeneratorResult {
+  secret: string;
+  actualLength: number;
+  bits: number;
+  strength: Strength;
+}
+
 export type ToolName = "ping" | "traceroute" | "dns_lookup" | "ssl_viewer" | "mac_oui";
 
 export type ExecutionStatus = "idle" | "running" | "completed" | "stopped" | "error";
