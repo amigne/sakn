@@ -413,7 +413,7 @@ Top bar, positioned **immediately to the left of the language switcher** (order:
 - **Accessibility**: the control has an accessible name from `common.your_ip`; the copied feedback is announced via `aria-live="polite"`.
 - **Loading**: fetched once on mount (`GET /api/v1/whoami`). While pending, nothing is shown (no layout shift placeholder beyond reserved inline space).
 - **Failure / unavailable**: if the request fails or returns no address, the element is **omitted** entirely (no error text).
-- **Responsive**: hidden below the `sm` breakpoint (< 640px) to preserve top-bar space, consistent with the brand text hiding below 350px. On hidden viewports the IP remains available via the account/session pages where applicable.
+- **Responsive**: visible at all viewport sizes (issue #428). The address uses compact muted monospace text so it fits alongside the language/theme/user controls even on narrow screens.
 - **Privacy**: this exposes only the visitor's own address to themselves — no new information disclosure. See `functional-spec.md` §2.4.
 
 #### 7.4.1 Top bar — desktop (authenticated)

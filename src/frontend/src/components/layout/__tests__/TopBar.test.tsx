@@ -229,15 +229,15 @@ describe("TopBar — visitor IP display", () => {
     });
   });
 
-  describe("AC-MYIP-013: hidden below sm breakpoint", () => {
-    it("has hidden sm:flex classes for responsive visibility", async () => {
+  describe("AC-MYIP-013: always visible at all display sizes", () => {
+    it("renders IP display with flex and without hidden class", async () => {
       mockWhoami.mockResolvedValue({ ip: "203.0.113.7" });
       renderTopBar();
 
       const ipEl = await screen.findByTestId("ip-display");
       const className = ipEl.className;
-      expect(className).toContain("hidden");
-      expect(className).toContain("sm:flex");
+      expect(className).not.toContain("hidden");
+      expect(className).toContain("flex");
     });
   });
 
