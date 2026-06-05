@@ -171,9 +171,27 @@ export default function SecretGeneratorPage() {
 
         // Schedule clipboard clear after 30s
         if (clipboardTimerRef.current !== null) clearTimeout(clipboardTimerRef.current);
-        clipboardTimerRef.current = setTimeout(() => {
-          navigator.clipboard.writeText("").catch(() => {});
-          wroteToClipboardRef.current = false;
+        // Capture the secret value at copy time so the timer callback can
+        // compare against it even if `result` changes before the timer fires.
+        const copiedSecret = result.secret;
+        clipboardTimerRef.current = setTimeout(async () => {
+          // Guard: only clear if this tool still "owns" the clipboard.
+          if (!wroteToClipboardRef.current) {
+            setClipboardSeconds(0);
+            return;
+          }
+          try {
+            const current = await navigator.clipboard.readText();
+            if (current === copiedSecret) {
+              await navigator.clipboard.writeText("");
+              wroteToClipboardRef.current = false;
+            }
+            // If clipboard content does not match, the user has copied
+            // something else — leave it alone.
+          } catch {
+            // Clipboard read permission denied (best-effort: do not clear
+            // since we cannot verify ownership).
+          }
           setClipboardSeconds(0);
         }, CLIPBOARD_CLEAR_S * 1000);
 
