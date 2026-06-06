@@ -160,6 +160,14 @@ class Settings(BaseSettings):
     # Health check token for /health/full (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
     HEALTH_FULL_TOKEN: str = ""
 
+    # ── WHOIS tool (ADR-018) ─────────────────────────────────────────────────
+    WHOIS_RDAP_CONNECT_TIMEOUT: int = 10
+    WHOIS_RDAP_READ_TIMEOUT: int = 20
+    WHOIS_TCP_CONNECT_TIMEOUT: int = 15  # Sprint 2 (WHOIS/43 fallback)
+    WHOIS_TCP_READ_TIMEOUT: int = 20  # Sprint 2 (WHOIS/43 fallback)
+    WHOIS_MAX_RESPONSE_BYTES: int = 2_097_152  # 2 MiB, Sprint 2
+    WHOIS_EXECUTION_DEADLINE: int = 60
+
     # ── MAC OUI Sync ──────────────────────────────────────────────────────────
     # Enable the daily IEEE OUI sync job (APScheduler). Set to False to disable.
     OUI_SYNC_ENABLED: bool = True
