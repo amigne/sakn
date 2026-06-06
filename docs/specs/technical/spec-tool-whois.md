@@ -330,28 +330,44 @@ Three calls to `filter_target()` per query (typical RDAP + WHOIS path):
 
 ### 5.2 Resolve-Then-Connect Pattern
 
+**RDAP (HTTPS) — pin the validated IP WITHOUT breaking TLS.** The connection must go
+to the pre-validated IP (DNS-rebinding defense) **while** the URL keeps the **hostname**
+so that SNI and certificate verification still apply. Do **not** put the IP in the URL,
+do **not** override the `Host` header, and **never** disable `verify`. In `httpx`, pin
+the IP via a custom transport whose connection pool resolves the hostname to the
+already-validated IP:
+
 ```python
-# For RDAP (httpx)
+# For RDAP (httpx) — IP-pinned but TLS-verified against the hostname.
 resolved_ip, block_error = await filter_target(rdap_hostname)
 if block_error:
     return ToolResult(success=False, error=block_error)
-# Use the resolved IP for the httpx transport
-transport = httpx.AsyncHTTPTransport(local_address=resolved_ip)  # conceptual
-async with httpx.AsyncClient(transport=transport) as client:
-    response = await client.get(f"https://{resolved_ip}/domain/{domain}",
-                                headers={"Host": rdap_hostname})
 
-# For WHOIS (asyncio)
+# Custom transport: keep the hostname in the URL (SNI + cert verification stay on
+# `rdap_hostname`) but force the socket to connect to `resolved_ip`. Implemented by
+# subclassing httpx.AsyncHTTPTransport / injecting an httpcore pool whose resolver
+# returns `resolved_ip` for `rdap_hostname`. verify=True (default) MUST be kept.
+transport = IPPinnedTransport(host=rdap_hostname, pinned_ip=resolved_ip)
+async with httpx.AsyncClient(transport=transport, verify=True) as client:
+    # URL uses the hostname — TLS validates the cert for rdap_hostname.
+    response = await client.get(f"https://{rdap_hostname}/domain/{domain}")
+
+# For WHOIS (asyncio) — plain TCP, no TLS, so connect straight to the validated IP.
 resolved_ip, block_error = await filter_target(whois_hostname)
 if block_error:
     return ToolResult(success=False, error=block_error)
 reader, writer = await asyncio.wait_for(
     asyncio.open_connection(resolved_ip, 43),
-    timeout=15.0
+    timeout=15.0,
 )
 ```
 
-The validated IP is used for the connection, not the hostname. This prevents DNS rebinding (see ADR-018 §B.5).
+The connection always targets the validated IP (DNS-rebinding defense, ADR-018 §B.5).
+For RDAP this is done **without** weakening TLS: the cert is verified against
+`rdap_hostname` and SNI carries the hostname. **MUST NOT**: put the IP in the HTTPS
+URL, spoof the `Host` header against a mismatched cert, or set `verify=False`. See
+`review-whois.md` §2.4. (For WHOIS over plain TCP there is no TLS, so connecting
+directly to the IP is correct.)
 
 ### 5.3 Usage Model
 
@@ -372,8 +388,8 @@ if block_error:
 |---|---|---|---|
 | RDAP HTTP connect timeout | 10s | `settings.WHOIS_RDAP_CONNECT_TIMEOUT` | `spec-tools-instant.md` §6 |
 | RDAP HTTP read timeout | 20s | `settings.WHOIS_RDAP_READ_TIMEOUT` | `spec-tools-instant.md` §6 |
-| WHOIS TCP connect timeout | 15s | `settings.WHOIS_WHOIS_CONNECT_TIMEOUT` | `spec-tools-instant.md` §6 |
-| WHOIS TCP read timeout | 20s | `settings.WHOIS_WHOIS_READ_TIMEOUT` | `spec-tools-instant.md` §6 |
+| WHOIS TCP connect timeout | 15s | `settings.WHOIS_TCP_CONNECT_TIMEOUT` | `spec-tools-instant.md` §6 |
+| WHOIS TCP read timeout | 20s | `settings.WHOIS_TCP_READ_TIMEOUT` | `spec-tools-instant.md` §6 |
 | WHOIS response size cap | 2 MiB | `settings.WHOIS_MAX_RESPONSE_BYTES` | Security review §2.5 |
 | Max RDAP redirects | 3 | Hardcoded | ADR-018 §B.4 |
 | DNS resolution timeout | 10s (global DNS timeout) | `settings.SECURITY_DNS_TIMEOUT` | `address_filter.py:140` |

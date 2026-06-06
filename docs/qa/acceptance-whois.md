@@ -306,7 +306,7 @@
 
 ### AC-WHOIS-071 — WHOIS connect timeout configurable
 
-**Given** `settings.WHOIS_WHOIS_CONNECT_TIMEOUT = 10` (overridden from default 15s)
+**Given** `settings.WHOIS_TCP_CONNECT_TIMEOUT = 10` (overridden from default 15s)
 **When** a WHOIS connection is attempted
 **Then** the connect timeout is 10 seconds
 
@@ -434,7 +434,7 @@
 
 **Given** the keys listed in `spec-tool-whois.md` §11 and `spec-api-contract.md` §10.3
 **When** the i18n key audit runs
-**Then** all `tools.whois.*` (24 keys) and `errors.whois_*` (2 keys) exist in both `fr.json` and `en.json`. Total: 26 keys. **No new keys are needed** — all keys are pre-existing in the API contract.
+**Then** all `tools.whois.*` (26 keys) and `errors.whois_*` (2 keys) exist in both `fr.json` and `en.json`. Total: 28 keys. The 3 UI-state keys added in Sprint 0 (`tools.whois.idle`, `tools.whois.trying_rdap`, `tools.whois.fallback_whois`, for the two-phase loading UX) are registered in `spec-api-contract.md` §10.3; the rest pre-existed. Sprint 3 adds them all to `en.json`/`fr.json`.
 
 ---
 

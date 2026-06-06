@@ -32,9 +32,9 @@ Total estimated: **8–12 days** (one developer, sequential). With parallel fron
 
 | File | Change | Owner |
 |---|---|---|
-| `src/backend/app/tools/whois.py` | **New**: `WhoisLookupTool` class with `get_definition()`, `validate_params()`, `execute()`, RDAP client, WHOIS client, `sanitize_whois_target()`, response parsing stubs | Backend |
-| `src/backend/app/main.py` | Add `from app.tools.whois import WhoisLookupTool` + `registry.register(WhoisLookupTool())` (~3 lines) | Backend |
-| `src/backend/app/config.py` | Add `WHOIS_RDAP_CONNECT_TIMEOUT`, `WHOIS_RDAP_READ_TIMEOUT`, `WHOIS_WHOIS_CONNECT_TIMEOUT`, `WHOIS_WHOIS_READ_TIMEOUT`, `WHOIS_MAX_RESPONSE_BYTES` settings (~10 lines) | Backend |
+| `src/backend/app/tools/whois_lookup.py` | **New**: `WhoisLookupTool` class with `get_definition()`, `validate_params()`, `execute()`, RDAP client, WHOIS client, `sanitize_whois_target()`, response parsing stubs | Backend |
+| `src/backend/app/main.py` | Add `from app.tools.whois_lookup import WhoisLookupTool` + `registry.register(WhoisLookupTool())` (~3 lines) | Backend |
+| `src/backend/app/config.py` | Add `WHOIS_RDAP_CONNECT_TIMEOUT`, `WHOIS_RDAP_READ_TIMEOUT`, `WHOIS_TCP_CONNECT_TIMEOUT`, `WHOIS_TCP_READ_TIMEOUT`, `WHOIS_MAX_RESPONSE_BYTES` settings (~10 lines). If env-overridable, also wire them into `.env.example` and the compose `environment:` blocks (pattern from ADR-012 / #409); otherwise keep them as module constants. | Backend |
 
 ### 2.3 Implementation Order
 
