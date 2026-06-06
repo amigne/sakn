@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.tools.base import ToolCategory, ToolResult
+from app.tools.base import ToolCategory
 from app.tools.whois_lookup import (
     WhoisLookupTool,
     _extract_iana_rdap_servers,
@@ -733,9 +733,8 @@ class TestRdapRedirectHandling:
                 # the redirect, resolve the target, find it blocked, and return None
                 return None
 
-        # Allow the main target and known RDAP hosts; block everything else
+        # Block internal hosts; allow everything else (RDAP hosts + target).
         blocked_hosts = {"10.0.0.1", "internal.local"}
-        allowed_hosts = {"rdap.iana.org", "rdap.example.com", "example.com"}
 
         async def mock_filter(target: str) -> tuple[str, str | None]:
             if target in blocked_hosts:
@@ -798,6 +797,138 @@ class TestRdapRedirectHandling:
         assert result.error == "errors.whois_connection_failed"
 
 
+# ── RDAP _rdap_get: real per-hop SSRF validation + IP pinning (S1/S3/S5) ─────
+
+
+class TestRdapGetPerHopSecurity:
+    """Exercise the real _rdap_get transport loop (not a mock) via MockTransport.
+
+    These tests cover the redirect SSRF/pinning path that the higher-level
+    tests bypass by mocking _rdap_get wholesale.
+    """
+
+    @pytest.mark.asyncio
+    async def test_followed_redirect_is_validated_and_pinned(
+        self, tool, monkeypatch
+    ):
+        """Each followed redirect re-validates AND IP-pins the new host (S1)."""
+        import contextlib as _ctx
+
+        import httpx
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "rdap1.example.com":
+                return httpx.Response(
+                    302,
+                    headers={
+                        "Location": "https://rdap2.example.com/domain/example.com"
+                    },
+                )
+            return httpx.Response(200, json={"ldhName": "EXAMPLE.COM"})
+
+        validated: list[str] = []
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            validated.append(target)
+            return "1.2.3.4", None
+
+        pinned: list[tuple[str, str]] = []
+
+        @_ctx.asynccontextmanager
+        async def fake_pin(host: str, ip: str):
+            pinned.append((host, ip))
+            yield
+
+        monkeypatch.setattr("app.tools.whois_lookup.filter_target", mock_filter)
+        monkeypatch.setattr("app.tools.whois_lookup._pin_resolution", fake_pin)
+
+        result = await tool._rdap_get(
+            "https://rdap1.example.com/domain/example.com",
+            transport=httpx.MockTransport(handler),
+        )
+
+        assert result == {"ldhName": "EXAMPLE.COM"}
+        # Both the initial host and the redirect target were validated AND pinned
+        # immediately before connecting — no fresh DNS at connect time.
+        assert "rdap1.example.com" in validated
+        assert "rdap2.example.com" in validated
+        assert ("rdap1.example.com", "1.2.3.4") in pinned
+        assert ("rdap2.example.com", "1.2.3.4") in pinned
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_blocked_host_is_not_connected(
+        self, tool, monkeypatch
+    ):
+        """A redirect to an SSRF-blocked host is refused before connecting (S1)."""
+        import httpx
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "rdap1.example.com":
+                return httpx.Response(
+                    302,
+                    headers={"Location": "https://internal.evil/domain/x"},
+                )
+            raise AssertionError("must not connect to a blocked redirect host")
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            if target == "internal.evil":
+                return "", "errors.target_not_allowed"
+            return "1.2.3.4", None
+
+        monkeypatch.setattr("app.tools.whois_lookup.filter_target", mock_filter)
+
+        result = await tool._rdap_get(
+            "https://rdap1.example.com/domain/x",
+            transport=httpx.MockTransport(handler),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_non_https_redirect_is_refused(self, tool, monkeypatch):
+        """A redirect that downgrades to http:// is refused (S5)."""
+        import httpx
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.scheme == "https":
+                return httpx.Response(
+                    302,
+                    headers={"Location": "http://rdap2.example.com/domain/x"},
+                )
+            raise AssertionError("must not follow an http:// downgrade")
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        monkeypatch.setattr("app.tools.whois_lookup.filter_target", mock_filter)
+
+        result = await tool._rdap_get(
+            "https://rdap1.example.com/domain/x",
+            transport=httpx.MockTransport(handler),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_oversize_response_is_capped(self, tool, monkeypatch):
+        """An over-cap RDAP body returns None instead of buffering unbounded (S3)."""
+        import httpx
+
+        big = b'{"x":"' + b"a" * (3 * 1024 * 1024) + b'"}'
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=big)
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        monkeypatch.setattr("app.tools.whois_lookup.filter_target", mock_filter)
+
+        result = await tool._rdap_get(
+            "https://rdap1.example.com/domain/x",
+            transport=httpx.MockTransport(handler),
+        )
+        assert result is None
+
+
 # ── IP pinning context manager ───────────────────────────────────────────────
 
 
@@ -811,9 +942,6 @@ class TestPinResolution:
 
         host = "example.com"
         pinned_ip = "93.184.216.34"
-
-        # Before patching, resolve should work normally
-        original_results = await loop.getaddrinfo("localhost", 80)
 
         async with _pin_resolution(host, pinned_ip):
             # Pinned host should resolve to the pinned IP

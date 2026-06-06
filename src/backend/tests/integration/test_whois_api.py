@@ -14,7 +14,6 @@ from sqlalchemy import select
 from app.constants.roles import ROLE_ADMINISTRATOR, ROLE_AUTHENTICATED, ROLE_VISITOR
 from app.models.tool_module import RoleToolPermission, ToolModule
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -118,7 +117,6 @@ async def test_whois_listing_and_seed(client: AsyncClient):
 async def test_whois_execute_rdap_success(client: AsyncClient):
     """AC-WHOIS-020: RDAP query succeeds with structured data."""
     from app.database import async_session_factory
-    from app.tools.whois_lookup import WhoisLookupTool
 
     async with async_session_factory() as db:
         tool_id = await _seed_whois_tool(db)
@@ -126,7 +124,6 @@ async def test_whois_execute_rdap_success(client: AsyncClient):
         await db.commit()
 
     # Get the tool instance from the registry to mock its _rdap_get method
-    from app.api.v1.endpoints.tools import get_registry
 
     # Build a mock tool and temporarily replace it in the registry
     async def mock_filter(target: str) -> tuple[str, str | None]:
@@ -161,12 +158,20 @@ async def test_whois_execute_rdap_success(client: AsyncClient):
         ],
     }
 
-    # Patch the httpx.AsyncClient constructor to return a mock
+    # Patch the httpx.AsyncClient constructor to return a mock. _rdap_get streams
+    # the body via client.stream(...) + aiter_bytes(), so the mock mirrors that.
+    import json as _json
+
     class MockResponse:
         def __init__(self, status_code, json_data):
             self.status_code = status_code
             self._json_data = json_data
+            self.content = _json.dumps(json_data).encode()
             self.headers = {}
+            self.request = MagicMock()
+
+        async def aiter_bytes(self):
+            yield self.content
 
         def json(self):
             return self._json_data
@@ -180,6 +185,16 @@ async def test_whois_execute_rdap_success(client: AsyncClient):
                     response=self,
                 )
 
+    class MockStream:
+        def __init__(self, response):
+            self._response = response
+
+        async def __aenter__(self):
+            return self._response
+
+        async def __aexit__(self, *args):
+            pass
+
     class MockClient:
         """Mock httpx.AsyncClient that works as an async context manager."""
 
@@ -192,11 +207,10 @@ async def test_whois_execute_rdap_success(client: AsyncClient):
         async def __aexit__(self, *args):
             pass
 
-        async def get(self, url, **kwargs):
+        def stream(self, method, url, **kwargs):
             self._call_count += 1
-            if "iana" in str(url):
-                return MockResponse(200, iana_json)
-            return MockResponse(200, rdap_json)
+            data = iana_json if "iana" in str(url) else rdap_json
+            return MockStream(MockResponse(200, data))
 
     import httpx
 

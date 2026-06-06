@@ -19,7 +19,7 @@ import logging
 import time
 from ipaddress import ip_address
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -99,15 +99,6 @@ def _parse_rdap_response(data: dict[str, Any], target: str) -> dict[str, Any]:
 
         if role == "registrar":
             registrar = _vcard_org_name(vcard)
-            # WHOIS server may be in publicIds
-            for pid in entity.get("publicIds", []):
-                if pid.get("type") == "IANA Registrar ID":
-                    continue
-            # Some RDAP servers embed the WHOIS server in remarks
-            for remark in entity.get("remarks", []):
-                for line in remark.get("description", []):
-                    if "whois" in line.lower() and "://" in line:
-                        continue  # skip URLs in remarks
         elif role == "registrant":
             registrant = vcard if not _is_gdpr_redacted(vcard, entity) else None
         elif role == "administrative":
@@ -146,13 +137,6 @@ def _parse_rdap_response(data: dict[str, Any], target: str) -> dict[str, Any]:
             if isinstance(desc, list) and desc:
                 disclaimer = " ".join(desc)
                 break
-
-    # WHOIS server from port43 (some RDAP responses include it)
-    for remark in data.get("remarks", []):
-        for line in remark.get("description", []):
-            if "whois" in line.lower():
-                # Try to extract "whois.example.com" patterns
-                pass
 
     return {
         "protocol": "rdap",
@@ -299,11 +283,19 @@ def _extract_tld(domain: str) -> str:
 
 
 def _build_rdap_url(base_url: str, target: str, is_ip: bool) -> str:
-    """Build the full RDAP query URL for a target."""
+    """Build the full RDAP query URL for a target.
+
+    The ``target`` is percent-encoded into the path so that it cannot break out
+    of the ``/domain/`` segment or inject query/fragment components into the URL
+    (defense-in-depth — the target is already SSRF-validated and DNS-resolvable,
+    but a domain may contain characters that are special in a URL path).
+    IP targets are left untouched: they are strictly validated by
+    ``ipaddress.ip_address`` upstream and may legitimately contain ``:`` (IPv6).
+    """
     base = base_url.rstrip("/")
     if is_ip:
         return f"{base}/ip/{target}"
-    return f"{base}/domain/{target}"
+    return f"{base}/domain/{quote(target, safe='')}"
 
 
 # ── WhoisLookupTool ──────────────────────────────────────────────────────────
@@ -469,8 +461,11 @@ class WhoisLookupTool(BaseTool):
         tld = target if is_ip else _extract_tld(target)
 
         # ── Step 1: IANA bootstrap ────────────────────────────────────
+        # Early SSRF gate so a blocked bootstrap host maps to CONNECTION_FAILED
+        # rather than UNSUPPORTED_TLD (which is what a None bootstrap means).
+        # The authoritative resolve-then-connect pin happens inside _rdap_get.
         iana_host = "rdap.iana.org"
-        iana_ip, block_error = await filter_target(iana_host)
+        _, block_error = await filter_target(iana_host)
         if block_error:
             logger.warning("RDAP IANA bootstrap blocked: %s", block_error)
             return ToolResult(
@@ -480,8 +475,7 @@ class WhoisLookupTool(BaseTool):
 
         bootstrap_url = _build_rdap_url(IANA_RDAP_BOOTSTRAP, tld, is_ip)
         try:
-            async with _pin_resolution(iana_host, iana_ip):
-                iana_data = await self._rdap_get(bootstrap_url)
+            iana_data = await self._rdap_get(bootstrap_url)
         except Exception as exc:
             logger.warning("RDAP IANA bootstrap failed for %s: %s", target, exc)
             return None  # Sprint 2: WHOIS fallback
@@ -512,8 +506,10 @@ class WhoisLookupTool(BaseTool):
             if not auth_host:
                 continue
 
-            # SSRF: validate the authoritative server hostname
-            auth_ip, auth_block_error = await filter_target(auth_host)
+            # SSRF: early gate on the authoritative server hostname. The
+            # resolve-then-connect pin (and per-redirect re-validation) is
+            # enforced inside _rdap_get for every hop.
+            _, auth_block_error = await filter_target(auth_host)
             if auth_block_error:
                 logger.warning(
                     "RDAP authoritative server %s blocked: %s",
@@ -525,8 +521,7 @@ class WhoisLookupTool(BaseTool):
 
             query_url = _build_rdap_url(auth_url, target, is_ip)
             try:
-                async with _pin_resolution(auth_host, auth_ip):
-                    rdap_data = await self._rdap_get(query_url)
+                rdap_data = await self._rdap_get(query_url)
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 404:
                     # Domain not found at authoritative server
@@ -562,16 +557,38 @@ class WhoisLookupTool(BaseTool):
 
     # ── RDAP HTTP request with redirect validation ──────────────────────
 
-    async def _rdap_get(self, url: str) -> dict[str, Any] | None:
-        """Perform an RDAP HTTP GET with SSRF-safe redirect handling.
+    async def _rdap_get(
+        self,
+        url: str,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> dict[str, Any] | None:
+        """Perform an RDAP HTTP GET with SSRF-safe, IP-pinned redirect handling.
 
-        - Does NOT auto-follow redirects (validates each hop manually).
-        - Max 3 redirects.
-        - Re-validates each redirect target through ``filter_target()``.
+        Security model (ADR-018 §B.4/§B.5):
+
+        - **Every** hop (the initial request and each redirect) is independently
+          SSRF-validated through ``filter_target()`` **and** IP-pinned via
+          ``_pin_resolution()`` immediately before the connection. This closes
+          the DNS-rebinding/TOCTOU gap on redirect targets — a redirect host is
+          never connected to on a freshly (and possibly attacker-controlled)
+          resolved IP.
+        - Only ``https`` URLs are followed; a hostless or non-HTTPS hop is
+          refused (no plaintext downgrade, no ``file://``/``gopher://``…).
+        - Redirects are never auto-followed (``follow_redirects=False``); max
+          ``MAX_RDAP_REDIRECTS`` hops, with loop detection.
+        - The response body is streamed and capped at
+          ``settings.WHOIS_MAX_RESPONSE_BYTES`` to bound memory against a hostile
+          or compromised RDAP server.
         - Timeouts from settings: connect=WHOIS_RDAP_CONNECT_TIMEOUT,
           read=WHOIS_RDAP_READ_TIMEOUT.
 
-        Returns parsed JSON dict, or None on non-JSON / 404 / blocked redirect.
+        ``transport`` is an optional injection point for tests.
+
+        Returns parsed JSON dict, or None on non-JSON / oversize / blocked or
+        non-HTTPS redirect. Raises ``httpx.HTTPStatusError`` on 404 (caller maps
+        it to ``not_found``) and on other non-2xx statuses (caller retries the
+        next authoritative server).
         """
         seen_urls: set[str] = set()
         current_url = url
@@ -587,6 +604,7 @@ class WhoisLookupTool(BaseTool):
             timeout=timeout,
             follow_redirects=False,
             verify=True,
+            transport=transport,
             headers={"Accept": "application/rdap+json, application/json"},
         ) as client:
             for _ in range(MAX_RDAP_REDIRECTS + 1):  # +1 for the initial request
@@ -595,31 +613,33 @@ class WhoisLookupTool(BaseTool):
                     return None
                 seen_urls.add(current_url)
 
-                response = await client.get(current_url)
+                # ── Per-hop SSRF validation + IP pin ──────────────────
+                parsed = urlparse(current_url)
+                hop_host = parsed.hostname
+                if parsed.scheme != "https" or not hop_host:
+                    logger.warning(
+                        "RDAP refused non-HTTPS or hostless URL: %s", current_url
+                    )
+                    return None
+
+                pinned_ip, block_error = await filter_target(hop_host)
+                if block_error:
+                    logger.warning("RDAP hop %s blocked (SSRF)", hop_host)
+                    return None
+
+                async with _pin_resolution(hop_host, pinned_ip):
+                    response = await self._stream_hop(client, current_url)
+
                 status = response.status_code
 
-                # Handle redirects
+                # Handle redirects — validated + pinned on the next iteration.
                 if status in (301, 302, 303, 307, 308):
                     location = response.headers.get("Location", "")
                     if not location:
                         return None
-
-                    # Resolve the redirect target hostname
-                    parsed = urlparse(location)
-                    redirect_host = parsed.hostname
-                    if not redirect_host:
-                        return None
-
-                    # SSRF: validate redirect target before following
-                    _, redirect_block = await filter_target(redirect_host)
-                    if redirect_block:
-                        logger.warning(
-                            "RDAP redirect to %s blocked (SSRF)",
-                            redirect_host,
-                        )
-                        return None
-
-                    current_url = location
+                    # Resolve relative redirects against the current URL so the
+                    # scheme/host checks above see an absolute target.
+                    current_url = str(httpx.URL(current_url).join(location))
                     continue
 
                 # 404 → domain not found (raise so caller can distinguish from
@@ -633,14 +653,7 @@ class WhoisLookupTool(BaseTool):
 
                 # 200 → success
                 if status == 200:
-                    try:
-                        return response.json()
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "RDAP response is not valid JSON from %s",
-                            current_url,
-                        )
-                        return None
+                    return self._decode_body(response, current_url)
 
                 # Other status codes → failure
                 logger.warning(
@@ -654,6 +667,43 @@ class WhoisLookupTool(BaseTool):
         # Exceeded max redirects
         logger.warning("RDAP exceeded max redirects (%d)", MAX_RDAP_REDIRECTS)
         return None
+
+    async def _stream_hop(
+        self, client: httpx.AsyncClient, url: str
+    ) -> httpx.Response:
+        """GET *url*, reading the body under the size cap.
+
+        The body is streamed and accumulated up to ``WHOIS_MAX_RESPONSE_BYTES``;
+        once the cap is exceeded the read stops and the (truncated) content is
+        attached so the caller's JSON decode fails cleanly rather than buffering
+        an unbounded body. Headers/status are always available.
+        """
+        cap = settings.WHOIS_MAX_RESPONSE_BYTES
+        async with client.stream("GET", url) as response:
+            if response.status_code in (301, 302, 303, 307, 308, 404):
+                # No body needed for redirects; 404 is signalled via status.
+                return response
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > cap:
+                    logger.warning(
+                        "RDAP response exceeded %d-byte cap from %s", cap, url
+                    )
+                    break
+            response._content = bytes(body)
+            return response
+
+    @staticmethod
+    def _decode_body(response: httpx.Response, url: str) -> dict[str, Any] | None:
+        """Decode a capped RDAP body as JSON, or None if invalid/oversize."""
+        if len(response.content) > settings.WHOIS_MAX_RESPONSE_BYTES:
+            return None
+        try:
+            return json.loads(response.content)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("RDAP response is not valid JSON from %s", url)
+            return None
 
     # ── Result schema ───────────────────────────────────────────────────
 
