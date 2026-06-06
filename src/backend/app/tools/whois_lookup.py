@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import time
 from ipaddress import ip_address
 from typing import Any
@@ -312,12 +313,29 @@ def _sanitize_whois_target(target: str) -> str:
 
     Reference: spec-tool-whois.md §3.4.
     """
-    import re
-
     sanitized = re.sub(r"[\x00-\x1f]", "", target)
     if not sanitized.strip():
         raise ValueError("Target is empty after sanitization")
     return sanitized
+
+
+def _encode_whois_query(query: str) -> bytes:
+    """Encode a WHOIS query line as ASCII bytes terminated by CRLF.
+
+    IDN targets (e.g. ``münchen.de``) are converted to their A-label/punycode
+    form — the representation classic WHOIS servers expect — instead of raising
+    ``UnicodeEncodeError`` (which would otherwise bubble up as a 500). Raises
+    ``ValueError`` if the target cannot be represented at all, so the caller can
+    map it to a clean error.
+    """
+    try:
+        ascii_query = query.encode("ascii").decode("ascii")
+    except UnicodeEncodeError:
+        try:
+            ascii_query = query.encode("idna").decode("ascii")
+        except (UnicodeError, ValueError) as exc:
+            raise ValueError(f"target not encodable for WHOIS: {exc}") from exc
+    return f"{ascii_query}\r\n".encode("ascii")
 
 
 def _decode_whois_body(data: bytes) -> str:
@@ -341,8 +359,6 @@ def _parse_whois_response(raw_text: str, target: str) -> dict[str, Any]:
 
     Reference: spec-tool-whois.md §4.2.
     """
-    import re
-
     result: dict[str, Any] = {
         "protocol": "whois",
         "domain": target,
@@ -441,37 +457,45 @@ def _is_redacted(value: str) -> bool:
 def _extract_whois_contact_block(raw_text: str, header: str) -> dict[str, Any] | None:
     """Extract a contact block from a WHOIS response.
 
-    Looks for *header* followed by its key-value lines (indented or not),
-    stopping at a blank line or the next top-level section header.
-    Returns a flat dict of field→value, or None if the block is absent
-    or GDPR-redacted.
+    Looks for a standalone *header* line, then collects its key-value lines,
+    stopping at the next blank line. Returns a flat dict of field→value, or None
+    if the block is absent or GDPR-redacted.
+
+    Implemented as a single linear line scan (no nested-quantifier regex) so a
+    large (up to the 2 MiB cap) raw response cannot trigger catastrophic
+    backtracking.
     """
-    import re
+    lines = raw_text.splitlines()
+    header_lower = header.lower()
 
-    # Find the header line, then collect continuation lines
-    pattern = rf"(?im)^{re.escape(header)}:?\s*\n((?:.*\n)*?)(?:\n|$|\Z)"
-    m = re.search(pattern, raw_text)
-    if not m:
+    start = None
+    for i, line in enumerate(lines):
+        stripped = line.strip().lower()
+        if stripped in (header_lower, f"{header_lower}:"):
+            start = i + 1
+            break
+    if start is None:
         return None
 
-    body = m.group(1)
-    if not body.strip():
+    # Collect the block: subsequent non-blank lines up to the next blank line.
+    block_lines: list[str] = []
+    for line in lines[start:]:
+        if not line.strip():
+            break
+        block_lines.append(line)
+    if not block_lines:
         return None
 
-    # Check for GDPR redaction in the block
-    if _is_redacted(body):
+    # GDPR redaction → None (the raw text is always available to the user).
+    if _is_redacted("\n".join(block_lines)):
         return None
 
-    # Parse key-value lines: "Key: Value" (some may be indented)
+    # Parse "Key: Value" lines (some may be indented).
     fields: dict[str, Any] = {}
-    for line in body.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        kv = re.split(r":\s*", line, maxsplit=1)
+    for line in block_lines:
+        kv = re.split(r":\s*", line.strip(), maxsplit=1)
         if len(kv) == 2:
-            key = kv[0].strip()
-            val = kv[1].strip()
+            key, val = kv[0].strip(), kv[1].strip()
             if key and val:
                 fields[key.lower().replace(" ", "_")] = val
 
@@ -685,10 +709,13 @@ class WhoisLookupTool(BaseTool):
                 error="errors.whois_connection_failed",
             )
 
-        # Connect and query
+        # Connect and query. ValueError = target not encodable for WHOIS (e.g.
+        # an IDN that cannot be punycode-encoded) — a clean failure, not a 500.
         try:
-            raw_bytes, was_truncated = await self._whois_query(resolved_ip, WHOIS_PORT, sanitized)
-        except (OSError, TimeoutError) as exc:
+            raw_bytes, was_truncated = await self._whois_query(
+                resolved_ip, WHOIS_PORT, sanitized
+            )
+        except (OSError, TimeoutError, ValueError) as exc:
             logger.warning(
                 "WHOIS/43 query failed for %s at %s: %s",
                 target,
@@ -718,28 +745,37 @@ class WhoisLookupTool(BaseTool):
         Returns ``(body_bytes, truncated)`` — *truncated* is True when the
         response was larger than the cap and has been trimmed.
 
-        Timeouts are enforced via the caller's ``asyncio.wait_for`` which wraps
-        the overall ``_execute_inner`` with ``WHOIS_EXECUTION_DEADLINE``, plus
-        the per-operation connect/read timeouts set in the settings.
+        Timeouts: a connect timeout (``WHOIS_TCP_CONNECT_TIMEOUT``) and a single
+        overall read deadline (``WHOIS_TCP_READ_TIMEOUT``) for the whole response
+        — so a slow-drip server cannot keep the socket alive one chunk at a time
+        up to the 60s execution deadline. Raises ``ValueError`` (before any
+        connection is opened) if *query* cannot be ASCII/IDNA-encoded.
         """
+        payload = _encode_whois_query(query)  # may raise ValueError, pre-connect
+
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(ip, port),
             timeout=settings.WHOIS_TCP_CONNECT_TIMEOUT,
         )
 
         try:
-            writer.write(f"{query}\r\n".encode("ascii"))
+            writer.write(payload)
             await writer.drain()
 
             body = bytearray()
             cap = settings.WHOIS_MAX_RESPONSE_BYTES
             truncated = False
+            loop = asyncio.get_running_loop()
+            read_deadline = loop.time() + settings.WHOIS_TCP_READ_TIMEOUT
 
             while True:
+                remaining = read_deadline - loop.time()
+                if remaining <= 0:
+                    break
                 try:
                     chunk = await asyncio.wait_for(
                         reader.read(65536),
-                        timeout=settings.WHOIS_TCP_READ_TIMEOUT,
+                        timeout=remaining,
                     )
                 except TimeoutError:
                     break
@@ -769,8 +805,6 @@ class WhoisLookupTool(BaseTool):
         Returns the lowercased WHOIS server hostname, or ``None`` if the TLD
         has no known WHOIS server or the IANA query fails.
         """
-        import re
-
         # SSRF: validate whois.iana.org before connecting
         iana_ip, block_error = await filter_target(IANA_WHOIS_HOST)
         if block_error:
@@ -778,8 +812,10 @@ class WhoisLookupTool(BaseTool):
             return None
 
         try:
-            raw, _truncated = await WhoisLookupTool._whois_query(iana_ip, WHOIS_PORT, tld)
-        except (OSError, TimeoutError) as exc:
+            raw, _truncated = await WhoisLookupTool._whois_query(
+                iana_ip, WHOIS_PORT, tld
+            )
+        except (OSError, TimeoutError, ValueError) as exc:
             logger.warning(
                 "IANA WHOIS reference query failed for TLD %s: %s", tld, exc
             )

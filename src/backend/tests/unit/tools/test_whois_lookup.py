@@ -13,6 +13,7 @@ from app.tools.base import ToolCategory
 from app.tools.whois_lookup import (
     WhoisLookupTool,
     _decode_whois_body,
+    _encode_whois_query,
     _extract_iana_rdap_servers,
     _extract_tld,
     _is_gdpr_redacted,
@@ -1082,6 +1083,24 @@ class TestSanitizeWhoisTarget:
         assert _sanitize_whois_target("sub.example.co.uk") == "sub.example.co.uk"
 
 
+class TestEncodeWhoisQuery:
+    def test_ascii_query(self):
+        assert _encode_whois_query("example.com") == b"example.com\r\n"
+
+    def test_idn_query_punycoded(self):
+        """An IDN target is sent as its A-label/punycode form, not raw Unicode."""
+        assert _encode_whois_query("münchen.de") == b"xn--mnchen-3ya.de\r\n"
+
+    def test_idn_multilabel_punycoded(self):
+        assert _encode_whois_query("café.fr") == b"xn--caf-dma.fr\r\n"
+
+    def test_unencodable_target_raises_valueerror(self):
+        """A target that cannot be IDNA-encoded raises ValueError (→ clean error,
+        never an unhandled UnicodeEncodeError / 500)."""
+        with pytest.raises(ValueError):
+            _encode_whois_query("\udce9")  # lone surrogate: not ascii, not idna
+
+
 class TestDecodeWhoisBody:
     def test_utf8_decoding(self):
         data = b"Domain Name: example.com\n"
@@ -1339,6 +1358,49 @@ class TestWhoisFallback:
         sent = mock_writer.write.call_args[0][0]
         assert b"\r\n" in sent
         assert b"example.com" in sent
+
+    @pytest.mark.asyncio
+    async def test_idn_target_punycoded_and_connects_to_validated_ip(self, tool):
+        """IDN target → punycode on the wire (no 500); connection uses the
+        SSRF-validated IP (resolve-then-connect), not a re-resolved one."""
+        from unittest.mock import AsyncMock
+
+        mock_reader = AsyncMock()
+        mock_reader.read.side_effect = [b"Domain Name: XN--MNCHEN-3YA.DE\r\n", b""]
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        connected_to: dict[str, object] = {}
+
+        async def mock_open_conn(ip, port):
+            connected_to["ip"] = ip
+            connected_to["port"] = port
+            return mock_reader, mock_writer
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            # The custom WHOIS server resolves to a distinct validated IP.
+            if target == "whois.denic.de":
+                return "2.3.4.5", None
+            return "1.2.3.4", None
+
+        with patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
+            result = await tool.execute(
+                {"target": "münchen.de", "server": "whois.denic.de"},
+                MagicMock(),
+            )
+
+        assert result.success is True, f"Expected success, got: {result.error}"
+        # Resolve-then-connect: socket opened to the validated server IP, port 43.
+        assert connected_to["ip"] == "2.3.4.5"
+        assert connected_to["port"] == 43
+        # IDN went out as A-label punycode, never raw Unicode.
+        sent = mock_writer.write.call_args[0][0]
+        assert sent == b"xn--mnchen-3ya.de\r\n"
 
     @pytest.mark.asyncio
     async def test_rdap_fails_fallsback_to_whois(self, tool):
