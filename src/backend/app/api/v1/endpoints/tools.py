@@ -37,6 +37,7 @@ def get_registry(request: Request) -> ToolRegistry:
         from app.tools.secret_generator import SecretGeneratorTool
         from app.tools.ssl_viewer import SslViewerTool
         from app.tools.traceroute import TracerouteTool
+        from app.tools.whois_lookup import WhoisLookupTool
 
         registry = ToolRegistry()
         registry.register(PingTool())
@@ -45,6 +46,7 @@ def get_registry(request: Request) -> ToolRegistry:
         registry.register(SslViewerTool())
         registry.register(MacOuiLookupTool())
         registry.register(SecretGeneratorTool())
+        registry.register(WhoisLookupTool())
         request.app.state.tool_registry = registry
     return request.app.state.tool_registry
 
