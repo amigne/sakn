@@ -341,3 +341,257 @@ def test_no_subprocess_in_whois():
             assert node.module != "subprocess", "subprocess import found"
             for alias in node.names:
                 assert "subprocess" not in str(alias.name), "subprocess reference found"
+
+
+# ── WHOIS fallback path (Sprint 2) ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_whois_fallback_path(client: AsyncClient):
+    """AC-WHOIS-030: When RDAP fails, the tool falls back to WHOIS/43."""
+    from unittest.mock import AsyncMock
+
+    from app.database import async_session_factory
+
+    async with async_session_factory() as db:
+        await _seed_whois_tool(db)
+        await _seed_whois_permissions(db, (await db.execute(
+            select(ToolModule.id).where(ToolModule.name == "whois")
+        )).scalar_one_or_none())
+        await db.commit()
+
+    from app.redis.rate_limit_store import RateLimitResult
+
+    async def mock_check_limit(*args, **kwargs):
+        return RateLimitResult(
+            allowed=True, soft_count=0, hard_count=0,
+            soft_limit=200, hard_limit=3600,
+            soft_window_s=3600, hard_window_s=3600,
+            retry_after=0, limit_type="none",
+        )
+
+    # IANA RDAP returns no services → RDAP fails
+    # IANA WHOIS returns a whois: referrer
+    # Authoritative WHOIS returns domain data
+    iana_rdap_empty = {"services": []}
+    iana_whois_bytes = b"domain: com\r\nwhois: whois.verisign-grs.com\r\n"
+    auth_whois_bytes = (
+        b"Domain Name: example.com\r\n"
+        b"Registrar: ACME Registrar\r\n"
+        b"Creation Date: 1995-08-14T04:00:00Z\r\n"
+    )
+
+    import json as _json
+
+    class MockResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json_data = json_data
+            self.content = _json.dumps(json_data).encode()
+            self.headers = {}
+            self.request = MagicMock()
+
+        async def aiter_bytes(self):
+            yield self.content
+
+    class MockStream:
+        def __init__(self, response):
+            self._response = response
+        async def __aenter__(self):
+            return self._response
+        async def __aexit__(self, *args):
+            pass
+
+    class MockClient:
+        """Mock httpx.AsyncClient that returns empty RDAP bootstrap."""
+        def __init__(self, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            pass
+        def stream(self, method, url, **kwargs):
+            return MockStream(MockResponse(200, iana_rdap_empty))
+
+    mock_reader = AsyncMock()
+    mock_reader.read.side_effect = [iana_whois_bytes, b"", auth_whois_bytes, b""]
+    mock_writer = MagicMock()
+    mock_writer.drain = AsyncMock()
+    mock_writer.wait_closed = AsyncMock()
+
+    async def mock_open_conn(ip, port):
+        return mock_reader, mock_writer
+
+    async def mock_filter(target: str) -> tuple[str, str | None]:
+        return "1.2.3.4", None
+
+    import httpx
+
+    import app.tools.whois_lookup as wl_mod
+
+    with patch("app.middleware.rate_limit.check_tool_rate_limit", mock_check_limit), \
+            patch.object(httpx, "AsyncClient", MockClient), \
+            patch.object(wl_mod, "filter_target", mock_filter), \
+            patch("asyncio.open_connection", mock_open_conn):
+        response = await client.post(
+            "/api/v1/tools/whois/execute",
+            json={"target": "example.com"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    result = data["result"]
+    assert result["success"] is True, f"Expected success, got: {result}"
+    assert result["data"]["protocol"] == "whois"
+    assert result["data"]["domain"] == "example.com"
+    assert result["data"]["registrar"] == "ACME Registrar"
+    assert result["data"]["raw_text"] is not None
+
+
+@pytest.mark.asyncio
+async def test_whois_custom_server_skips_rdap(client: AsyncClient):
+    """AC-WHOIS-031: Custom server parameter → RDAP skipped, WHOIS direct."""
+    from unittest.mock import AsyncMock
+
+    from app.database import async_session_factory
+
+    async with async_session_factory() as db:
+        await _seed_whois_tool(db)
+        await _seed_whois_permissions(db, (await db.execute(
+            select(ToolModule.id).where(ToolModule.name == "whois")
+        )).scalar_one_or_none())
+        await db.commit()
+
+    from app.redis.rate_limit_store import RateLimitResult
+
+    async def mock_check_limit(*args, **kwargs):
+        return RateLimitResult(
+            allowed=True, soft_count=0, hard_count=0,
+            soft_limit=200, hard_limit=3600,
+            soft_window_s=3600, hard_window_s=3600,
+            retry_after=0, limit_type="none",
+        )
+
+    whois_bytes = (
+        b"Domain Name: example.net\r\n"
+        b"Registrar: MyReg\r\n"
+    )
+
+    mock_reader = AsyncMock()
+    mock_reader.read.side_effect = [whois_bytes, b""]
+    mock_writer = MagicMock()
+    mock_writer.drain = AsyncMock()
+    mock_writer.wait_closed = AsyncMock()
+
+    async def mock_open_conn(ip, port):
+        return mock_reader, mock_writer
+
+    async def mock_filter(target: str) -> tuple[str, str | None]:
+        return "1.2.3.4", None
+
+    import app.tools.whois_lookup as wl_mod
+
+    with patch("app.middleware.rate_limit.check_tool_rate_limit", mock_check_limit), \
+            patch.object(wl_mod, "filter_target", mock_filter), \
+            patch("asyncio.open_connection", mock_open_conn):
+        response = await client.post(
+            "/api/v1/tools/whois/execute",
+            json={"target": "example.net", "server": "whois.mydomain.net"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert result["success"] is True
+    assert result["data"]["protocol"] == "whois"
+    assert result["data"]["registrar"] == "MyReg"
+
+
+@pytest.mark.asyncio
+async def test_whois_fallback_unsupported_tld(client: AsyncClient):
+    """AC-WHOIS-032: Unknown TLD → WHOIS_UNSUPPORTED_TLD."""
+    from unittest.mock import AsyncMock
+
+    from app.database import async_session_factory
+
+    async with async_session_factory() as db:
+        await _seed_whois_tool(db)
+        await _seed_whois_permissions(db, (await db.execute(
+            select(ToolModule.id).where(ToolModule.name == "whois")
+        )).scalar_one_or_none())
+        await db.commit()
+
+    from app.redis.rate_limit_store import RateLimitResult
+
+    async def mock_check_limit(*args, **kwargs):
+        return RateLimitResult(
+            allowed=True, soft_count=0, hard_count=0,
+            soft_limit=200, hard_limit=3600,
+            soft_window_s=3600, hard_window_s=3600,
+            retry_after=0, limit_type="none",
+        )
+
+    # IANA RDAP returns no services
+    iana_rdap_empty = {"services": []}
+    # IANA WHOIS returns no whois: field
+    iana_bytes = b"domain: nonexistent\r\nstatus: NOT FOUND\r\n"
+
+    import json as _json
+
+    class MockResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json_data = json_data
+            self.content = _json.dumps(json_data).encode()
+            self.headers = {}
+            self.request = MagicMock()
+
+        async def aiter_bytes(self):
+            yield self.content
+
+    class MockStream:
+        def __init__(self, response):
+            self._response = response
+        async def __aenter__(self):
+            return self._response
+        async def __aexit__(self, *args):
+            pass
+
+    class MockClient:
+        def __init__(self, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            pass
+        def stream(self, method, url, **kwargs):
+            return MockStream(MockResponse(200, iana_rdap_empty))
+
+    mock_reader = AsyncMock()
+    mock_reader.read.side_effect = [iana_bytes, b""]
+    mock_writer = MagicMock()
+    mock_writer.drain = AsyncMock()
+    mock_writer.wait_closed = AsyncMock()
+
+    async def mock_open_conn(ip, port):
+        return mock_reader, mock_writer
+
+    async def mock_filter(target: str) -> tuple[str, str | None]:
+        return "1.2.3.4", None
+
+    import httpx
+
+    import app.tools.whois_lookup as wl_mod
+
+    with patch("app.middleware.rate_limit.check_tool_rate_limit", mock_check_limit), \
+            patch.object(httpx, "AsyncClient", MockClient), \
+            patch.object(wl_mod, "filter_target", mock_filter), \
+            patch("asyncio.open_connection", mock_open_conn):
+        response = await client.post(
+            "/api/v1/tools/whois/execute",
+            json={"target": "test.nonexistenttld"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert result["success"] is False
+    assert result["error"] == "errors.whois_unsupported_tld"
