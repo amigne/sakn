@@ -12,11 +12,14 @@ import pytest
 from app.tools.base import ToolCategory
 from app.tools.whois_lookup import (
     WhoisLookupTool,
+    _decode_whois_body,
     _extract_iana_rdap_servers,
     _extract_tld,
     _is_gdpr_redacted,
     _parse_rdap_response,
+    _parse_whois_response,
     _pin_resolution,
+    _sanitize_whois_target,
 )
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -576,7 +579,8 @@ class TestRdapExecution:
 
     @pytest.mark.asyncio
     async def test_rdap_iana_404(self, tool):
-        """IANA bootstrap returns 404 → WHOIS_UNSUPPORTED_TLD."""
+        """IANA bootstrap returns 404 → WHOIS fallback → WHOIS_UNSUPPORTED_TLD
+        if the WHOIS fallback also finds no server."""
 
         async def mock_rdap_get(url: str) -> dict | None:
             return None  # IANA returns nothing (404 / no data)
@@ -588,7 +592,10 @@ class TestRdapExecution:
             "app.tools.whois_lookup.filter_target", mock_filter
         ), patch.object(
             tool, "_rdap_get", mock_rdap_get
-        ):
+        ), patch.object(
+            tool, "_discover_whois_server"
+        ) as mock_discover:
+            mock_discover.return_value = None  # No WHOIS server for TLD
             result = await tool.execute(
                 {"target": "unknown-tld.xyz"},
                 MagicMock(),
@@ -640,7 +647,7 @@ class TestRdapExecution:
 
     @pytest.mark.asyncio
     async def test_rdap_connect_timeout(self, tool):
-        """RDAP connection timeout → WHOIS_CONNECTION_FAILED."""
+        """RDAP connection timeout → WHOIS fallback also fails → WHOIS_CONNECTION_FAILED."""
         import httpx
 
         async def mock_rdap_get(url: str) -> dict | None:
@@ -653,31 +660,54 @@ class TestRdapExecution:
             "app.tools.whois_lookup.filter_target", mock_filter
         ), patch.object(
             tool, "_rdap_get", mock_rdap_get
-        ):
+        ), patch.object(
+            tool, "_discover_whois_server"
+        ) as mock_discover:
+            mock_discover.return_value = None  # WHOIS also not available
             result = await tool.execute(
                 {"target": "example.com"},
                 MagicMock(),
             )
 
         assert result.success is False
-        assert result.error == "errors.whois_connection_failed"
+        assert result.error == "errors.whois_unsupported_tld"
 
     @pytest.mark.asyncio
     async def test_custom_server_skips_rdap(self, tool):
-        """When server is provided, RDAP is skipped → WHOIS_UNSUPPORTED_TLD."""
+        """When server is provided, RDAP is skipped → WHOIS/43 direct connection."""
+        from unittest.mock import AsyncMock
+
+        whois_bytes = (
+            b"Domain Name: EXAMPLE.COM\r\n"
+            b"Registrar: ARINReg\r\n"
+        )
+
+        mock_reader = AsyncMock()
+        mock_reader.read.side_effect = [whois_bytes, b""]
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        async def mock_open_conn(ip, port):
+            return mock_reader, mock_writer
+
         async def mock_filter(target: str) -> tuple[str, str | None]:
             return "1.2.3.4", None
 
-        with patch("app.tools.whois_lookup.filter_target", mock_filter):
+        with patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
             result = await tool.execute(
                 {"target": "example.com", "server": "whois.arin.net"},
                 MagicMock(),
             )
 
-        # Sprint 1: custom server not yet supported → WHOIS_UNSUPPORTED_TLD
-        # Sprint 2 will handle this with WHOIS/43 connection
-        assert result.success is False
-        assert result.error == "errors.whois_unsupported_tld"
+        # Sprint 2: custom server → WHOIS/43 direct, RDAP skipped
+        assert result.success is True
+        assert result.data["protocol"] == "whois"
+        assert result.data["registrar"] == "ARINReg"
 
     @pytest.mark.asyncio
     async def test_execution_deadline_exceeded(self, tool):
@@ -1016,3 +1046,485 @@ class TestResultSchema:
         assert "tech_contact" in props
         assert "raw_text" in props
         assert "disclaimer" in props
+
+
+# ── WHOIS/43 helpers (Sprint 2) ────────────────────────────────────────────────
+
+
+class TestSanitizeWhoisTarget:
+    def test_normal_target_passes(self):
+        assert _sanitize_whois_target("example.com") == "example.com"
+
+    def test_crlf_rejected(self):
+        """Carriage-return / line-feed are stripped from the target."""
+        sanitized = _sanitize_whois_target("example.com\r\ninjected")
+        assert "\r" not in sanitized
+        assert "\n" not in sanitized
+        # The text after control chars is preserved (sanitization strips
+        # \r\n but keeps the rest — this is a WHOIS query, only the
+        # first line matters, CRLF injection is what we prevent)
+        assert "example.com" in sanitized
+
+    def test_null_byte_stripped(self):
+        sanitized = _sanitize_whois_target("ex\x00ample.com")
+        assert "\x00" not in sanitized
+        assert sanitized == "example.com"
+
+    def test_control_chars_stripped(self):
+        sanitized = _sanitize_whois_target("ex\x01am\x02ple.com")
+        assert sanitized == "example.com"
+
+    def test_empty_after_sanitization_raises(self):
+        with pytest.raises(ValueError, match="empty after sanitization"):
+            _sanitize_whois_target("\r\n\x00\x01")
+
+    def test_subdomain_passes(self):
+        assert _sanitize_whois_target("sub.example.co.uk") == "sub.example.co.uk"
+
+
+class TestDecodeWhoisBody:
+    def test_utf8_decoding(self):
+        data = b"Domain Name: example.com\n"
+        result = _decode_whois_body(data)
+        assert result == "Domain Name: example.com\n"
+
+    def test_latin1_fallback(self):
+        # Latin-1 bytes that are invalid UTF-8: é in latin-1 is 0xE9
+        data = b"Domain Name: ex\xe9mple.com\n"
+        result = _decode_whois_body(data)
+        assert "example" not in result  # the \xe9 byte is present in output
+        # Latin-1 fallback preserves the byte as a character
+        assert "ex" in result
+
+    def test_latin1_accents(self):
+        data = "café".encode("latin-1")
+        result = _decode_whois_body(data)
+        assert result == "café"
+
+
+# ── WHOIS response parsing ─────────────────────────────────────────────────────
+
+# Sample WHOIS fixtures (anonymized real-world responses)
+
+WHOIS_THICK_RESPONSE = """\
+Domain Name: EXAMPLE.COM
+Registry Domain ID: 1234567_DOMAIN_COM-VRSN
+Registrar WHOIS Server: whois.example-registrar.com
+Registrar URL: https://www.example-registrar.com
+Updated Date: 2026-01-15T08:30:00Z
+Creation Date: 1995-08-14T04:00:00Z
+Registry Expiry Date: 2027-08-13T04:00:00Z
+Registrar: Example Registrar, Inc.
+Domain Status: clientDeleteProhibited
+Domain Status: clientTransferProhibited
+Name Server: NS1.EXAMPLE.COM
+Name Server: NS2.EXAMPLE.COM
+Registrant Name: REDACTED FOR PRIVACY
+Registrant Organization: REDACTED FOR PRIVACY
+"""
+
+WHOIS_THIN_RESPONSE = """\
+Domain Name: EXAMPLE.COM
+Registry Domain ID: 1234567_DOMAIN_COM-VRSN
+Registrar WHOIS Server: whois.example-registrar.com
+Updated Date: 2026-01-15T08:30:00Z
+Creation Date: 1995-08-14T04:00:00Z
+Registry Expiry Date: 2027-08-13T04:00:00Z
+Registrar: Example Registrar, Inc.
+Domain Status: clientDeleteProhibited
+Name Server: NS1.EXAMPLE.COM
+Name Server: NS2.EXAMPLE.COM
+"""
+
+WHOIS_GDPR_RESPONSE = """\
+Domain Name: REDACTED-DOMAIN.EU
+Registrar: REDACTED FOR PRIVACY
+Creation Date: 2020-01-01T00:00:00Z
+Domain Status: ok
+Name Server: NS1.REDACTED.EU
+"""
+
+WHOIS_LATIN1_RESPONSE = (
+    "Domain Name: ex\xe9mple.com\n"
+    "Registrar: TLD Registrar Solutions\n"
+    "Creation Date: 2010-03-15T12:00:00Z\n"
+)
+
+
+class TestParseWhoisResponse:
+    def test_extract_domain(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert result["protocol"] == "whois"
+        assert result["domain"] == "EXAMPLE.COM"
+
+    def test_extract_registrar(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert result["registrar"] == "Example Registrar, Inc."
+
+    def test_extract_dates(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert result["creation_date"] == "1995-08-14T04:00:00Z"
+        assert result["expiration_date"] == "2027-08-13T04:00:00Z"
+        assert result["updated_date"] == "2026-01-15T08:30:00Z"
+
+    def test_extract_nameservers(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert len(result["name_servers"]) == 2
+        assert "ns1.example.com" in result["name_servers"]
+        assert "ns2.example.com" in result["name_servers"]
+
+    def test_extract_status(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert len(result["status"]) == 2
+        assert "clientDeleteProhibited" in result["status"]
+        assert "clientTransferProhibited" in result["status"]
+
+    def test_raw_text_always_present(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert result["raw_text"] == WHOIS_THICK_RESPONSE
+
+    def test_thin_response(self):
+        """Thin WHOIS (e.g., .com) has no contact data — extraction still works."""
+        result = _parse_whois_response(WHOIS_THIN_RESPONSE, "example.com")
+        assert result["domain"] == "EXAMPLE.COM"
+        assert result["registrar"] == "Example Registrar, Inc."
+        assert result["registrant"] is None
+        assert result["admin_contact"] is None
+        assert result["tech_contact"] is None
+        assert len(result["name_servers"]) == 2
+
+    def test_gdpr_redacted_registrar(self):
+        """GDPR-redacted registrar field should be None."""
+        result = _parse_whois_response(WHOIS_GDPR_RESPONSE, "redacted-domain.eu")
+        assert result["registrar"] is None
+
+    def test_missing_fields_null(self):
+        minimal = "Domain Name: minimal.com\n"
+        result = _parse_whois_response(minimal, "minimal.com")
+        assert result["domain"] == "minimal.com"
+        assert result["registrar"] is None
+        assert result["name_servers"] == []
+        assert result["creation_date"] is None
+        assert result["expiration_date"] is None
+        assert result["updated_date"] is None
+
+    def test_empty_response(self):
+        result = _parse_whois_response("", "empty.com")
+        assert result["domain"] == "empty.com"
+        assert result["protocol"] == "whois"
+
+    def test_whois_server_extraction(self):
+        result = _parse_whois_response(WHOIS_THICK_RESPONSE, "example.com")
+        assert result["whois_server"] == "whois.example-registrar.com"
+
+
+# ── WHOIS SSRF (Sprint 2) ──────────────────────────────────────────────────────
+
+
+class TestWhoisSsrf:
+    @pytest.mark.asyncio
+    async def test_custom_server_direct_whois_blocked(self, tool):
+        """Custom server resolving to private IP → blocked before WHOIS connect."""
+        call_count = 0
+
+        async def selective_filter(target: str) -> tuple[str, str | None]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:  # target
+                return "93.184.216.34", None
+            return "", "errors.target_not_allowed"  # server blocked
+
+        with patch("app.tools.whois_lookup.filter_target", selective_filter):
+            result = await tool.execute(
+                {"target": "example.com", "server": "127.0.0.1"},
+                MagicMock(),
+            )
+        assert result.success is False
+        assert result.error == "errors.target_not_allowed"
+
+    @pytest.mark.asyncio
+    async def test_auto_whois_server_blocked_at_connect(self, tool):
+        """Auto-discovered WHOIS server resolving to private IP → CONNECTION_FAILED."""
+        import httpx
+
+        call_count = 0
+
+        async def mock_rdap_get(url: str) -> dict | None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # IANA bootstrap returns empty → RDAP fails, triggers fallback
+                return None
+            raise httpx.ConnectTimeout("timeout")
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            # Let target, rdap.iana.org, and whois.iana.org through
+            if target in ("example.com", "rdap.iana.org", "whois.iana.org"):
+                return "1.2.3.4", None
+            # Block the discovered WHOIS server
+            return "", "errors.target_not_allowed"
+
+        with patch.object(
+            tool, "_rdap_get", mock_rdap_get
+        ), patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch.object(
+            tool, "_discover_whois_server"
+        ) as mock_discover:
+            # The IANA WHOIS server is discovered, but when we try to
+            # connect to it, filter_target blocks it
+            mock_discover.return_value = "blocked-whois.example.net"
+            result = await tool.execute(
+                {"target": "example.com"},
+                MagicMock(),
+            )
+
+        # The auto-discovered WHOIS server is blocked at connect time
+        # → WHOIS_CONNECTION_FAILED
+        # (not TARGET_NOT_ALLOWED, because the "server" wasn't user-provided)
+        assert result.success is False
+        assert result.error == "errors.whois_connection_failed"
+
+
+# ── WHOIS fallback path (Sprint 2) ─────────────────────────────────────────────
+
+
+class TestWhoisFallback:
+    @pytest.mark.asyncio
+    async def test_custom_server_triggers_whois_directly(self, tool):
+        """When a custom server is provided, RDAP is skipped and WHOIS/43 is used."""
+        from unittest.mock import AsyncMock
+
+        # IANA whois response for .com
+        whois_body = (
+            b"Domain Name: EXAMPLE.COM\r\n"
+            b"Registrar: CustomReg\r\n"
+            b"Creation Date: 1995-08-14T04:00:00Z\r\n"
+            b"Registry Expiry Date: 2027-08-13T04:00:00Z\r\n"
+            b"Name Server: NS1.EXAMPLE.COM\r\n"
+        )
+
+        mock_reader = AsyncMock()
+        mock_reader.read.side_effect = [whois_body, b""]
+
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        async def mock_open_conn(ip, port):
+            return mock_reader, mock_writer
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            if target == "whois.custom-registrar.com":
+                return "2.3.4.5", None
+            return "1.2.3.4", None
+
+        with patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
+            result = await tool.execute(
+                {"target": "example.com", "server": "whois.custom-registrar.com"},
+                MagicMock(),
+            )
+
+        assert result.success is True, f"Expected success, got error: {result.error}"
+        assert result.data["protocol"] == "whois"
+        assert result.data["domain"] == "EXAMPLE.COM"
+        assert result.data["registrar"] == "CustomReg"
+        assert result.data["raw_text"] is not None
+        # Verify the query was sent (anti-injection: sanitized target)
+        mock_writer.write.assert_called_once()
+        sent = mock_writer.write.call_args[0][0]
+        assert b"\r\n" in sent
+        assert b"example.com" in sent
+
+    @pytest.mark.asyncio
+    async def test_rdap_fails_fallsback_to_whois(self, tool):
+        """When RDAP returns None (no data), the tool falls back to WHOIS/43."""
+        from unittest.mock import AsyncMock
+
+        # IANA RDAP returns empty (no RDAP entry for this TLD)
+        async def mock_rdap_get(url: str) -> dict | None:
+            return None
+
+        # IANA WHOIS response: whois: whois.nic.xyz
+        iana_whois_bytes = (
+            b"domain: xyz\r\n"
+            b"whois: whois.nic.xyz\r\n"
+            b"status: ACTIVE\r\n"
+        )
+
+        # Authoritative WHOIS response
+        auth_whois_bytes = (
+            b"Domain Name: example.xyz\r\n"
+            b"Registrar: XYZ Registrar\r\n"
+            b"Creation Date: 2020-01-15T00:00:00Z\r\n"
+            b"Name Server: NS1.XYZ.COM\r\n"
+        )
+
+        mock_reader = AsyncMock()
+        # First call: IANA WHOIS → returns referrer
+        # Second call: authoritative WHOIS → returns domain data
+        mock_reader.read.side_effect = [
+            iana_whois_bytes,
+            b"",  # EOF after IANA response
+            auth_whois_bytes,
+            b"",  # EOF after authoritative response
+        ]
+
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        mock_open = AsyncMock()
+        mock_open.side_effect = lambda ip, port: (mock_reader, mock_writer)
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        with patch.object(
+            tool, "_rdap_get", mock_rdap_get
+        ), patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open
+        ):
+            result = await tool.execute(
+                {"target": "example.xyz"},
+                MagicMock(),
+            )
+
+        assert result.success is True, f"Expected success, got error: {result.error}"
+        assert result.data["protocol"] == "whois"
+        assert result.data["domain"] == "example.xyz"
+        assert result.data["registrar"] == "XYZ Registrar"
+        assert result.data["raw_text"] is not None
+        # Verify IANA WHOIS was queried first (whois.iana.org on port 43)
+        assert mock_open.call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_whois_truncation_marker(self, tool):
+        """When WHOIS response exceeds the size cap, the raw_text has a truncation marker."""
+        from unittest.mock import AsyncMock
+
+        # Generate a response that exceeds the cap
+        big_body = b"Domain Name: big.example\r\n" + (b"X" * (2_097_152 + 1000))
+
+        mock_reader = AsyncMock()
+        mock_reader.read.side_effect = [big_body, b""]
+
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        async def mock_open_conn(ip, port):
+            return mock_reader, mock_writer
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        with patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
+            result = await tool.execute(
+                {"target": "big.example", "server": "whois.example.net"},
+                MagicMock(),
+            )
+
+        assert result.success is True
+        assert result.data["protocol"] == "whois"
+        assert "TRUNCATED" in result.data["raw_text"]
+
+    @pytest.mark.asyncio
+    async def test_whois_unsupported_tld(self, tool):
+        """When IANA has no WHOIS server for the TLD, return WHOIS_UNSUPPORTED_TLD."""
+        from unittest.mock import AsyncMock
+
+        # IANA RDAP returns None (no RDAP entry)
+        async def mock_rdap_get(url: str) -> dict | None:
+            return None
+
+        # IANA WHOIS returns no whois: field
+        iana_bytes = b"domain: unknown\r\nstatus: NOT FOUND\r\n"
+
+        mock_reader = AsyncMock()
+        mock_reader.read.side_effect = [iana_bytes, b""]
+
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        async def mock_open_conn(ip, port):
+            return mock_reader, mock_writer
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        with patch.object(
+            tool, "_rdap_get", mock_rdap_get
+        ), patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
+            result = await tool.execute(
+                {"target": "test.unknown"},
+                MagicMock(),
+            )
+
+        assert result.success is False
+        assert result.error == "errors.whois_unsupported_tld"
+
+    @pytest.mark.asyncio
+    async def test_whois_connection_failed(self, tool):
+        """When WHOIS server cannot be reached, return WHOIS_CONNECTION_FAILED."""
+        from unittest.mock import AsyncMock
+
+        # IANA RDAP returns None → fallback triggers
+        async def mock_rdap_get(url: str) -> dict | None:
+            return None
+
+        # IANA WHOIS returns a valid whois: referrer
+        iana_bytes = b"whois: whois.dead-server.com\r\n"
+
+        mock_reader = AsyncMock()
+        # First call: IANA WHOIS succeeds
+        # Second call: authoritative WHOIS fails with OSError
+        mock_reader.read.side_effect = [iana_bytes, b""]
+
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        call_count = 0
+
+        async def mock_open_conn(ip, port):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # IANA WHOIS — success
+                return mock_reader, mock_writer
+            # Authoritative WHOIS — fail
+            raise OSError("Connection refused")
+
+        async def mock_filter(target: str) -> tuple[str, str | None]:
+            return "1.2.3.4", None
+
+        with patch.object(
+            tool, "_rdap_get", mock_rdap_get
+        ), patch(
+            "app.tools.whois_lookup.filter_target", mock_filter
+        ), patch(
+            "asyncio.open_connection", mock_open_conn
+        ):
+            result = await tool.execute(
+                {"target": "test.dead"},
+                MagicMock(),
+            )
+
+        assert result.success is False
+        assert result.error == "errors.whois_connection_failed"

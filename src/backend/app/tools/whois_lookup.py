@@ -1,8 +1,8 @@
-"""WHOIS lookup tool — RDAP-first with WHOIS/43 fallback (Sprint 2).
+"""WHOIS lookup tool — RDAP-first with WHOIS/43 fallback.
 
-Sprint 1 implements the RDAP phase and the complete SSRF/validation foundation.
-When RDAP fails, the tool returns WHOIS_UNSUPPORTED_TLD or WHOIS_CONNECTION_FAILED
-with a clean extension point for the Sprint 2 WHOIS/43 fallback.
+Sprint 1: RDAP phase and complete SSRF/validation foundation.
+Sprint 2: WHOIS/43 fallback with IANA server discovery, structured extraction,
+          size cap, anti-injection sanitization, and TCP timeouts.
 
 References:
   - spec-tool-whois.md §1–6
@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
 # ── Constants ────────────────────────────────────────────────────────────────
 
 IANA_RDAP_BOOTSTRAP = "https://rdap.iana.org"
+IANA_WHOIS_HOST = "whois.iana.org"
+WHOIS_PORT = 43
 MAX_RDAP_REDIRECTS = 3
+TRUNCATION_MARKER = "\n\n[TRUNCATED — response exceeded size limit]\n"
 
 
 # ── IP pinning (resolve-then-connect, DNS-rebinding defence) ─────────────────
@@ -298,16 +301,201 @@ def _build_rdap_url(base_url: str, target: str, is_ip: bool) -> str:
     return f"{base}/domain/{quote(target, safe='')}"
 
 
+# ── WHOIS/43 helpers (Sprint 2) ───────────────────────────────────────────────
+
+
+def _sanitize_whois_target(target: str) -> str:
+    """Strip control characters to prevent WHOIS protocol injection.
+
+    Removes \\r, \\n, and all control chars below 0x20 except space (0x20).
+    Raises ValueError if the result is empty after sanitization.
+
+    Reference: spec-tool-whois.md §3.4.
+    """
+    import re
+
+    sanitized = re.sub(r"[\x00-\x1f]", "", target)
+    if not sanitized.strip():
+        raise ValueError("Target is empty after sanitization")
+    return sanitized
+
+
+def _decode_whois_body(data: bytes) -> str:
+    """Decode a WHOIS raw response body, best-effort.
+
+    Tries UTF-8 first, then Latin-1 as fallback (some legacy WHOIS servers
+    return Latin-1 encoded text). Replacement characters are used for
+    undecodable bytes so the output is always a valid string.
+    """
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("latin-1", errors="replace")
+
+
+def _parse_whois_response(raw_text: str, target: str) -> dict[str, Any]:
+    """Best-effort structured extraction from a classic WHOIS response.
+
+    Extracts common fields using regex patterns.  Fields that cannot be
+    parsed are ``None``.  The ``raw_text`` is always included.
+
+    Reference: spec-tool-whois.md §4.2.
+    """
+    import re
+
+    result: dict[str, Any] = {
+        "protocol": "whois",
+        "domain": target,
+        "status": [],
+        "registrar": None,
+        "whois_server": None,
+        "name_servers": [],
+        "creation_date": None,
+        "expiration_date": None,
+        "updated_date": None,
+        "registrant": None,
+        "admin_contact": None,
+        "tech_contact": None,
+        "raw_text": raw_text,
+        "disclaimer": None,
+    }
+
+    # Domain name
+    m = re.search(r"(?im)^Domain Name:\s*(.+)", raw_text)
+    if m:
+        result["domain"] = m.group(1).strip()
+
+    # Registrar
+    m = re.search(r"(?im)^Registrar:\s*(.+)", raw_text)
+    if m:
+        result["registrar"] = m.group(1).strip()
+        if _is_redacted(result["registrar"]):
+            result["registrar"] = None
+
+    # Status — multiple lines
+    statuses = re.findall(r"(?im)^Domain Status:\s*(.+)", raw_text)
+    if statuses:
+        result["status"] = [s.strip() for s in statuses]
+
+    # Name servers — multiple lines
+    nameservers = re.findall(r"(?im)^Name Server:\s*(.+)", raw_text)
+    if nameservers:
+        result["name_servers"] = [ns.strip().lower() for ns in nameservers]
+
+    # Creation date
+    m = re.search(r"(?im)^Creation Date:\s*(.+)", raw_text)
+    if m:
+        result["creation_date"] = m.group(1).strip()
+
+    # Expiration date (Registry Expiry Date OR Expiration Date)
+    m = re.search(r"(?im)^(?:Registry )?Expir\w+ Date:\s*(.+)", raw_text)
+    if m:
+        result["expiration_date"] = m.group(1).strip()
+
+    # Updated date
+    m = re.search(r"(?im)^Updated Date:\s*(.+)", raw_text)
+    if m:
+        result["updated_date"] = m.group(1).strip()
+
+    # WHOIS server (from the referral line — both "Whois Server:" and
+    # "Registrar WHOIS Server:" forms exist)
+    m = re.search(r"(?im)^(?:Registrar )?Whois Server:\s*(.+)", raw_text)
+    if m:
+        result["whois_server"] = m.group(1).strip().lower()
+
+    # Registrant — best-effort block extraction (the line after "Registrant"
+    # header, up to the next blank line or section header).  GDPR-redacted
+    # fields stay None (the raw text is always available).
+    registrant_block = _extract_whois_contact_block(raw_text, "Registrant")
+    if registrant_block:
+        result["registrant"] = registrant_block
+
+    admin_block = _extract_whois_contact_block(raw_text, "Administrative Contact")
+    if not admin_block:
+        admin_block = _extract_whois_contact_block(raw_text, "Admin Contact")
+    if admin_block:
+        result["admin_contact"] = admin_block
+
+    tech_block = _extract_whois_contact_block(raw_text, "Technical Contact")
+    if not tech_block:
+        tech_block = _extract_whois_contact_block(raw_text, "Tech Contact")
+    if tech_block:
+        result["tech_contact"] = tech_block
+
+    return result
+
+
+def _is_redacted(value: str) -> bool:
+    """Heuristic: does a WHOIS field value indicate GDPR redaction?"""
+    v = value.lower()
+    redacted_keywords = [
+        "redacted",
+        "redacted for privacy",
+        "gdpr",
+        "data protected",
+        "not disclosed",
+    ]
+    return any(kw in v for kw in redacted_keywords)
+
+
+def _extract_whois_contact_block(raw_text: str, header: str) -> dict[str, Any] | None:
+    """Extract a contact block from a WHOIS response.
+
+    Looks for *header* followed by its key-value lines (indented or not),
+    stopping at a blank line or the next top-level section header.
+    Returns a flat dict of field→value, or None if the block is absent
+    or GDPR-redacted.
+    """
+    import re
+
+    # Find the header line, then collect continuation lines
+    pattern = rf"(?im)^{re.escape(header)}:?\s*\n((?:.*\n)*?)(?:\n|$|\Z)"
+    m = re.search(pattern, raw_text)
+    if not m:
+        return None
+
+    body = m.group(1)
+    if not body.strip():
+        return None
+
+    # Check for GDPR redaction in the block
+    if _is_redacted(body):
+        return None
+
+    # Parse key-value lines: "Key: Value" (some may be indented)
+    fields: dict[str, Any] = {}
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        kv = re.split(r":\s*", line, maxsplit=1)
+        if len(kv) == 2:
+            key = kv[0].strip()
+            val = kv[1].strip()
+            if key and val:
+                fields[key.lower().replace(" ", "_")] = val
+
+    if not fields:
+        return None
+    return fields
+
+
 # ── WhoisLookupTool ──────────────────────────────────────────────────────────
 
 
 class WhoisLookupTool(BaseTool):
-    """WHOIS lookup tool — RDAP-first with WHOIS/43 fallback (Sprint 2).
+    """WHOIS lookup tool — RDAP-first with WHOIS/43 fallback.
 
     Sprint 1 scope:
     - RDAP phase: IANA bootstrap → authoritative query → JSON parsing
     - SSRF foundation: filter_target on every outbound host
-    - Clean extension point for WHOIS/43 fallback (Sprint 2)
+
+    Sprint 2 scope:
+    - WHOIS/43 fallback with IANA server discovery
+    - Best-effort structured extraction from raw WHOIS responses
+    - Anti-injection target sanitization
+    - Response size cap with truncation marker
+    - Latin-1 decoding fallback for legacy servers
 
     Metadata flags (consumed by main.py seed logic for ToolModule row).
     """
@@ -424,15 +612,16 @@ class WhoisLookupTool(BaseTool):
         if block_error:
             return ToolResult(success=False, error=block_error)
 
-        # If a custom server is provided, validate it too
+        # If a custom server is provided, validate it too → go WHOIS directly
         if server:
             _, server_block_error = await filter_target(server)
             if server_block_error:
                 return ToolResult(success=False, error=server_block_error)
-            # Custom server → skip RDAP, go to WHOIS fallback (Sprint 2)
-            return ToolResult(
-                success=False,
-                error="errors.whois_unsupported_tld",
+
+            # Sprint 2: custom server → WHOIS/43 direct, skip RDAP
+            return await self._execute_whois_fallback(
+                target=target,
+                whois_server=server,
             )
 
         # ── Phase 1: RDAP ─────────────────────────────────────────────
@@ -441,12 +630,170 @@ class WhoisLookupTool(BaseTool):
         if rdap_result is not None:
             return rdap_result
 
-        # ── Fallback extension point (Sprint 2: WHOIS/43) ─────────────
-        # RDAP failed — Sprint 2 will insert WHOIS/43 fallback here.
-        return ToolResult(
-            success=False,
-            error="errors.whois_connection_failed",
+        # ── Phase 2: WHOIS/43 fallback ────────────────────────────────
+
+        # RDAP failed — discover the TLD's WHOIS server via IANA
+        tld = target if is_ip else _extract_tld(target)
+        whois_server = await self._discover_whois_server(tld)
+        if whois_server is None:
+            return ToolResult(
+                success=False,
+                error="errors.whois_unsupported_tld",
+            )
+
+        return await self._execute_whois_fallback(
+            target=target,
+            whois_server=whois_server,
         )
+
+    # ── WHOIS/43 client (Sprint 2) ────────────────────────────────────────
+
+    async def _execute_whois_fallback(
+        self,
+        *,
+        target: str,
+        whois_server: str,
+    ) -> ToolResult:
+        """Execute a WHOIS/43 query and return structured results.
+
+        The *whois_server* hostname is already SSRF-validated by the caller
+        (either via the phase-0 ``server`` custom-parameter check, or via
+        ``_discover_whois_server`` which validates ``whois.iana.org``).
+        This method re-resolves *whois_server* immediately before connecting
+        (resolve-then-connect, ADR-018 §B.5).
+        """
+        # Re-resolve just before connect (DNS-rebinding defence)
+        resolved_ip, block_error = await filter_target(whois_server)
+        if block_error:
+            logger.warning(
+                "WHOIS server %s blocked at connect time: %s",
+                whois_server,
+                block_error,
+            )
+            return ToolResult(
+                success=False,
+                error="errors.whois_connection_failed",
+            )
+
+        # Sanitize the target to prevent WHOIS protocol injection
+        try:
+            sanitized = _sanitize_whois_target(target)
+        except ValueError as exc:
+            logger.warning("WHOIS target sanitization failed for %s: %s", target, exc)
+            return ToolResult(
+                success=False,
+                error="errors.whois_connection_failed",
+            )
+
+        # Connect and query
+        try:
+            raw_bytes, was_truncated = await self._whois_query(resolved_ip, WHOIS_PORT, sanitized)
+        except (OSError, TimeoutError) as exc:
+            logger.warning(
+                "WHOIS/43 query failed for %s at %s: %s",
+                target,
+                whois_server,
+                exc,
+            )
+            return ToolResult(
+                success=False,
+                error="errors.whois_connection_failed",
+            )
+
+        # Decode and parse
+        raw_text = _decode_whois_body(raw_bytes)
+
+        if was_truncated:
+            raw_text += TRUNCATION_MARKER
+
+        data = _parse_whois_response(raw_text, target)
+        return ToolResult(success=True, data=data)
+
+    @staticmethod
+    async def _whois_query(ip: str, port: int, query: str) -> tuple[bytes, bool]:
+        """Open a TCP connection to *ip*:*port*, send *query*\\r\\n, and read
+        the response until the server closes the connection.
+
+        The body is capped at ``WHOIS_MAX_RESPONSE_BYTES``.
+        Returns ``(body_bytes, truncated)`` — *truncated* is True when the
+        response was larger than the cap and has been trimmed.
+
+        Timeouts are enforced via the caller's ``asyncio.wait_for`` which wraps
+        the overall ``_execute_inner`` with ``WHOIS_EXECUTION_DEADLINE``, plus
+        the per-operation connect/read timeouts set in the settings.
+        """
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, port),
+            timeout=settings.WHOIS_TCP_CONNECT_TIMEOUT,
+        )
+
+        try:
+            writer.write(f"{query}\r\n".encode("ascii"))
+            await writer.drain()
+
+            body = bytearray()
+            cap = settings.WHOIS_MAX_RESPONSE_BYTES
+            truncated = False
+
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(
+                        reader.read(65536),
+                        timeout=settings.WHOIS_TCP_READ_TIMEOUT,
+                    )
+                except TimeoutError:
+                    break
+
+                if not chunk:
+                    break
+
+                body.extend(chunk)
+                if len(body) > cap:
+                    truncated = True
+                    break
+
+            return bytes(body[:cap]), truncated
+        finally:
+            writer.close()
+            with contextlib.suppress(TimeoutError, OSError):
+                await asyncio.wait_for(writer.wait_closed(), timeout=5.0)
+
+    @staticmethod
+    async def _discover_whois_server(tld: str) -> str | None:
+        """Discover the authoritative WHOIS server for *tld* via IANA.
+
+        Queries ``whois.iana.org`` on port 43 with ``tld\\r\\n`` and parses
+        the ``whois:`` field from the response (standard IANA WHOIS reference
+        format).
+
+        Returns the lowercased WHOIS server hostname, or ``None`` if the TLD
+        has no known WHOIS server or the IANA query fails.
+        """
+        import re
+
+        # SSRF: validate whois.iana.org before connecting
+        iana_ip, block_error = await filter_target(IANA_WHOIS_HOST)
+        if block_error:
+            logger.warning("IANA WHOIS host %s blocked: %s", IANA_WHOIS_HOST, block_error)
+            return None
+
+        try:
+            raw, _truncated = await WhoisLookupTool._whois_query(iana_ip, WHOIS_PORT, tld)
+        except (OSError, TimeoutError) as exc:
+            logger.warning(
+                "IANA WHOIS reference query failed for TLD %s: %s", tld, exc
+            )
+            return None
+
+        text = _decode_whois_body(raw)
+
+        # Extract the whois: field (standard IANA format)
+        m = re.search(r"(?im)^whois:\s*(\S+)", text)
+        if m:
+            return m.group(1).strip().lower()
+
+        logger.info("No whois: field in IANA response for TLD %s", tld)
+        return None
 
     # ── RDAP client ─────────────────────────────────────────────────────
 
@@ -482,20 +829,17 @@ class WhoisLookupTool(BaseTool):
 
         if iana_data is None:
             # IANA returned 404 or had no RDAP entry for this TLD/IP
-            logger.info("No RDAP entry at IANA for %s", tld)
-            return ToolResult(
-                success=False,
-                error="errors.whois_unsupported_tld",
-            )
+            logger.info("No RDAP entry at IANA for %s — will try WHOIS fallback", tld)
+            return None  # Sprint 2: trigger WHOIS/43 fallback
 
         # Extract authoritative RDAP server URL
         auth_servers = _extract_iana_rdap_servers(iana_data)
         if not auth_servers:
-            logger.info("No RDAP servers in IANA bootstrap for %s", tld)
-            return ToolResult(
-                success=False,
-                error="errors.whois_unsupported_tld",
+            logger.info(
+                "No RDAP servers in IANA bootstrap for %s — will try WHOIS fallback",
+                tld,
             )
+            return None  # Sprint 2: trigger WHOIS/43 fallback
 
         # ── Step 2: Authoritative RDAP query ──────────────────────────
         # Try each authoritative server in order
