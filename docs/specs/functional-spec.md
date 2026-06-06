@@ -253,6 +253,8 @@ All separators can be mixed in the input text. The extraction is case-insensitiv
 
 ### 3.6 WHOIS Lookup
 
+> **Status:** Finalized — Sprint 0 (spec consolidation). Technical spec: `docs/specs/technical/spec-tool-whois.md`. ADR: `docs/adr/ADR-018-whois-resolution-and-ssrf-policy.md`.
+
 #### 3.6.1 Description
 
 Query domain or IP ownership information using RDAP (Registration Data Access Protocol) with automatic fallback to classic WHOIS (port 43) when RDAP is unavailable.
@@ -262,25 +264,29 @@ Query domain or IP ownership information using RDAP (Registration Data Access Pr
 | Parameter | Type | Default | Constraints |
 |---|---|---|---|
 | Target | string | (required) | Valid domain name or IP address. Max 255 characters. |
-| WHOIS Server | string | Automatic | Optional. Custom WHOIS server hostname or IP. Overrides automatic server selection. |
+| WHOIS Server | string | Automatic | Optional. Custom WHOIS server hostname or IP. When provided, RDAP is skipped and the query goes directly to the custom server on port 43 (classic WHOIS only). |
 
 #### 3.6.3 Behaviour Rules
 
-- RDAP is attempted first (HTTP `GET` to the appropriate RDAP bootstrap server).
+- RDAP is attempted first (HTTP `GET` to the appropriate RDAP bootstrap server via IANA).
 - If the TLD or IP registry does not support RDAP (HTTP 404, timeout, or connection refused), fall back to classic WHOIS on port 43.
+- When a custom `WHOIS Server` is provided, RDAP is **skipped entirely** — the query goes directly to the custom server on port 43 (WHOIS only).
 - Classic WHOIS response is returned as structured fields when possible, plus the raw text.
 - The protocol used (RDAP or WHOIS) is indicated in the result.
+- All outbound connections (RDAP and WHOIS) pass through the shared SSRF address filter (`filter_target`). Internal/private IPs are blocked for both the `Target` parameter and the `WHOIS Server` parameter. RDAP HTTP redirects are re-validated through the same filter before following.
 - A "Copy to clipboard" button MUST be available for displayed results.
 
 #### 3.6.4 Edge Cases
 
 - Domain does not exist: "Domain not found."
 - IP address is private/internal: blocked by the same network address filter used by other tools (see §5.1 of `spec-backend.md`).
-- WHOIS server unreachable or timeout: timeout error after 15s.
-- TLD with no known WHOIS or RDAP server: unsupported TLD error.
+- Custom `WHOIS Server` resolves to a private/internal IP: blocked with the same security error.
+- WHOIS server unreachable or timeout: timeout error (RDAP: 10s connect, 20s total read; WHOIS: 15s connect, 20s total read).
+- TLD with no known WHOIS or RDAP server: unsupported TLD error (`WHOIS_UNSUPPORTED_TLD`).
 - Rate-limited by remote WHOIS server: error with "try again later" message.
 - Thin WHOIS registry (e.g., `.com`): the raw text response is displayed. Structured data extraction is best-effort.
 - GDPR-redacted contact fields: displayed as "[REDACTED]" — this is the expected output for most domains.
+- WHOIS response exceeds the configured size cap (default 2 MiB): response is truncated and a warning is displayed.
 
 ### 3.7 Secret Generator
 

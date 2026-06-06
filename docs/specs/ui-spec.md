@@ -224,15 +224,260 @@ Grouped cards, one per record type: A, AAAA, CNAME, MX, NS, TXT, SRV, SOA, PTR, 
 
 Structured cards. Copy button. Each certificate in the chain: collapsible section with subject, issuer, validity, SANs, key algorithm/size, fingerprints, extended key usage. Errors in RED: expired, name mismatch, self-signed, untrusted root, weak key (< 2048 bits RSA). Full chain valid → green "Chain valid" badge.
 
-### 5.5 Secret Generator
+### 5.5 WHOIS Lookup
 
 #### 5.5.1 Layout
+
+Two-panel vertical layout on desktop: **Parameters Panel** (top) + **Output Panel** (bottom). On mobile/tablet, single-column stacked.
+
+The tool follows the **instant tool** pattern (§4.2): Start button → disabled with spinner → HTTP request to `POST /api/v1/tools/whois/execute` → render result → re-enable button. Error re-enables button and displays in output panel.
+
+#### 5.5.2 Parameters Panel
+
+Two fields:
+
+| Control | Parameter | Default | Constraints |
+|---|---|---|---|
+| Text input | Target | (empty) | Required. Domain or IP. Max 255 chars. Placeholder: "example.com" |
+| Text input | WHOIS Server | (empty) | Optional. Custom WHOIS server. Max 255 chars. Hidden behind "Advanced" toggle. Placeholder: "whois.arin.net" |
+
+**"Advanced" section** (collapsed by default): contains the `WHOIS Server` field. Toggle label: "Advanced" / "Avancé" (i18n: `common.advanced`). When expanded, a brief note: "Leave empty for automatic server selection." (i18n: `tools.whois.param_server_desc`).
+
+**Start button**: Primary action (accent color), full label "Lookup" or "Start" (i18n: `common.start`). Disabled when `Target` is empty or during execution. Enter key triggers Start.
+
+**Reset button**: Secondary action, reverts both fields to empty/default.
+
+#### 5.5.3 Output Panel — Idle State
+
+Empty state: centered message "Enter a domain or IP address and click Start." (i18n: `tools.whois.idle`). Subtle icon (search/magnifying glass).
+
+#### 5.5.4 Output Panel — Loading State
+
+- Start button → disabled + spinner.
+- Output panel: progress indicator ("Looking up..." / "Recherche en cours…") with elapsed time counter (MM:SS).
+- The protocol attempt is shown: "Trying RDAP…" → if RDAP fails, "RDAP unavailable, falling back to WHOIS…" (i18n: `tools.whois.trying_rdap`, `tools.whois.fallback_whois`).
+
+#### 5.5.5 Output Panel — Result State (RDAP)
+
+**Protocol indicator**: Badge at the top of the result card:
+- RDAP: blue badge with "RDAP" label (i18n: `tools.whois.protocol_rdap`)
+- WHOIS: yellow badge with "WHOIS" label (i18n: `tools.whois.protocol_whois`)
+
+**Structured fields** (card layout, label: value pairs):
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ [RDAP]                                         [📋 Copy] │
+│                                                         │
+│ Domain          example.com                             │
+│ Status          clientDeleteProhibited                  │
+│                 clientTransferProhibited                │
+│ Registrar       Example Registrar, Inc.                 │
+│ Nameservers     ns1.example.com                         │
+│                 ns2.example.com                         │
+│                                                         │
+│ Created         Aug 14, 1995                            │
+│ Expires         Aug 13, 2027                            │
+│ Updated         Jan 15, 2026                            │
+│                                                         │
+│ Registrant      [REDACTED]                              │
+│ Admin Contact   [REDACTED]                              │
+│ Tech Contact    [REDACTED]                              │
+│                                                         │
+│ Disclaimer      For more information on RDAP...         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Field display rules**:
+- `domain`: always shown (monospace).
+- `status`: array → displayed as tags/badges, one per line. If empty, row hidden.
+- `registrar`: single line. If null, row hidden.
+- `name_servers`: array → one per line (monospace). If empty, row hidden.
+- `creation_date`, `expiration_date`, `updated_date`: displayed in locale-aware format (i18n date formatting). If null, row shows "—".
+- `registrant`, `admin_contact`, `tech_contact`: if the backend returns a contact object, display the organization/name. If **null** (GDPR redacted or not available), display `[REDACTED]` in muted/italic text (i18n: `tools.whois.redacted`).
+- `disclaimer`: if present, small text below the structured fields. If null, hidden.
+
+**Copy button**: Copies structured fields as formatted text (label: value pairs), plus the `raw_text` if present. Uses the same clipboard behavior as other tools (no auto-clear — the data is not sensitive).
+
+#### 5.5.6 Output Panel — Result State (WHOIS Fallback)
+
+Same protocol indicator badge (WHOIS/yellow) and structured fields.
+
+**Additional section** — Raw WHOIS text:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Raw WHOIS Response                                      │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Domain Name: EXAMPLE.COM                            │ │
+│ │ Registry Domain ID: 123456789_DOMAIN_COM-VRSN       │ │
+│ │ Registrar WHOIS Server: whois.example-registrar.com │ │
+│ │ Registrar URL: http://www.example-registrar.com     │ │
+│ │ Updated Date: 2026-01-15T08:30:00Z                  │ │
+│ │ Creation Date: 1995-08-14T04:00:00Z                 │ │
+│ │ Registry Expiry Date: 2027-08-13T04:00:00Z          │ │
+│ │ ...                                                  │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Monospace font, `white-space: pre-wrap`, `overflow-x: auto`, `max-height: 400px` with vertical scroll.
+- Collapsible section (expanded by default on WHOIS results, hidden on RDAP results since RDAP has no raw text).
+- Section title: "Raw WHOIS Response" (i18n: `tools.whois.result_raw_text`).
+
+#### 5.5.7 Output Panel — Domain Not Found
+
+When the backend returns `success=false` with `not_found=true`:
+
+- Warning banner (yellow): "Domain not found." (i18n: `tools.whois.not_found`)
+- The domain may not be registered or may have been deleted.
+- No structured fields rendered.
+
+#### 5.5.8 Output Panel — Error States
+
+| Error | Display |
+|---|---|
+| `TARGET_NOT_ALLOWED` | Red error banner: "Target not allowed. Private and internal IP addresses are blocked." |
+| `WHOIS_UNSUPPORTED_TLD` | Red error banner: "This TLD is not supported by any known WHOIS or RDAP server." |
+| `WHOIS_CONNECTION_FAILED` | Red error banner: "Could not connect to the remote server. The WHOIS/RDAP server may be down or unreachable." |
+| `RATE_LIMIT_EXCEEDED` | Yellow warning banner with countdown timer. |
+| Network error (client-side) | Red error banner: "A network error occurred. Check your connection and try again." |
+
+All error banners are dismissible. The output panel returns to idle state when dismissed.
+
+#### 5.5.9 Truncation Warning
+
+When the WHOIS response is truncated (size cap exceeded):
+
+- Warning banner (yellow, non-dismissible): "The response was truncated because it exceeded the maximum size. Some data may be missing."
+- The `raw_text` block shows the truncated data with a `[TRUNCATED]` marker at the end.
+
+#### 5.5.10 Responsive Behavior
+
+| Breakpoint | Layout |
+|---|---|
+| Desktop (≥ 1024px) | Parameters top, Output bottom. Both visible simultaneously. |
+| Tablet (768–1023px) | Same layout with reduced field widths. Raw text block max-height: 300px. |
+| Mobile (< 768px) | Full-width fields. Structured fields stack vertically (label above value). Raw text block max-height: 250px. |
+
+On mobile: touch targets ≥ 44×44px. The Copy button is full-width below the structured fields.
+
+#### 5.5.11 Accessibility
+
+- **Parameters**: all inputs have visible `<label>` elements. The "Advanced" toggle is a `<button>` with `aria-expanded`. The `WHOIS Server` field has `aria-describedby` pointing to the helper text.
+- **Result announcement**: the output panel has `aria-live="polite"` to announce results to screen readers. The announcement reads: "WHOIS lookup complete. Protocol: RDAP. Domain: example.com. Registrar: Example Registrar, Inc."
+- **Error announcement**: error banners use `aria-live="assertive"` for immediate screen reader announcement.
+- **Focus order**: Target → (Advanced toggle → WHOIS Server if expanded) → Start → Reset → Output panel (results, then Copy).
+- **Copy feedback**: the Copy button announces "Copied" via `aria-live="polite"`.
+- **Raw text block**: marked as a complementary region with `aria-label="Raw WHOIS Response"`. Scrollable via keyboard (focusable with `tabindex="0"`).
+- **Reduced motion**: the spinner respects `prefers-reduced-motion: reduce`.
+- **Contrast**: all badges (RDAP, WHOIS, status codes) meet 4.5:1 contrast in both themes.
+
+#### 5.5.12 Wireframe — WHOIS Lookup (Desktop)
+
+```
++--------------+----------------------------------------------------+
+| [Logo/Brand] |                        [EN v] [    ] [User v]     |
++--------------+----------------------------------------------------+
+| [Ping]       | WHOIS Lookup                                       |
+| [Traceroute] |                                                    |
+| [DNS]        | Target:          [example.com                  ]   |
+| [TLS]        |                                                    |
+| [MAC OUI]    | ▸ Advanced                                         |
+| [WHOIS]*     |   WHOIS Server:   [                             ]   |
+| [SecretGen]  |   Leave empty for automatic server selection.      |
+|              |                                                    |
+|              | [Start]  [Reset]                                   |
+|              |----------------------------------------------------|
+|              | [RDAP]                                    [📋 Copy] |
+|              |                                                    |
+|              | Domain          example.com                        |
+|              | Status          clientDeleteProhibited             |
+|              |                 clientTransferProhibited           |
+|              | Registrar       Example Registrar, Inc.            |
+|              | Nameservers     ns1.example.com                    |
+|              |                 ns2.example.com                    |
+|              |                                                    |
+|              | Created         Aug 14, 1995                       |
+|              | Expires         Aug 13, 2027                       |
+|              | Updated         Jan 15, 2026                       |
+|              |                                                    |
+|              | Registrant      [REDACTED]                         |
+|              | Admin Contact   [REDACTED]                         |
+|              | Tech Contact    [REDACTED]                         |
+|              |                                                    |
+|              | Disclaimer      For more information on RDAP...    |
++--------------+----------------------------------------------------+
+| [Footer]                                                         |
++-------------------------------------------------------------------+
+```
+
+#### 5.5.13 Wireframe — WHOIS Lookup (Mobile, < 768px)
+
+```
++---------------------------+
+| [🍔] WHOIS Lookup         |
++---------------------------+
+| Target:                   |
+| [example.com         ]    |
+|                           |
+| ▸ Advanced                |
+|                           |
+| [    Start    ] [Reset]   |
++---------------------------+
+| [RDAP]           [📋 Copy]|
+|                           |
+| Domain                    |
+| example.com               |
+|                           |
+| Status                    |
+| clientDeleteProhibited    |
+| clientTransferProhibited  |
+|                           |
+| Registrar                 |
+| Example Registrar, Inc.   |
+|                           |
+| Nameservers               |
+| ns1.example.com           |
+| ns2.example.com           |
+|                           |
+| Created                   |
+| Aug 14, 1995              |
+|                           |
+| Expires                   |
+| Aug 13, 2027              |
+|                           |
+| Updated                   |
+| Jan 15, 2026              |
+|                           |
+| Registrant                |
+| [REDACTED]                |
+|                           |
+| Admin Contact             |
+| [REDACTED]                |
+|                           |
+| Tech Contact              |
+| [REDACTED]                |
+|                           |
+| ▾ Raw WHOIS Response      |
+| ┌───────────────────────┐ |
+| │ Domain Name: EXAMPLE… │ |
+| │ ...                   │ |
+| └───────────────────────┘ |
++---------------------------+
+| [Footer]                  |
++---------------------------+
+```
+
+### 5.6 Secret Generator
+
+#### 5.6.1 Layout
 
 Three-column layout on desktop: **Mode Tabs** (left) + **Parameters** (center) + **Result** (right). On tablet/mobile, single-column stacked: Mode Tabs → Parameters → Result.
 
 The tool does **not** have a "Start" button — generation is instant on parameter change. See §4.2 "Client-side tools."
 
-#### 5.5.2 Mode Tabs
+#### 5.6.2 Mode Tabs
 
 Three mutually exclusive tabs (radio-group pattern with tab appearance):
 
@@ -244,7 +489,7 @@ Three mutually exclusive tabs (radio-group pattern with tab appearance):
 
 Active tab is highlighted with the primary action color. Switching modes immediately regenerates a secret with the new mode's default parameters.
 
-#### 5.5.3 Parameters by Mode
+#### 5.6.3 Parameters by Mode
 
 **Password mode parameters:**
 
@@ -274,7 +519,7 @@ Below the slider: informational text `"Chaque caractère encode 6 bits (base64ur
 
 Below the slider: informational text `"Chaque caractère encode 4 bits (hexadécimal)."` (i18n: `tools.secret_generator.param_length_hex_desc`).
 
-#### 5.5.4 Result Area
+#### 5.6.4 Result Area
 
 **Secret display**: read-only `<textarea>` or `<div contenteditable="false">` with monospace font (system-ui monospace stack), `overflow-x: auto`, `white-space: pre`, `user-select: all`. Font size: 1.1rem. Background: `var(--color-card-bg)`, border: 1px solid `var(--color-border)`, padding: 12px, border-radius: 4px. Minimum height: 3em.
 
@@ -285,7 +530,7 @@ Below the slider: informational text `"Chaque caractère encode 4 bits (hexadéc
 ```
 
 Components:
-- Strength badge: icon + label + color. See §5.5.5 for thresholds.
+- Strength badge: icon + label + color. See §5.6.5 for thresholds.
 - Length: `"N caractères"` (i18n plural-aware)
 - Entropy: `"(X bits)"` (i18n: `tools.secret_generator.entropy`)
 
@@ -298,7 +543,7 @@ Components:
 
 **Auto-clear notice**: small text below the buttons: `"Le secret sera effacé du presse-papier dans 30 secondes."` (i18n: `tools.secret_generator.auto_clear_notice`). Accompanied by a countdown timer (30 → 0) that resets on each Copy click.
 
-#### 5.5.5 Strength Indicator
+#### 5.6.5 Strength Indicator
 
 Entropy thresholds (bits of entropy):
 
@@ -313,7 +558,7 @@ Each level has an associated icon: Weak (⚠️), Fair (🔶), Strong (🔵), Ve
 
 Strength is updated on every regeneration. The label, icon, and color are announced to screen readers via `aria-live="polite"`.
 
-#### 5.5.6 Degraded States
+#### 5.6.6 Degraded States
 
 **Clipboard API unavailable** (old browser, HTTP origin, missing permission):
 - "Copy" button is hidden.
@@ -327,7 +572,7 @@ Strength is updated on every regeneration. The label, icon, and color are announ
 **No character set selected** (Password mode):
 - Prevented at the UI level (last toggle snaps back). If somehow bypassed, the secret field displays the i18n message `tools.secret_generator.no_charset_selected` and no secret is generated.
 
-#### 5.5.7 Responsive Behavior
+#### 5.6.7 Responsive Behavior
 
 | Breakpoint | Layout |
 |---|---|
@@ -337,7 +582,7 @@ Strength is updated on every regeneration. The label, icon, and color are announ
 
 On mobile: sliders are full-width. Toggle switches have larger touch targets (≥ 44px). The secret field is full-width with horizontal scroll for long secrets.
 
-#### 5.5.8 Accessibility
+#### 5.6.8 Accessibility
 
 - **Mode tabs**: implement as radio group with `role="tablist"`, `role="tab"`, `aria-selected`, keyboard navigation (Arrow Left/Right).
 - **Parameters**: all controls have visible `<label>` elements. Slider has `aria-valuemin`, `aria-valuemax`, `aria-valuenow`. Number input is synchronized with slider.

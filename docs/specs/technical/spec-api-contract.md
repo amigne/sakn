@@ -861,6 +861,9 @@ tools.whois.protocol_whois
 tools.whois.not_found
 tools.whois.redacted
 tools.whois.unsupported_tld
+tools.whois.idle
+tools.whois.trying_rdap
+tools.whois.fallback_whois
 
 tools.secret_generator.name
 tools.secret_generator.description
